@@ -26,6 +26,14 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['login' => ['The provided credentials are incorrect.']]);
         }
 
+        if ($user->role?->name === 'user' && ! $user->customerProfile?->profile_authorized_at) {
+            throw ValidationException::withMessages(['login' => ['The provided credentials are incorrect.']]);
+        }
+
+        if ($user->role?->name === 'driver' && ! $user->driver?->profile_authorized_at) {
+            throw ValidationException::withMessages(['login' => ['The provided credentials are incorrect.']]);
+        }
+
         $user->forceFill(['last_login_at' => now()])->save();
         $token = $user->createToken('smartfreight-web')->plainTextToken;
 
@@ -53,11 +61,19 @@ class AuthController extends Controller
         $user = DB::transaction(function () use ($data, $driverData, $role, $roleName): User {
             $user = User::query()->create([...$data, 'role_id' => $role->id]);
             if ($roleName === 'user') {
-                Customer::query()->create(['user_id' => $user->id, 'customer_type' => 'private', 'status' => 'active']);
+                Customer::query()->create([
+                    'user_id' => $user->id,
+                    'customer_type' => 'private',
+                    'status' => 'active',
+                    'profile_authorized_at' => now(),
+                ]);
             }
             if ($roleName === 'driver') {
                 Driver::query()->create([
                     'user_id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'profile_authorized_at' => now(),
                     'license_number' => $driverData['license_number'],
                     'license_country_code' => strtoupper((string) $driverData['license_country_code']),
                     'license_expires_at' => $driverData['license_expires_at'],

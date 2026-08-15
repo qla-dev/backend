@@ -20,4 +20,4 @@ companies/roles/users -> company_invitations
 
 All arrows represented by `*_id` in business tables are database-level foreign keys. Pivot tables (`company_user`, `fleet_access`, `conversation_user`) also use constrained foreign keys and composite uniqueness rules.
 
-API access is authenticated with Sanctum. Superadmin-only registries (roles, all users, all companies, and email campaigns), company team/fleet administration, and finance resources are protected by role middleware.
+API access is authenticated with Sanctum. Superadmin-only registries (roles, all users, all logistics companies, and email campaigns), company team/fleet administration, and finance resources are protected by role middleware.

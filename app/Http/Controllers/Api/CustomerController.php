@@ -33,6 +33,7 @@ class CustomerController extends CrudController
             'billing_email' => ['nullable', 'email', 'max:255'],
             'billing_address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:120'],
+            'profile_authorized_at' => ['nullable', 'date'],
         ];
     }
 
@@ -42,7 +43,11 @@ class CustomerController extends CrudController
         if ($search !== '') {
             $query->where(function (Builder $customerQuery) use ($search): void {
                 $customerQuery
-                    ->where('company_name', 'like', "%{$search}%")
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('country_code', 'like', "%{$search}%")
+                    ->orWhere('company_name', 'like', "%{$search}%")
                     ->orWhere('tax_number', 'like', "%{$search}%")
                     ->orWhereHas('user', function (Builder $userQuery) use ($search): void {
                         $userQuery->where('name', 'like', "%{$search}%")
@@ -63,9 +68,9 @@ class CustomerController extends CrudController
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'username' => ['required', 'string', 'max:80', 'unique:users,username'],
-            'password' => ['required', 'string', 'min:8'],
+            'email' => ['nullable', 'email', 'max:255', 'required_with:password', 'unique:users,email'],
+            'username' => ['nullable', 'string', 'max:80', 'required_with:password', 'unique:users,username'],
+            'password' => ['nullable', 'string', 'min:8'],
             'phone' => ['nullable', 'string', 'max:50'],
             'language' => ['nullable', 'string', 'max:5'],
             'country_code' => ['nullable', 'string', 'size:2'],
@@ -78,7 +83,7 @@ class CustomerController extends CrudController
         ]);
 
         $customer = DB::transaction(function () use ($data): Customer {
-            $user = User::query()->create([
+            $user = ! empty($data['password']) ? User::query()->create([
                 'role_id' => Role::query()->where('name', 'user')->firstOrFail()->id,
                 'name' => $data['name'],
                 'email' => $data['email'],
@@ -89,20 +94,25 @@ class CustomerController extends CrudController
                 'country_code' => isset($data['country_code']) ? strtoupper($data['country_code']) : null,
                 'is_active' => true,
                 'email_verified_at' => now(),
-            ]);
+            ]) : null;
 
             return Customer::query()->create([
-                'user_id' => $user->id,
-                'customer_type' => $data['customer_type'] ?? 'private',
+                'user_id' => $user?->id,
+                'name' => $data['name'],
+                'email' => $data['email'] ?? null,
+                'phone' => $data['phone'] ?? null,
+                'country_code' => isset($data['country_code']) ? strtoupper($data['country_code']) : null,
+                'customer_type' => $data['customer_type'] ?? 'business',
                 'status' => 'active',
                 'company_name' => $data['company_name'] ?? null,
                 'tax_number' => $data['tax_number'] ?? null,
                 'billing_email' => $data['billing_email'] ?? null,
                 'billing_address' => $data['billing_address'] ?? null,
                 'city' => $data['city'] ?? null,
+                'profile_authorized_at' => $user ? now() : null,
             ])->load($this->relations());
         });
 
-        return $this->success((new EntityResource($customer))->resolve($request), 'Customer account created.', status: 201);
+        return $this->success((new EntityResource($customer))->resolve($request), 'Customer created.', status: 201);
     }
 }

@@ -28,7 +28,12 @@ class DriverController extends CrudController
         $presence = $updating ? 'sometimes' : 'required';
 
         return [
-            'user_id' => [$presence, 'integer', 'exists:users,id'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'country_code' => ['nullable', 'string', 'size:2'],
+            'profile_authorized_at' => ['nullable', 'date'],
             'primary_company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'license_number' => [$presence, 'string', 'max:120', 'unique:drivers,license_number'],
             'license_country_code' => [$presence, 'string', 'size:2'],
@@ -42,7 +47,7 @@ class DriverController extends CrudController
 
     protected function searchColumns(): array
     {
-        return ['license_number', 'license_country_code', 'availability_status'];
+        return ['name', 'email', 'phone', 'license_number', 'license_country_code', 'availability_status'];
     }
 
     protected function applyFilters(Builder $query, Request $request): void
@@ -56,9 +61,9 @@ class DriverController extends CrudController
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'username' => ['required', 'string', 'max:80', 'unique:users,username'],
-            'password' => ['required', 'string', 'min:8'],
+            'email' => ['nullable', 'email', 'max:255', 'required_with:password', 'unique:users,email'],
+            'username' => ['nullable', 'string', 'max:80', 'required_with:password', 'unique:users,username'],
+            'password' => ['nullable', 'string', 'min:8'],
             'phone' => ['nullable', 'string', 'max:50'],
             'language' => ['nullable', 'string', 'max:5'],
             'country_code' => ['nullable', 'string', 'size:2'],
@@ -70,7 +75,7 @@ class DriverController extends CrudController
         ]);
 
         $driver = DB::transaction(function () use ($data, $request): Driver {
-            $user = User::query()->create([
+            $user = ! empty($data['password']) ? User::query()->create([
                 'role_id' => Role::query()->where('name', 'driver')->firstOrFail()->id,
                 'name' => $data['name'],
                 'email' => $data['email'],
@@ -81,10 +86,15 @@ class DriverController extends CrudController
                 'country_code' => isset($data['country_code']) ? strtoupper($data['country_code']) : null,
                 'is_active' => true,
                 'email_verified_at' => now(),
-            ]);
+            ]) : null;
 
             $driver = Driver::query()->create([
-                'user_id' => $user->id,
+                'user_id' => $user?->id,
+                'name' => $data['name'],
+                'email' => $data['email'] ?? null,
+                'phone' => $data['phone'] ?? null,
+                'country_code' => isset($data['country_code']) ? strtoupper($data['country_code']) : null,
+                'profile_authorized_at' => $user ? now() : null,
                 'primary_company_id' => $data['primary_company_id'] ?? null,
                 'license_number' => $data['license_number'],
                 'license_country_code' => strtoupper($data['license_country_code']),
@@ -92,7 +102,7 @@ class DriverController extends CrudController
                 'availability_status' => $data['availability_status'] ?? 'available',
             ]);
 
-            if (! empty($data['primary_company_id'])) {
+            if ($user && ! empty($data['primary_company_id'])) {
                 $user->companies()->attach($data['primary_company_id'], [
                     'company_role' => 'driver',
                     'status' => 'active',
@@ -104,6 +114,6 @@ class DriverController extends CrudController
             return $driver->load($this->relations());
         });
 
-        return $this->success((new EntityResource($driver))->resolve($request), 'Driver account created.', status: 201);
+        return $this->success((new EntityResource($driver))->resolve($request), 'Driver created.', status: 201);
     }
 }

@@ -10,7 +10,10 @@ class Customer extends BaseModel
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'is_active' => 'boolean',
+            'profile_authorized_at' => 'datetime',
+        ];
     }
 
     public function user(): BelongsTo
@@ -20,12 +23,12 @@ class Customer extends BaseModel
 
     public function getNameAttribute(): ?string
     {
-        return $this->user?->name;
+        return $this->user?->name ?? $this->attributes['name'] ?? null;
     }
 
     public function getEmailAttribute(): ?string
     {
-        return $this->user?->email;
+        return $this->user?->email ?? $this->attributes['email'] ?? null;
     }
 
     public function getUsernameAttribute(): ?string
@@ -35,12 +38,12 @@ class Customer extends BaseModel
 
     public function getPhoneAttribute(): ?string
     {
-        return $this->user?->phone;
+        return $this->user?->phone ?? $this->attributes['phone'] ?? null;
     }
 
     public function getCountryCodeAttribute(): ?string
     {
-        return $this->user?->country_code;
+        return $this->user?->country_code ?? $this->attributes['country_code'] ?? null;
     }
 
     public function getLanguageAttribute(): ?string
@@ -50,6 +53,8 @@ class Customer extends BaseModel
 
     public function getIsActiveAttribute(): bool
     {
-        return (bool) $this->user?->is_active;
+        return $this->user
+            ? (bool) $this->user->is_active && $this->profile_authorized_at !== null
+            : false;
     }
 }
