@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\EntityResource;
 use App\Models\Load;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,15 @@ class LoadController extends CrudController
     protected function searchColumns(): array
     {
         return ['title', 'status', 'cargo_type', 'goods_type'];
+    }
+
+    protected function applyFilters(Builder $query, Request $request): void
+    {
+        $status = trim((string) $request->query('status', ''));
+
+        if ($status !== '') {
+            $query->where('status', $status);
+        }
     }
 
     protected function rules(bool $updating = false): array

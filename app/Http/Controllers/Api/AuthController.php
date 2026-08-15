@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EntityResource;
+use App\Models\Customer;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -17,7 +19,7 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate(['login' => ['required', 'string'], 'password' => ['required', 'string']]);
-        $user = User::query()->with(['role', 'companies'])->where('email', $credentials['login'])->orWhere('username', $credentials['login'])->first();
+        $user = User::query()->with(['role', 'companies', 'customerProfile'])->where('email', $credentials['login'])->orWhere('username', $credentials['login'])->first();
 
         if (! $user || ! $user->is_active || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages(['login' => ['The provided credentials are incorrect.']]);
@@ -36,17 +38,24 @@ class AuthController extends Controller
             'email' => ['required', 'email', 'unique:users,email'], 'username' => ['required', 'string', 'max:80', 'unique:users,username'],
             'password' => ['required', 'string', 'min:8'], 'language' => ['nullable', 'string', 'max:5'],
         ]);
-        $role = Role::query()->where('name', $data['role'])->firstOrFail();
+        $roleName = $data['role'];
+        $role = Role::query()->where('name', $roleName)->firstOrFail();
         unset($data['role']);
-        $user = User::query()->create([...$data, 'role_id' => $role->id]);
-        $user->load('role');
+        $user = DB::transaction(function () use ($data, $role, $roleName): User {
+            $user = User::query()->create([...$data, 'role_id' => $role->id]);
+            if ($roleName === 'user') {
+                Customer::query()->create(['user_id' => $user->id, 'customer_type' => 'private', 'status' => 'active']);
+            }
+
+            return $user->load(['role', 'customerProfile']);
+        });
 
         return response()->json(['message' => 'Registration successful.', 'data' => ['token' => $user->createToken('smartfreight-web')->plainTextToken, 'token_type' => 'Bearer', 'user' => (new EntityResource($user))->resolve($request)], 'meta' => [], 'errors' => []], 201);
     }
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->load(['role', 'companies', 'driverProfile']);
+        $user = $request->user()->load(['role', 'companies', 'driverProfile', 'customerProfile']);
 
         return response()->json(['message' => 'Authenticated user retrieved.', 'data' => (new EntityResource($user))->resolve($request), 'meta' => [], 'errors' => []]);
     }

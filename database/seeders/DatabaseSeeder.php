@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Company;
+use App\Models\Customer;
 use App\Models\DriverProfile;
 use App\Models\Load;
 use App\Models\Role;
@@ -37,6 +38,11 @@ class DatabaseSeeder extends Seeder
 
             return [$username => $user];
         });
+
+        Customer::query()->updateOrCreate(
+            ['user_id' => $users['customer_demo']->id],
+            ['customer_type' => 'private', 'status' => 'active']
+        );
 
         $company = Company::query()->updateOrCreate(['slug' => 'smartfreight-logistics-hub'], [
             'owner_user_id' => $users['company_demo']->id, 'name' => 'Smartfreight Logistics Hub', 'email' => 'company_demo@smartfreight.test',

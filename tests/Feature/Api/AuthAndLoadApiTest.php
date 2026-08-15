@@ -6,6 +6,7 @@ use App\Models\Load;
 use App\Models\LoadStop;
 use App\Models\Offer;
 use App\Models\Role;
+use App\Models\Customer;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,6 +58,7 @@ class AuthAndLoadApiTest extends TestCase
             'company_demo',
             'finance_demo',
         ], User::query()->orderBy('id')->pluck('username')->all());
+        $this->assertSame('customer_demo', Customer::query()->firstOrFail()->user->username);
     }
 
     public function test_authenticated_user_can_create_update_and_delete_a_load_with_stops(): void
@@ -169,6 +171,33 @@ class AuthAndLoadApiTest extends TestCase
         ]);
     }
 
+    public function test_load_listing_can_be_limited_to_freight_exchange_loads(): void
+    {
+        $token = $this->postJson('/api/auth/login', [
+            'login' => 'customer_demo',
+            'password' => 'demo12345',
+        ])->json('data.token');
+
+        $availableLoad = Load::query()->create([
+            'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
+            'public_id' => '00000000-0000-4000-8000-000000000099',
+            'title' => 'Available exchange cargo',
+            'status' => 'available',
+            'transport_type' => 'road',
+            'cargo_type' => 'FTL',
+            'weight_kg' => 1000,
+            'currency' => 'EUR',
+        ]);
+
+        $response = $this->withToken($token)
+            ->getJson('/api/loads?status=available&limit=100')
+            ->assertOk();
+
+        $this->assertSame([$availableLoad->id], collect($response->json('data'))->pluck('id')->all());
+        $this->assertNotContains('in_transit', collect($response->json('data'))->pluck('status')->all());
+        $this->assertNotContains('assigned', collect($response->json('data'))->pluck('status')->all());
+    }
+
     public function test_invalid_foreign_key_is_rejected_before_insert(): void
     {
         $token = $this->postJson('/api/auth/login', [
@@ -252,30 +281,32 @@ class AuthAndLoadApiTest extends TestCase
     {
         $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
 
-        $response = $this->withToken($token)->postJson('/api/users/customer', [
+        $response = $this->withToken($token)->postJson('/api/customers', [
             'name' => 'Manual Customer', 'email' => 'manual.customer@example.com',
             'username' => 'manual_customer', 'password' => 'secure-pass-123',
             'country_code' => 'DE', 'language' => 'de',
-        ])->assertCreated()->assertJsonPath('data.role.name', 'user');
+        ])->assertCreated()->assertJsonPath('data.user.role.name', 'user');
 
-        $this->assertDatabaseHas('users', ['id' => $response->json('data.id'), 'username' => 'manual_customer', 'is_active' => true]);
+        $userId = $response->json('data.user.id');
+        $this->assertDatabaseHas('users', ['id' => $userId, 'username' => 'manual_customer', 'is_active' => true]);
+        $this->assertDatabaseHas('customers', ['id' => $response->json('data.id'), 'user_id' => $userId, 'status' => 'active']);
     }
 
     public function test_customer_listing_supports_server_side_search_limit_and_page_number(): void
     {
         $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
 
-        $this->withToken($token)->postJson('/api/users/customer', [
+        $this->withToken($token)->postJson('/api/customers', [
             'name' => 'Pagination Customer', 'email' => 'pagination.customer@example.com',
             'username' => 'pagination_customer', 'password' => 'secure-pass-123',
             'country_code' => 'BA', 'language' => 'bs',
         ])->assertCreated();
 
         $this->withToken($token)
-            ->getJson('/api/users?role=user&search=customer&limit=1&pageno=2')
+            ->getJson('/api/customers?search=customer&limit=1&pageno=2')
             ->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.role.name', 'user')
+            ->assertJsonPath('data.0.user.role.name', 'user')
             ->assertJsonPath('meta.current_page', 2)
             ->assertJsonPath('meta.page_no', 2)
             ->assertJsonPath('meta.per_page', 1)

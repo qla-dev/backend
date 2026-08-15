@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\CompanyInvitationController;
 use App\Http\Controllers\Api\CompanyMembershipController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\DriverProfileController;
 use App\Http\Controllers\Api\EmailCampaignController;
@@ -76,11 +77,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::middleware('role:superadmin')->group(function (): void {
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
-        Route::post('users/customer', [UserController::class, 'storeCustomer']);
+        Route::post('users/customer', [CustomerController::class, 'store']);
         Route::post('users/driver', [UserController::class, 'storeDriver']);
         Route::apiResources([
             'roles' => RoleController::class,
             'users' => UserController::class,
+            'customers' => CustomerController::class,
             'companies' => CompanyController::class,
             'email-templates' => EmailTemplateController::class,
             'email-campaigns' => EmailCampaignController::class,

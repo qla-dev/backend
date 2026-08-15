@@ -67,6 +67,11 @@ class User extends Authenticatable
         return $this->hasOne(DriverProfile::class);
     }
 
+    public function customerProfile(): HasOne
+    {
+        return $this->hasOne(Customer::class);
+    }
+
     public function ownedVehicles(): HasMany
     {
         return $this->hasMany(Vehicle::class, 'owner_user_id');
