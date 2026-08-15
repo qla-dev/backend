@@ -19,7 +19,7 @@ class LoadController extends CrudController
 
     protected function relations(): array
     {
-        return ['customer.role', 'company', 'assignedDriver.driverProfile', 'vehicle', 'stops', 'offers', 'shipment.events', 'routes.stops', 'notes.author', 'documents'];
+        return ['customer.role', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'offers', 'shipment.events', 'routes.stops', 'notes.author', 'documents'];
     }
 
     protected function searchColumns(): array

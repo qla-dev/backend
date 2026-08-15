@@ -7,7 +7,7 @@ use App\Http\Controllers\Api\CompanyMembershipController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DocumentController;
-use App\Http\Controllers\Api\DriverProfileController;
+use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\EmailCampaignController;
 use App\Http\Controllers\Api\EmailCampaignRecipientController;
 use App\Http\Controllers\Api\EmailTemplateController;
@@ -43,7 +43,6 @@ Route::prefix('auth')->group(function (): void {
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::apiResources([
-        'driver-profiles' => DriverProfileController::class,
         'vehicles' => VehicleController::class,
         'vehicle-locations' => VehicleLocationController::class,
         'loads' => LoadController::class,
@@ -58,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'conversations' => ConversationController::class,
         'messages' => MessageController::class,
     ]);
+    Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
 
     Route::middleware('role:company,superadmin')->group(function (): void {
         Route::apiResources([
@@ -78,7 +78,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
         Route::post('users/customer', [CustomerController::class, 'store']);
-        Route::post('users/driver', [UserController::class, 'storeDriver']);
+        Route::post('users/driver', [DriverController::class, 'store']);
+        Route::post('drivers', [DriverController::class, 'store'])->name('drivers.store');
         Route::apiResources([
             'roles' => RoleController::class,
             'users' => UserController::class,

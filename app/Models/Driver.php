@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class DriverProfile extends BaseModel
+class Driver extends BaseModel
 {
     protected function casts(): array
     {

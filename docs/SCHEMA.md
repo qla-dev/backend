@@ -5,7 +5,7 @@ Core relationship chain:
 ```text
 roles -> users <-> companies
               |-> customers
-              \-> driver_profiles
+              \-> drivers
 companies/users -> vehicles -> vehicle_locations
 users/companies/drivers/vehicles -> loads -> load_stops
                                       |-> offers

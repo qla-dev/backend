@@ -62,9 +62,9 @@ class User extends Authenticatable
         return $this->belongsToMany(Company::class)->withPivot(['company_role', 'status', 'invited_by_user_id', 'joined_at'])->withTimestamps();
     }
 
-    public function driverProfile(): HasOne
+    public function driver(): HasOne
     {
-        return $this->hasOne(DriverProfile::class);
+        return $this->hasOne(Driver::class);
     }
 
     public function customerProfile(): HasOne

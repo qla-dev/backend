@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EntityResource;
 use App\Models\Customer;
+use App\Models\Driver;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -19,7 +20,7 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate(['login' => ['required', 'string'], 'password' => ['required', 'string']]);
-        $user = User::query()->with(['role', 'companies', 'customerProfile'])->where('email', $credentials['login'])->orWhere('username', $credentials['login'])->first();
+        $user = User::query()->with(['role', 'companies', 'customerProfile', 'driver'])->where('email', $credentials['login'])->orWhere('username', $credentials['login'])->first();
 
         if (! $user || ! $user->is_active || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages(['login' => ['The provided credentials are incorrect.']]);
@@ -37,17 +38,34 @@ class AuthController extends Controller
             'role' => ['required', 'in:user,driver,company,finance'], 'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'], 'username' => ['required', 'string', 'max:80', 'unique:users,username'],
             'password' => ['required', 'string', 'min:8'], 'language' => ['nullable', 'string', 'max:5'],
+            'license_number' => ['nullable', 'required_if:role,driver', 'string', 'max:120', 'unique:drivers,license_number'],
+            'license_country_code' => ['nullable', 'required_if:role,driver', 'string', 'size:2'],
+            'license_expires_at' => ['nullable', 'required_if:role,driver', 'date'],
         ]);
         $roleName = $data['role'];
         $role = Role::query()->where('name', $roleName)->firstOrFail();
-        unset($data['role']);
-        $user = DB::transaction(function () use ($data, $role, $roleName): User {
+        $driverData = [
+            'license_number' => $data['license_number'] ?? null,
+            'license_country_code' => $data['license_country_code'] ?? null,
+            'license_expires_at' => $data['license_expires_at'] ?? null,
+        ];
+        unset($data['role'], $data['license_number'], $data['license_country_code'], $data['license_expires_at']);
+        $user = DB::transaction(function () use ($data, $driverData, $role, $roleName): User {
             $user = User::query()->create([...$data, 'role_id' => $role->id]);
             if ($roleName === 'user') {
                 Customer::query()->create(['user_id' => $user->id, 'customer_type' => 'private', 'status' => 'active']);
             }
+            if ($roleName === 'driver') {
+                Driver::query()->create([
+                    'user_id' => $user->id,
+                    'license_number' => $driverData['license_number'],
+                    'license_country_code' => strtoupper((string) $driverData['license_country_code']),
+                    'license_expires_at' => $driverData['license_expires_at'],
+                    'availability_status' => 'available',
+                ]);
+            }
 
-            return $user->load(['role', 'customerProfile']);
+            return $user->load(['role', 'customerProfile', 'driver']);
         });
 
         return response()->json(['message' => 'Registration successful.', 'data' => ['token' => $user->createToken('smartfreight-web')->plainTextToken, 'token_type' => 'Bearer', 'user' => (new EntityResource($user))->resolve($request)], 'meta' => [], 'errors' => []], 201);
@@ -55,7 +73,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->load(['role', 'companies', 'driverProfile', 'customerProfile']);
+        $user = $request->user()->load(['role', 'companies', 'driver', 'customerProfile']);
 
         return response()->json(['message' => 'Authenticated user retrieved.', 'data' => (new EntityResource($user))->resolve($request), 'meta' => [], 'errors' => []]);
     }
@@ -73,7 +91,7 @@ class AuthController extends Controller
         if (isset($data['country_code'])) $data['country_code'] = strtoupper($data['country_code']);
         $user->update($data);
 
-        return response()->json(['message' => 'Profile updated.', 'data' => (new EntityResource($user->load(['role', 'companies', 'driverProfile'])))->resolve($request), 'meta' => [], 'errors' => []]);
+        return response()->json(['message' => 'Profile updated.', 'data' => (new EntityResource($user->load(['role', 'companies', 'driver', 'customerProfile'])))->resolve($request), 'meta' => [], 'errors' => []]);
     }
 
     public function logout(Request $request): JsonResponse

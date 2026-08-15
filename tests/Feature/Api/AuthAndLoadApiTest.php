@@ -7,6 +7,7 @@ use App\Models\LoadStop;
 use App\Models\Offer;
 use App\Models\Role;
 use App\Models\Customer;
+use App\Models\Driver;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,6 +49,28 @@ class AuthAndLoadApiTest extends TestCase
             ->assertJsonStructure(['data' => ['token']]);
     }
 
+    public function test_driver_registration_creates_a_separate_driver_record(): void
+    {
+        $response = $this->postJson('/api/auth/register', [
+            'role' => 'driver',
+            'name' => 'Registered Driver',
+            'email' => 'registered.driver@example.com',
+            'username' => 'registered_driver',
+            'password' => 'secure-pass-123',
+            'language' => 'en',
+            'license_number' => 'BA-REGISTERED-001',
+            'license_country_code' => 'BA',
+            'license_expires_at' => now()->addYear()->toDateString(),
+        ])->assertCreated()
+            ->assertJsonPath('data.user.role.name', 'driver')
+            ->assertJsonPath('data.user.driver.license_number', 'BA-REGISTERED-001');
+
+        $this->assertDatabaseHas('drivers', [
+            'user_id' => $response->json('data.user.id'),
+            'license_number' => 'BA-REGISTERED-001',
+        ]);
+    }
+
     public function test_seeder_creates_all_five_accounts_with_superadmin_first(): void
     {
         $this->assertSame('superadmin', Role::query()->orderBy('id')->value('name'));
@@ -59,6 +82,7 @@ class AuthAndLoadApiTest extends TestCase
             'finance_demo',
         ], User::query()->orderBy('id')->pluck('username')->all());
         $this->assertSame('customer_demo', Customer::query()->firstOrFail()->user->username);
+        $this->assertSame('driver_demo', Driver::query()->firstOrFail()->user->username);
     }
 
     public function test_authenticated_user_can_create_update_and_delete_a_load_with_stops(): void
@@ -337,7 +361,7 @@ class AuthAndLoadApiTest extends TestCase
         $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
         $company = \App\Models\Company::query()->firstOrFail();
 
-        $response = $this->withToken($token)->postJson('/api/users/driver', [
+        $response = $this->withToken($token)->postJson('/api/drivers', [
             'name' => 'Manual Driver', 'email' => 'manual.driver@example.com',
             'username' => 'manual_driver', 'password' => 'secure-pass-123',
             'country_code' => 'BA', 'language' => 'bs', 'primary_company_id' => $company->id,
@@ -349,7 +373,7 @@ class AuthAndLoadApiTest extends TestCase
 
         $userId = $response->json('data.user.id');
         $this->assertDatabaseHas('users', ['id' => $userId, 'username' => 'manual_driver', 'is_active' => true]);
-        $this->assertDatabaseHas('driver_profiles', ['user_id' => $userId, 'primary_company_id' => $company->id, 'license_number' => 'BA-MANUAL-DRIVER']);
+        $this->assertDatabaseHas('drivers', ['user_id' => $userId, 'primary_company_id' => $company->id, 'license_number' => 'BA-MANUAL-DRIVER']);
         $this->assertDatabaseHas('company_user', ['company_id' => $company->id, 'user_id' => $userId, 'company_role' => 'driver', 'status' => 'active']);
     }
 }
