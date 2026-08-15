@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -48,6 +49,22 @@ class AuthController extends Controller
         $user = $request->user()->load(['role', 'companies', 'driverProfile']);
 
         return response()->json(['message' => 'Authenticated user retrieved.', 'data' => (new EntityResource($user))->resolve($request), 'meta' => [], 'errors' => []]);
+    }
+
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => ['nullable', 'string', 'max:50'], 'language' => ['nullable', 'string', 'max:5'],
+            'country_code' => ['nullable', 'string', 'size:2'], 'avatar_url' => ['nullable', 'url'],
+            'password' => ['sometimes', 'string', 'min:8'],
+        ]);
+        if (isset($data['country_code'])) $data['country_code'] = strtoupper($data['country_code']);
+        $user->update($data);
+
+        return response()->json(['message' => 'Profile updated.', 'data' => (new EntityResource($user->load(['role', 'companies', 'driverProfile'])))->resolve($request), 'meta' => [], 'errors' => []]);
     }
 
     public function logout(Request $request): JsonResponse
