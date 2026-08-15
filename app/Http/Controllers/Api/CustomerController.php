@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\EntityResource;
+use App\Mail\CustomerFirstPasswordMail;
 use App\Models\Customer;
 use App\Models\Role;
 use App\Models\User;
@@ -10,6 +11,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Throwable;
 
 class CustomerController extends CrudController
 {
@@ -123,5 +128,104 @@ class CustomerController extends CrudController
         });
 
         return $this->success((new EntityResource($customer))->resolve($request), 'Customer created.', status: 201);
+    }
+
+    public function authorizeCustomer(Request $request, Customer $customer): JsonResponse
+    {
+        if ($customer->is_active) {
+            return response()->json([
+                'message' => 'Customer is already authorized.',
+                'data' => (new EntityResource($customer->load($this->relations())))->resolve($request),
+                'meta' => [],
+                'errors' => [],
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique('users', 'email')->ignore($customer->user_id),
+            ],
+        ]);
+
+        $temporaryPassword = Str::password(14);
+
+        $customer = DB::transaction(function () use ($customer, $data, $temporaryPassword): Customer {
+            $lockedCustomer = Customer::query()->lockForUpdate()->findOrFail($customer->id);
+            $user = $lockedCustomer->user;
+
+            if (! $user) {
+                $user = User::query()->create([
+                    'role_id' => Role::query()->where('name', 'user')->firstOrFail()->id,
+                    'name' => $lockedCustomer->name ?: $lockedCustomer->company_name ?: $data['email'],
+                    'email' => $data['email'],
+                    'username' => $this->availableUsername($data['email'], $lockedCustomer->id),
+                    'password' => $temporaryPassword,
+                    'phone' => $lockedCustomer->phone,
+                    'language' => $lockedCustomer->language ?: 'bs',
+                    'country_code' => $lockedCustomer->country_code,
+                    'is_active' => true,
+                ]);
+            } else {
+                $user->update([
+                    'email' => $data['email'],
+                    'password' => $temporaryPassword,
+                    'is_active' => true,
+                ]);
+            }
+
+            $lockedCustomer->update([
+                'user_id' => $user->id,
+                'email' => $data['email'],
+                'billing_email' => $lockedCustomer->billing_email ?: $data['email'],
+                'status' => 'active',
+                'profile_authorized_at' => now(),
+            ]);
+
+            return $lockedCustomer->load($this->relations());
+        });
+
+        $emailSent = true;
+        try {
+            Mail::to($data['email'])->send(new CustomerFirstPasswordMail(
+                customerName: (string) ($customer->name ?: $customer->company_name ?: 'Customer'),
+                username: (string) $customer->user->username,
+                temporaryPassword: $temporaryPassword,
+            ));
+        } catch (Throwable $exception) {
+            $emailSent = false;
+            report($exception);
+        }
+
+        return $this->success(
+            (new EntityResource($customer))->resolve($request),
+            $emailSent
+                ? 'Customer authorized and first password email sent.'
+                : 'Customer authorized, but the first password email could not be sent.',
+            ['email_sent' => $emailSent],
+        );
+    }
+
+    private function availableUsername(string $email, int $customerId): string
+    {
+        $emailName = Str::before($email, '@');
+        $base = Str::slug($emailName, '_') ?: 'customer';
+        $base = substr($base, 0, 60);
+        $username = $base;
+
+        if (User::query()->where('username', $username)->exists()) {
+            $username = "{$base}_{$customerId}";
+        }
+
+        $suffix = 2;
+        while (User::query()->where('username', $username)->exists()) {
+            $username = "{$base}_{$customerId}_{$suffix}";
+            $suffix++;
+        }
+
+        return substr($username, 0, 80);
     }
 }

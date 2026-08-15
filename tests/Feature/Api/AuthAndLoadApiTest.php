@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Mail\CustomerFirstPasswordMail;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Driver;
@@ -12,6 +13,8 @@ use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class AuthAndLoadApiTest extends TestCase
@@ -337,6 +340,89 @@ class AuthAndLoadApiTest extends TestCase
             'profile_authorized_at' => null,
         ]);
         $this->assertDatabaseMissing('users', ['email' => 'standalone.customer@example.com']);
+    }
+
+    public function test_superadmin_can_authorize_a_standalone_customer_and_send_first_password(): void
+    {
+        Mail::fake();
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+        $customer = Customer::query()->create([
+            'name' => 'Imported Customer',
+            'email' => 'old-address@example.com',
+            'customer_type' => 'business',
+            'status' => 'active',
+        ]);
+
+        $this->withToken($token)
+            ->postJson("/api/customers/{$customer->id}/authorize", [
+                'email' => 'authorized.customer@example.com',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.is_active', true)
+            ->assertJsonPath('data.user.email', 'authorized.customer@example.com')
+            ->assertJsonPath('meta.email_sent', true);
+
+        $customer->refresh();
+        $this->assertNotNull($customer->user_id);
+        $this->assertNotNull($customer->profile_authorized_at);
+        $this->assertTrue($customer->user->is_active);
+
+        $temporaryPassword = null;
+        Mail::assertSent(CustomerFirstPasswordMail::class, function (CustomerFirstPasswordMail $mail) use (&$temporaryPassword): bool {
+            $user = User::query()->where('email', 'authorized.customer@example.com')->firstOrFail();
+            $temporaryPassword = $mail->temporaryPassword;
+
+            return $mail->hasTo('authorized.customer@example.com')
+                && $mail->username === $user->username
+                && Hash::check($mail->temporaryPassword, $user->password);
+        });
+
+        $this->postJson('/api/auth/login', [
+            'login' => $customer->user->username,
+            'password' => $temporaryPassword,
+        ])->assertOk()->assertJsonPath('data.user.id', $customer->user_id);
+    }
+
+    public function test_customer_authorization_requires_a_valid_unique_email(): void
+    {
+        Mail::fake();
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+        $customer = Customer::query()->create([
+            'name' => 'Imported Customer',
+            'customer_type' => 'business',
+            'status' => 'active',
+        ]);
+
+        $this->withToken($token)
+            ->postJson("/api/customers/{$customer->id}/authorize", ['email' => 'not-an-email'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('email');
+
+        $this->withToken($token)
+            ->postJson("/api/customers/{$customer->id}/authorize", ['email' => 'customer_demo@smartfreight.test'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('email');
+
+        $this->assertNull($customer->fresh()->user_id);
+        Mail::assertNothingSent();
+    }
+
+    public function test_only_superadmin_can_authorize_a_customer(): void
+    {
+        Mail::fake();
+        $token = $this->postJson('/api/auth/login', ['login' => 'customer_demo', 'password' => 'demo12345'])->json('data.token');
+        $customer = Customer::query()->create([
+            'name' => 'Imported Customer',
+            'customer_type' => 'business',
+            'status' => 'active',
+        ]);
+
+        $this->withToken($token)
+            ->postJson("/api/customers/{$customer->id}/authorize", ['email' => 'imported@example.com'])
+            ->assertForbidden();
+
+        $this->assertNull($customer->fresh()->user_id);
+        Mail::assertNothingSent();
     }
 
     public function test_customer_listing_supports_server_side_search_limit_and_page_number(): void

@@ -77,6 +77,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::middleware('role:superadmin')->group(function (): void {
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
+        Route::post('customers/{customer}/authorize', [CustomerController::class, 'authorizeCustomer']);
         Route::post('users/customer', [CustomerController::class, 'store']);
         Route::post('users/driver', [DriverController::class, 'store']);
         Route::post('drivers', [DriverController::class, 'store'])->name('drivers.store');
