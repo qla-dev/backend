@@ -73,6 +73,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     Route::middleware('role:superadmin')->group(function (): void {
+        Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::apiResources([
             'roles' => RoleController::class,
             'users' => UserController::class,

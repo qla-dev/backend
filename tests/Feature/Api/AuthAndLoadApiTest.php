@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Load;
 use App\Models\LoadStop;
+use App\Models\Offer;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
@@ -141,5 +142,28 @@ class AuthAndLoadApiTest extends TestCase
             ->getJson('/api/companies')
             ->assertOk()
             ->assertJsonPath('data.0.name', 'Smartfreight Logistics Hub');
+    }
+
+    public function test_superadmin_can_approve_an_offer_and_assign_its_driver(): void
+    {
+        $load = Load::query()->firstOrFail();
+        $driver = User::query()->where('username', 'driver_demo')->firstOrFail();
+        $offer = Offer::query()->create([
+            'load_id' => $load->id,
+            'company_id' => $load->company_id,
+            'driver_user_id' => $driver->id,
+            'created_by_user_id' => $driver->id,
+            'amount' => 1250,
+            'currency' => 'EUR',
+            'status' => 'pending',
+        ]);
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $this->withToken($token)->postJson("/api/offers/{$offer->id}/approve", [
+            'driver_user_id' => $driver->id,
+        ])->assertOk()->assertJsonPath('data.status', 'accepted');
+
+        $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => $driver->id, 'status' => 'assigned']);
+        $this->assertDatabaseHas('offers', ['id' => $offer->id, 'status' => 'accepted']);
     }
 }
