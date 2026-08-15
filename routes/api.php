@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\RouteStopController;
 use App\Http\Controllers\Api\ShipmentController;
+use App\Http\Controllers\Api\ShipmentInvoiceDocumentController;
 use App\Http\Controllers\Api\TrackingEventController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VehicleController;
@@ -42,6 +43,9 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('shipments/{shipment}/invoice/{document}', ShipmentInvoiceDocumentController::class)
+        ->where('document', 'predracun|a4-faktura');
+
     Route::apiResources([
         'vehicles' => VehicleController::class,
         'vehicle-locations' => VehicleLocationController::class,
