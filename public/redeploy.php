@@ -12,6 +12,19 @@ chdir($baseDir);
 putenv('COMPOSER_ALLOW_SUPERUSER=1');
 putenv('COMPOSER_NO_INTERACTION=1');
 
+$environmentFile = $baseDir.DIRECTORY_SEPARATOR.'.env';
+if (is_file($environmentFile)) {
+    $environment = file_get_contents($environmentFile);
+
+    if (is_string($environment)) {
+        $normalizedEnvironment = preg_replace('/^(DB_HOST=)https?:\/\//m', '$1', $environment);
+
+        if (is_string($normalizedEnvironment) && $normalizedEnvironment !== $environment) {
+            file_put_contents($environmentFile, $normalizedEnvironment, LOCK_EX);
+        }
+    }
+}
+
 $composerHome = $baseDir.DIRECTORY_SEPARATOR.'.composer';
 $composerCache = $composerHome.DIRECTORY_SEPARATOR.'cache';
 
@@ -177,11 +190,11 @@ $commands = [
     ['label' => 'Pulling latest code', 'command' => 'git pull --ff-only'],
     ['label' => 'Installing Composer dependencies', 'command' => $composer.' install --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-dev --no-ansi'],
     ['label' => 'Clearing Laravel config cache', 'command' => $phpCommand.' artisan config:clear --no-ansi'],
-    ['label' => 'Clearing Laravel application cache', 'command' => $phpCommand.' artisan cache:clear --no-ansi'],
     ['label' => 'Clearing Laravel route cache', 'command' => $phpCommand.' artisan route:clear --no-ansi'],
     ['label' => 'Clearing Laravel view cache', 'command' => $phpCommand.' artisan view:clear --no-ansi'],
     ['label' => 'Running database migrations', 'command' => $phpCommand.' artisan migrate --force --no-ansi'],
     ['label' => 'Seeding demo roles and accounts', 'command' => $phpCommand.' artisan db:seed --force --no-ansi'],
+    ['label' => 'Clearing Laravel application cache', 'command' => $phpCommand.' artisan cache:clear --no-ansi'],
     ['label' => 'Rebuilding Laravel config cache', 'command' => $phpCommand.' artisan config:cache --no-ansi'],
 ];
 
