@@ -38,6 +38,15 @@ class AuthAndLoadApiTest extends TestCase
             ->assertJsonPath('data.username', 'customer_demo');
     }
 
+    public function test_local_frontend_login_uses_bearer_auth_without_csrf(): void
+    {
+        $this->withHeaders(['Origin' => 'http://localhost:3000'])
+            ->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])
+            ->assertOk()
+            ->assertJsonPath('data.user.role.name', 'superadmin')
+            ->assertJsonStructure(['data' => ['token']]);
+    }
+
     public function test_seeder_creates_all_five_accounts_with_superadmin_first(): void
     {
         $this->assertSame('superadmin', Role::query()->orderBy('id')->value('name'));
