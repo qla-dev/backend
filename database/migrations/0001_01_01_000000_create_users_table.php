@@ -11,6 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // MySQL DDL is not transactional. Clean only this migration's tables
+        // when retrying after an interrupted or failed first deployment.
+        Schema::disableForeignKeyConstraints();
+        try {
+            Schema::dropIfExists('sessions');
+            Schema::dropIfExists('password_reset_tokens');
+            Schema::dropIfExists('company_user');
+            Schema::dropIfExists('companies');
+            Schema::dropIfExists('users');
+            Schema::dropIfExists('roles');
+        } finally {
+            Schema::enableForeignKeyConstraints();
+        }
+
         Schema::create('roles', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
