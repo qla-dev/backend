@@ -6,6 +6,7 @@ use App\Http\Resources\EntityResource;
 use App\Models\DriverProfile;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,13 @@ class UserController extends CrudController
     protected function searchColumns(): array
     {
         return ['name', 'email', 'username'];
+    }
+
+    protected function applyFilters(Builder $query, Request $request): void
+    {
+        if ($request->filled('role')) {
+            $query->whereHas('role', fn (Builder $roleQuery) => $roleQuery->where('name', $request->string('role')));
+        }
     }
 
     public function storeCustomer(Request $request): JsonResponse

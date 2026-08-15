@@ -97,6 +97,78 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseMissing('load_stops', ['load_id' => $loadId]);
     }
 
+    public function test_post_load_modal_payload_creates_a_publishable_load(): void
+    {
+        $token = $this->postJson('/api/auth/login', [
+            'login' => 'customer_demo',
+            'password' => 'demo12345',
+        ])->json('data.token');
+
+        $response = $this->withToken($token)->postJson('/api/loads', [
+            'title' => 'Full modal flow cargo',
+            'transport_type' => 'road',
+            'cargo_type' => 'FTL',
+            'goods_type' => 'General',
+            'weight_kg' => 24000,
+            'length_m' => 13.6,
+            'volume_m3' => 82,
+            'pallets' => 24,
+            'declared_value' => 50000,
+            'budget' => 1450,
+            'currency' => 'EUR',
+            'payment_terms' => 'negotiable',
+            'payment_due_days' => 30,
+            'requires_adr' => false,
+            'requires_tail_lift' => false,
+            'must_be_trackable' => true,
+            'is_urgent' => false,
+            'body_types' => ['Curtain'],
+            'contact' => [
+                'name' => 'Current user',
+                'phone' => '+38733123456',
+                'mobile' => '',
+                'email' => 'customer@smartfreight.test',
+                'fax' => '',
+            ],
+            'notes' => 'Created through the post-load wizard.',
+            'internal_comments' => null,
+            'external_comments' => null,
+            'status' => 'available',
+            'published_at' => '2026-08-15T12:00:00Z',
+            'stops' => [
+                [
+                    'type' => 'pickup', 'position' => 1, 'place_type' => 'Loading place',
+                    'city' => 'Sarajevo', 'country_code' => 'BA', 'address' => 'Warehouse 1',
+                    'window_starts_at' => '2026-08-20T08:00:00', 'window_ends_at' => '2026-08-20T10:00:00',
+                ],
+                [
+                    'type' => 'delivery', 'position' => 2, 'place_type' => 'Unloading place',
+                    'city' => 'Berlin', 'country_code' => 'DE', 'address' => 'Terminal 2',
+                    'window_starts_at' => '2026-08-22T08:00:00', 'window_ends_at' => '2026-08-22T12:00:00',
+                ],
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('data.title', 'Full modal flow cargo')
+            ->assertJsonPath('data.status', 'available')
+            ->assertJsonPath('data.weight_kg', 24000)
+            ->assertJsonPath('data.contact.name', 'Current user')
+            ->assertJsonCount(2, 'data.stops');
+
+        $loadId = $response->json('data.id');
+        $this->assertDatabaseHas('loads', [
+            'id' => $loadId,
+            'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
+            'weight_kg' => 24000,
+            'status' => 'available',
+        ]);
+        $this->assertDatabaseHas('load_stops', [
+            'load_id' => $loadId,
+            'type' => 'delivery',
+            'city' => 'Berlin',
+            'position' => 2,
+        ]);
+    }
+
     public function test_invalid_foreign_key_is_rejected_before_insert(): void
     {
         $token = $this->postJson('/api/auth/login', [
@@ -187,6 +259,28 @@ class AuthAndLoadApiTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.role.name', 'user');
 
         $this->assertDatabaseHas('users', ['id' => $response->json('data.id'), 'username' => 'manual_customer', 'is_active' => true]);
+    }
+
+    public function test_customer_listing_supports_server_side_search_limit_and_page_number(): void
+    {
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $this->withToken($token)->postJson('/api/users/customer', [
+            'name' => 'Pagination Customer', 'email' => 'pagination.customer@example.com',
+            'username' => 'pagination_customer', 'password' => 'secure-pass-123',
+            'country_code' => 'BA', 'language' => 'bs',
+        ])->assertCreated();
+
+        $this->withToken($token)
+            ->getJson('/api/users?role=user&search=customer&limit=1&pageno=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.role.name', 'user')
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.page_no', 2)
+            ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonPath('meta.limit', 1)
+            ->assertJsonPath('meta.total', 2);
     }
 
     public function test_superadmin_can_onboard_a_company_with_owner_and_membership(): void

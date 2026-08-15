@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EntityResource;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,10 @@ abstract class CrudController extends Controller
         return [];
     }
 
+    protected function applyFilters(Builder $query, Request $request): void
+    {
+    }
+
     public function index(Request $request): JsonResponse
     {
         $model = $this->modelClass();
@@ -43,13 +48,20 @@ abstract class CrudController extends Controller
             });
         }
 
-        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
-        $page = $query->latest('id')->paginate($perPage);
+        $this->applyFilters($query, $request);
+
+        $perPage = max(1, min(500, (int) $request->query('limit', $request->query('per_page', 25))));
+        $pageNumber = max(1, (int) $request->query('pageno', $request->query('page_no', $request->query('page', 1))));
+        $page = $query->latest('id')->paginate($perPage, ['*'], 'page', $pageNumber);
 
         return $this->success(
             EntityResource::collection($page->items())->resolve($request),
             'Resources retrieved successfully.',
-            ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total()]
+            [
+                'current_page' => $page->currentPage(), 'page_no' => $page->currentPage(),
+                'last_page' => $page->lastPage(), 'per_page' => $page->perPage(),
+                'limit' => $page->perPage(), 'total' => $page->total(),
+            ]
         );
     }
 
