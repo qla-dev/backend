@@ -18,15 +18,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $roleLabels = ['user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'superadmin' => 'Superadmin'];
+        $roleLabels = ['superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration'];
         $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => $name === 'superadmin' ? ['*'] : [], 'is_active' => true])]);
 
         $accounts = [
+            'superadmin_demo' => ['role' => 'superadmin', 'name' => 'John Doe'],
             'customer_demo' => ['role' => 'user', 'name' => 'Demo Customer'],
             'driver_demo' => ['role' => 'driver', 'name' => 'Demo Driver'],
             'company_demo' => ['role' => 'company', 'name' => 'Smartfreight Logistics Hub'],
             'finance_demo' => ['role' => 'finance', 'name' => 'Demo Finance'],
-            'superadmin_demo' => ['role' => 'superadmin', 'name' => 'John Doe'],
         ];
 
         $users = collect($accounts)->mapWithKeys(function (array $account, string $username) use ($roles) {

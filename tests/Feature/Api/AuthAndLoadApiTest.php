@@ -4,6 +4,8 @@ namespace Tests\Feature\Api;
 
 use App\Models\Load;
 use App\Models\LoadStop;
+use App\Models\Role;
+use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -33,6 +35,18 @@ class AuthAndLoadApiTest extends TestCase
             ->getJson('/api/auth/me')
             ->assertOk()
             ->assertJsonPath('data.username', 'customer_demo');
+    }
+
+    public function test_seeder_creates_all_five_accounts_with_superadmin_first(): void
+    {
+        $this->assertSame('superadmin', Role::query()->orderBy('id')->value('name'));
+        $this->assertSame([
+            'superadmin_demo',
+            'customer_demo',
+            'driver_demo',
+            'company_demo',
+            'finance_demo',
+        ], User::query()->orderBy('id')->pluck('username')->all());
     }
 
     public function test_authenticated_user_can_create_update_and_delete_a_load_with_stops(): void
