@@ -10,8 +10,8 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -104,7 +104,9 @@ class AuthController extends Controller
             'country_code' => ['nullable', 'string', 'size:2'], 'avatar_url' => ['nullable', 'url'],
             'password' => ['sometimes', 'string', 'min:8'],
         ]);
-        if (isset($data['country_code'])) $data['country_code'] = strtoupper($data['country_code']);
+        if (isset($data['country_code'])) {
+            $data['country_code'] = strtoupper($data['country_code']);
+        }
         $user->update($data);
 
         return response()->json(['message' => 'Profile updated.', 'data' => (new EntityResource($user->load(['role', 'companies', 'driver', 'customerProfile'])))->resolve($request), 'meta' => [], 'errors' => []]);

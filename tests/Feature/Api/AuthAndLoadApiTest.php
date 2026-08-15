@@ -2,12 +2,13 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\Company;
+use App\Models\Customer;
+use App\Models\Driver;
 use App\Models\Load;
 use App\Models\LoadStop;
 use App\Models\Offer;
 use App\Models\Role;
-use App\Models\Customer;
-use App\Models\Driver;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -316,6 +317,28 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseHas('customers', ['id' => $response->json('data.id'), 'user_id' => $userId, 'status' => 'active']);
     }
 
+    public function test_superadmin_can_create_a_customer_without_a_user_account(): void
+    {
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $response = $this->withToken($token)->postJson('/api/customers', [
+            'name' => 'Standalone Customer',
+            'email' => 'standalone.customer@example.com',
+            'phone' => '+38761111222',
+            'country_code' => 'BA',
+        ])->assertCreated()
+            ->assertJsonPath('data.name', 'Standalone Customer')
+            ->assertJsonPath('data.user_id', null)
+            ->assertJsonPath('data.is_active', false);
+
+        $this->assertDatabaseHas('customers', [
+            'id' => $response->json('data.id'),
+            'user_id' => null,
+            'profile_authorized_at' => null,
+        ]);
+        $this->assertDatabaseMissing('users', ['email' => 'standalone.customer@example.com']);
+    }
+
     public function test_customer_listing_supports_server_side_search_limit_and_page_number(): void
     {
         $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
@@ -359,7 +382,7 @@ class AuthAndLoadApiTest extends TestCase
     public function test_superadmin_can_create_a_driver_with_profile_and_company_membership(): void
     {
         $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
-        $company = \App\Models\Company::query()->firstOrFail();
+        $company = Company::query()->firstOrFail();
 
         $response = $this->withToken($token)->postJson('/api/drivers', [
             'name' => 'Manual Driver', 'email' => 'manual.driver@example.com',
@@ -375,5 +398,28 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $userId, 'username' => 'manual_driver', 'is_active' => true]);
         $this->assertDatabaseHas('drivers', ['user_id' => $userId, 'primary_company_id' => $company->id, 'license_number' => 'BA-MANUAL-DRIVER']);
         $this->assertDatabaseHas('company_user', ['company_id' => $company->id, 'user_id' => $userId, 'company_role' => 'driver', 'status' => 'active']);
+    }
+
+    public function test_superadmin_can_create_a_driver_without_a_user_account(): void
+    {
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $response = $this->withToken($token)->postJson('/api/drivers', [
+            'name' => 'Standalone Driver',
+            'email' => 'standalone.driver@example.com',
+            'license_number' => 'BA-STANDALONE-001',
+            'license_country_code' => 'BA',
+            'license_expires_at' => now()->addYear()->toDateString(),
+        ])->assertCreated()
+            ->assertJsonPath('data.name', 'Standalone Driver')
+            ->assertJsonPath('data.user_id', null)
+            ->assertJsonPath('data.is_active', false);
+
+        $this->assertDatabaseHas('drivers', [
+            'id' => $response->json('data.id'),
+            'user_id' => null,
+            'profile_authorized_at' => null,
+        ]);
+        $this->assertDatabaseMissing('users', ['email' => 'standalone.driver@example.com']);
     }
 }

@@ -41,7 +41,13 @@ class DatabaseSeeder extends Seeder
 
         Customer::query()->updateOrCreate(
             ['user_id' => $users['customer_demo']->id],
-            ['customer_type' => 'private', 'status' => 'active']
+            [
+                'name' => $users['customer_demo']->name,
+                'email' => $users['customer_demo']->email,
+                'customer_type' => 'private',
+                'status' => 'active',
+                'profile_authorized_at' => now(),
+            ]
         );
 
         $company = Company::query()->updateOrCreate(['slug' => 'smartfreight-logistics-hub'], [
@@ -54,7 +60,7 @@ class DatabaseSeeder extends Seeder
             $users['finance_demo']->id => ['company_role' => 'finance', 'status' => 'active', 'invited_by_user_id' => $users['company_demo']->id, 'joined_at' => now()],
         ]);
 
-        Driver::query()->updateOrCreate(['user_id' => $users['driver_demo']->id], ['primary_company_id' => $company->id, 'license_number' => 'BA-DEMO-001', 'license_country_code' => 'BA', 'license_expires_at' => now()->addYears(3), 'availability_status' => 'available', 'rating' => 4.90]);
+        Driver::query()->updateOrCreate(['user_id' => $users['driver_demo']->id], ['name' => $users['driver_demo']->name, 'email' => $users['driver_demo']->email, 'profile_authorized_at' => now(), 'primary_company_id' => $company->id, 'license_number' => 'BA-DEMO-001', 'license_country_code' => 'BA', 'license_expires_at' => now()->addYears(3), 'availability_status' => 'available', 'rating' => 4.90]);
         $vehicle = Vehicle::query()->updateOrCreate(['registration_number' => 'DEMO-001'], ['company_id' => $company->id, 'owner_user_id' => $users['company_demo']->id, 'assigned_driver_user_id' => $users['driver_demo']->id, 'transport_type' => 'road', 'vehicle_type' => 'Truck', 'make' => 'Mercedes-Benz', 'model' => 'Actros', 'year' => 2025, 'capacity_kg' => 24000, 'status' => 'active']);
         $load = Load::query()->updateOrCreate(['public_id' => '00000000-0000-4000-8000-000000000001'], ['customer_user_id' => $users['customer_demo']->id, 'company_id' => $company->id, 'assigned_driver_user_id' => $users['driver_demo']->id, 'vehicle_id' => $vehicle->id, 'title' => 'Pharma Temperature Cargo', 'status' => 'in_transit', 'transport_type' => 'road', 'cargo_type' => 'FTL', 'goods_type' => 'Pharma', 'weight_kg' => 11200, 'budget' => 1480, 'currency' => 'EUR', 'payment_terms' => 'on_delivery', 'must_be_trackable' => true, 'published_at' => now()]);
         $load->stops()->delete();
