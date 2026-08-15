@@ -22,6 +22,11 @@ class Load extends BaseModel
         return $this->belongsTo(User::class, 'customer_user_id');
     }
 
+    public function consignee(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'consignee_customer_id');
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

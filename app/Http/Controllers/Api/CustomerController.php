@@ -78,6 +78,44 @@ class CustomerController extends CrudController
             ->orderBy('id');
     }
 
+    public function options(Request $request): JsonResponse
+    {
+        $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'pageno' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $query = Customer::query()->with('user');
+        $this->applyFilters($query, $request);
+        $this->applyOrdering($query);
+
+        $limit = (int) $request->query('limit', 20);
+        $pageNumber = (int) $request->query('pageno', 1);
+        $page = $query->paginate($limit, ['*'], 'page', $pageNumber);
+
+        $options = collect($page->items())->map(fn (Customer $customer): array => [
+            'id' => $customer->id,
+            'text' => $customer->name ?: $customer->company_name ?: "Customer #{$customer->id}",
+            'name' => $customer->name ?: $customer->company_name,
+            'tax_number' => $customer->tax_number,
+            'country_code' => $customer->country_code,
+            'city' => $customer->city,
+            'address' => $customer->billing_address,
+            'source' => $customer->source,
+        ])->values()->all();
+
+        return $this->success($options, 'Customer options retrieved successfully.', [
+            'current_page' => $page->currentPage(),
+            'page_no' => $page->currentPage(),
+            'last_page' => $page->lastPage(),
+            'per_page' => $page->perPage(),
+            'limit' => $page->perPage(),
+            'total' => $page->total(),
+            'has_more' => $page->hasMorePages(),
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

@@ -19,7 +19,7 @@ class LoadController extends CrudController
 
     protected function relations(): array
     {
-        return ['customer.role', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'offers', 'shipment.events', 'routes.stops', 'notes.author', 'documents'];
+        return ['customer.role', 'consignee.user.role', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'offers', 'shipment.events', 'routes.stops', 'notes.author', 'documents'];
     }
 
     protected function searchColumns(): array
@@ -41,7 +41,7 @@ class LoadController extends CrudController
         $p = $updating ? 'sometimes' : 'required';
 
         return [
-            'customer_user_id' => ['sometimes', 'integer', 'exists:users,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'],
+            'customer_user_id' => ['sometimes', 'integer', 'exists:users,id'], 'consignee_customer_id' => ['nullable', 'integer', 'exists:customers,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'assigned_driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'title' => [$p, 'string', 'max:255'], 'status' => ['sometimes', 'string', 'max:50'], 'transport_type' => ['sometimes', 'in:road,air,sea'],
             'cargo_type' => [$p, 'string', 'max:100'], 'goods_type' => ['nullable', 'string', 'max:100'], 'weight_kg' => [$p, 'numeric', 'min:0.01'],
@@ -75,7 +75,7 @@ class LoadController extends CrudController
                 $load->stops()->createMany($stops);
             }
 
-return $load;
+            return $load;
         });
         $load->load($this->relations());
 
@@ -96,7 +96,7 @@ return $load;
                 $load->stops()->createMany($stops);
             }
 
-return $load;
+            return $load;
         });
         $load->load($this->relations());
 

@@ -127,6 +127,64 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseMissing('load_stops', ['load_id' => $loadId]);
     }
 
+    public function test_authenticated_customer_options_use_remote_search_and_load_more_pagination(): void
+    {
+        $token = $this->postJson('/api/auth/login', [
+            'login' => 'customer_demo',
+            'password' => 'demo12345',
+        ])->json('data.token');
+
+        foreach (range(1, 25) as $number) {
+            Customer::query()->create([
+                'name' => sprintf('Paged Consignee %02d', $number),
+                'customer_type' => 'business',
+                'status' => 'active',
+            ]);
+        }
+
+        $this->withToken($token)
+            ->getJson('/api/customer-options?search=Paged%20Consignee&limit=20&pageno=1')
+            ->assertOk()
+            ->assertJsonCount(20, 'data')
+            ->assertJsonPath('meta.page_no', 1)
+            ->assertJsonPath('meta.has_more', true)
+            ->assertJsonStructure(['data' => [['id', 'text', 'name', 'tax_number', 'country_code', 'city', 'address', 'source']]]);
+
+        $this->withToken($token)
+            ->getJson('/api/customer-options?search=Paged%20Consignee&limit=20&pageno=2')
+            ->assertOk()
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('meta.page_no', 2)
+            ->assertJsonPath('meta.has_more', false);
+    }
+
+    public function test_new_load_can_reference_a_standalone_customer_as_consignee(): void
+    {
+        $token = $this->postJson('/api/auth/login', [
+            'login' => 'customer_demo',
+            'password' => 'demo12345',
+        ])->json('data.token');
+        $consignee = Customer::query()->create([
+            'name' => 'Global Standalone Consignee',
+            'customer_type' => 'business',
+            'status' => 'active',
+        ]);
+
+        $response = $this->withToken($token)->postJson('/api/loads', [
+            'consignee_customer_id' => $consignee->id,
+            'title' => 'Load with global consignee',
+            'cargo_type' => 'FTL',
+            'weight_kg' => 12000,
+        ])->assertCreated()
+            ->assertJsonPath('data.consignee.id', $consignee->id)
+            ->assertJsonPath('data.consignee.name', 'Global Standalone Consignee');
+
+        $this->assertDatabaseHas('loads', [
+            'id' => $response->json('data.id'),
+            'consignee_customer_id' => $consignee->id,
+        ]);
+    }
+
     public function test_post_load_modal_payload_creates_a_publishable_load(): void
     {
         $token = $this->postJson('/api/auth/login', [

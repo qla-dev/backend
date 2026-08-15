@@ -58,6 +58,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'messages' => MessageController::class,
     ]);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
+    Route::get('customer-options', [CustomerController::class, 'options']);
 
     Route::middleware('role:company,superadmin')->group(function (): void {
         Route::apiResources([
