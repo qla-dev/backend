@@ -166,4 +166,35 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => $driver->id, 'status' => 'assigned']);
         $this->assertDatabaseHas('offers', ['id' => $offer->id, 'status' => 'accepted']);
     }
+
+    public function test_superadmin_can_manually_create_a_customer_account(): void
+    {
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $response = $this->withToken($token)->postJson('/api/users/customer', [
+            'name' => 'Manual Customer', 'email' => 'manual.customer@example.com',
+            'username' => 'manual_customer', 'password' => 'secure-pass-123',
+            'country_code' => 'DE', 'language' => 'de',
+        ])->assertCreated()->assertJsonPath('data.role.name', 'user');
+
+        $this->assertDatabaseHas('users', ['id' => $response->json('data.id'), 'username' => 'manual_customer', 'is_active' => true]);
+    }
+
+    public function test_superadmin_can_onboard_a_company_with_owner_and_membership(): void
+    {
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $response = $this->withToken($token)->postJson('/api/companies/onboard', [
+            'company_name' => 'Manual Logistics GmbH', 'company_email' => 'office@manual-logistics.example',
+            'country_code' => 'DE', 'city' => 'Berlin', 'plan' => 'growth', 'status' => 'verified',
+            'owner_name' => 'Manual Owner', 'owner_email' => 'owner@manual-logistics.example',
+            'owner_username' => 'manual_company_owner', 'owner_password' => 'secure-pass-123',
+        ])->assertCreated()->assertJsonPath('data.name', 'Manual Logistics GmbH');
+
+        $companyId = $response->json('data.id');
+        $owner = User::query()->where('username', 'manual_company_owner')->firstOrFail();
+        $this->assertSame('company', $owner->role->name);
+        $this->assertDatabaseHas('companies', ['id' => $companyId, 'owner_user_id' => $owner->id]);
+        $this->assertDatabaseHas('company_user', ['company_id' => $companyId, 'user_id' => $owner->id, 'company_role' => 'admin', 'status' => 'active']);
+    }
 }
