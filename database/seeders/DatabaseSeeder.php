@@ -1,0 +1,59 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Company;
+use App\Models\DriverProfile;
+use App\Models\Load;
+use App\Models\Role;
+use App\Models\Shipment;
+use App\Models\User;
+use App\Models\Vehicle;
+use Illuminate\Database\Seeder;
+
+class DatabaseSeeder extends Seeder
+{
+    /**
+     * Seed the application's database.
+     */
+    public function run(): void
+    {
+        $roleLabels = ['user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'superadmin' => 'Superadmin'];
+        $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => $name === 'superadmin' ? ['*'] : [], 'is_active' => true])]);
+
+        $accounts = [
+            'customer_demo' => ['role' => 'user', 'name' => 'Demo Customer'],
+            'driver_demo' => ['role' => 'driver', 'name' => 'Demo Driver'],
+            'company_demo' => ['role' => 'company', 'name' => 'Smartfreight Logistics Hub'],
+            'finance_demo' => ['role' => 'finance', 'name' => 'Demo Finance'],
+            'superadmin_demo' => ['role' => 'superadmin', 'name' => 'John Doe'],
+        ];
+
+        $users = collect($accounts)->mapWithKeys(function (array $account, string $username) use ($roles) {
+            $user = User::query()->updateOrCreate(['username' => $username], [
+                'role_id' => $roles[$account['role']]->id, 'name' => $account['name'], 'email' => "{$username}@smartfreight.test",
+                'password' => 'demo12345', 'language' => 'bs', 'country_code' => 'BA', 'is_active' => true, 'email_verified_at' => now(),
+            ]);
+
+            return [$username => $user];
+        });
+
+        $company = Company::query()->updateOrCreate(['slug' => 'smartfreight-logistics-hub'], [
+            'owner_user_id' => $users['company_demo']->id, 'name' => 'Smartfreight Logistics Hub', 'email' => 'company_demo@smartfreight.test',
+            'country_code' => 'BA', 'city' => 'Sarajevo', 'plan' => 'enterprise', 'status' => 'verified', 'verified_at' => now(),
+        ]);
+        $company->users()->syncWithoutDetaching([
+            $users['company_demo']->id => ['company_role' => 'admin', 'status' => 'active', 'joined_at' => now()],
+            $users['driver_demo']->id => ['company_role' => 'driver', 'status' => 'active', 'invited_by_user_id' => $users['company_demo']->id, 'joined_at' => now()],
+            $users['finance_demo']->id => ['company_role' => 'finance', 'status' => 'active', 'invited_by_user_id' => $users['company_demo']->id, 'joined_at' => now()],
+        ]);
+
+        DriverProfile::query()->updateOrCreate(['user_id' => $users['driver_demo']->id], ['primary_company_id' => $company->id, 'license_number' => 'BA-DEMO-001', 'license_country_code' => 'BA', 'license_expires_at' => now()->addYears(3), 'availability_status' => 'available', 'rating' => 4.90]);
+        $vehicle = Vehicle::query()->updateOrCreate(['registration_number' => 'DEMO-001'], ['company_id' => $company->id, 'owner_user_id' => $users['company_demo']->id, 'assigned_driver_user_id' => $users['driver_demo']->id, 'transport_type' => 'road', 'vehicle_type' => 'Truck', 'make' => 'Mercedes-Benz', 'model' => 'Actros', 'year' => 2025, 'capacity_kg' => 24000, 'status' => 'active']);
+        $load = Load::query()->updateOrCreate(['public_id' => '00000000-0000-4000-8000-000000000001'], ['customer_user_id' => $users['customer_demo']->id, 'company_id' => $company->id, 'assigned_driver_user_id' => $users['driver_demo']->id, 'vehicle_id' => $vehicle->id, 'title' => 'Pharma Temperature Cargo', 'status' => 'in_transit', 'transport_type' => 'road', 'cargo_type' => 'FTL', 'goods_type' => 'Pharma', 'weight_kg' => 11200, 'budget' => 1480, 'currency' => 'EUR', 'payment_terms' => 'on_delivery', 'must_be_trackable' => true, 'published_at' => now()]);
+        $load->stops()->delete();
+        $load->stops()->createMany([['type' => 'pickup', 'position' => 1, 'city' => 'Sarajevo', 'country_code' => 'BA', 'window_starts_at' => now()], ['type' => 'delivery', 'position' => 2, 'city' => 'Vienna', 'country_code' => 'AT', 'window_starts_at' => now()->addDay()]]);
+        $shipment = Shipment::query()->updateOrCreate(['load_id' => $load->id], ['tracking_number' => 'SWP-DEMO-001', 'carrier' => $company->name, 'status' => 'in_transit', 'estimated_delivery_at' => now()->addDay()]);
+        $shipment->events()->firstOrCreate(['title' => 'Departed Sarajevo Hub'], ['status' => 'in_transit', 'location' => 'Sarajevo, BA', 'occurred_at' => now(), 'created_by_user_id' => $users['driver_demo']->id]);
+    }
+}
