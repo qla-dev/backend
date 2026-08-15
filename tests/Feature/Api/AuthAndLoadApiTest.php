@@ -197,4 +197,25 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseHas('companies', ['id' => $companyId, 'owner_user_id' => $owner->id]);
         $this->assertDatabaseHas('company_user', ['company_id' => $companyId, 'user_id' => $owner->id, 'company_role' => 'admin', 'status' => 'active']);
     }
+
+    public function test_superadmin_can_create_a_driver_with_profile_and_company_membership(): void
+    {
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+        $company = \App\Models\Company::query()->firstOrFail();
+
+        $response = $this->withToken($token)->postJson('/api/users/driver', [
+            'name' => 'Manual Driver', 'email' => 'manual.driver@example.com',
+            'username' => 'manual_driver', 'password' => 'secure-pass-123',
+            'country_code' => 'BA', 'language' => 'bs', 'primary_company_id' => $company->id,
+            'license_number' => 'BA-MANUAL-DRIVER', 'license_country_code' => 'BA',
+            'license_expires_at' => now()->addYears(2)->toDateString(), 'availability_status' => 'available',
+        ])->assertCreated()
+            ->assertJsonPath('data.user.role.name', 'driver')
+            ->assertJsonPath('data.primary_company.id', $company->id);
+
+        $userId = $response->json('data.user.id');
+        $this->assertDatabaseHas('users', ['id' => $userId, 'username' => 'manual_driver', 'is_active' => true]);
+        $this->assertDatabaseHas('driver_profiles', ['user_id' => $userId, 'primary_company_id' => $company->id, 'license_number' => 'BA-MANUAL-DRIVER']);
+        $this->assertDatabaseHas('company_user', ['company_id' => $company->id, 'user_id' => $userId, 'company_role' => 'driver', 'status' => 'active']);
+    }
 }

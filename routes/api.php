@@ -76,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
         Route::post('users/customer', [UserController::class, 'storeCustomer']);
+        Route::post('users/driver', [UserController::class, 'storeDriver']);
         Route::apiResources([
             'roles' => RoleController::class,
             'users' => UserController::class,
