@@ -32,7 +32,7 @@ class UserController extends CrudController
 
     protected function searchColumns(): array
     {
-        return ['name', 'email', 'username'];
+        return ['name', 'email', 'username', 'phone', 'country_code'];
     }
 
     protected function applyFilters(Builder $query, Request $request): void
