@@ -361,6 +361,23 @@ class AuthAndLoadApiTest extends TestCase
             ->assertJsonPath('meta.total', 2);
     }
 
+    public function test_customer_listing_uses_deklarant_name_order_by_default(): void
+    {
+        $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+
+        Customer::query()->create(['name' => 'Zulu Logistics', 'customer_type' => 'business', 'status' => 'active']);
+        Customer::query()->create(['name' => '059 d.o.o. Bileća', 'customer_type' => 'business', 'status' => 'active']);
+
+        $response = $this->withToken($token)->getJson('/api/customers?limit=50&pageno=1')->assertOk();
+
+        $names = collect($response->json('data'))->pluck('name')->all();
+        $sortedNames = $names;
+        sort($sortedNames, SORT_NATURAL | SORT_FLAG_CASE);
+
+        $this->assertSame($sortedNames, $names);
+        $this->assertSame('059 d.o.o. Bileća', $names[0]);
+    }
+
     public function test_superadmin_can_onboard_a_company_with_owner_and_membership(): void
     {
         $token = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');

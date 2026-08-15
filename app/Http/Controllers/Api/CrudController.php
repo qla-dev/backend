@@ -29,8 +29,11 @@ abstract class CrudController extends Controller
         return [];
     }
 
-    protected function applyFilters(Builder $query, Request $request): void
+    protected function applyFilters(Builder $query, Request $request): void {}
+
+    protected function applyOrdering(Builder $query): void
     {
+        $query->orderByDesc('id');
     }
 
     public function index(Request $request): JsonResponse
@@ -49,10 +52,11 @@ abstract class CrudController extends Controller
         }
 
         $this->applyFilters($query, $request);
+        $this->applyOrdering($query);
 
         $perPage = max(1, min(500, (int) $request->query('limit', $request->query('per_page', 25))));
         $pageNumber = max(1, (int) $request->query('pageno', $request->query('page_no', $request->query('page', 1))));
-        $page = $query->latest('id')->paginate($perPage, ['*'], 'page', $pageNumber);
+        $page = $query->paginate($perPage, ['*'], 'page', $pageNumber);
 
         return $this->success(
             EntityResource::collection($page->items())->resolve($request),

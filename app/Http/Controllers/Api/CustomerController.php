@@ -64,6 +64,11 @@ class CustomerController extends CrudController
         }
     }
 
+    protected function applyOrdering(Builder $query): void
+    {
+        $query->orderBy('name')->orderBy('id');
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
