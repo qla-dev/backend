@@ -5,9 +5,9 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-// The production API is deployed below /backend. The parent .htaccess
+// The production API is deployed below /endpoints. The parent .htaccess
 // forwards clean URLs into public while REQUEST_URI keeps the prefix.
-$deploymentPrefix = '/backend';
+$deploymentPrefix = '/endpoints';
 $requestUri = $_SERVER['REQUEST_URI'] ?? '';
 if (
     ($requestUri === $deploymentPrefix || str_starts_with($requestUri, $deploymentPrefix.'/'))

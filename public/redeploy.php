@@ -7,18 +7,6 @@ ini_set('memory_limit', '512M');
 ini_set('output_buffering', '0');
 ini_set('zlib.output_compression', '0');
 
-if (PHP_SAPI !== 'cli') {
-    $password = (string) ($_SERVER['PHP_AUTH_PW'] ?? '');
-
-    if (! hash_equals('1234', $password)) {
-        header('WWW-Authenticate: Basic realm="Smartfreight backend redeploy"');
-        header('HTTP/1.1 401 Unauthorized');
-        header('Content-Type: text/plain; charset=utf-8');
-        echo "Authentication required.\n";
-        exit;
-    }
-}
-
 $baseDir = dirname(__DIR__);
 chdir($baseDir);
 putenv('COMPOSER_ALLOW_SUPERUSER=1');
