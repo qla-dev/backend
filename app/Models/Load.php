@@ -26,6 +26,7 @@ class Load extends BaseModel
             'is_fragile' => 'boolean', 'requires_adr' => 'boolean', 'requires_tail_lift' => 'boolean',
             'must_be_trackable' => 'boolean', 'is_urgent' => 'boolean', 'published_at' => 'datetime', 'completed_at' => 'datetime',
             'status_change' => 'array',
+            'etd_at' => 'datetime', 'atd_at' => 'datetime',
         ];
     }
 
