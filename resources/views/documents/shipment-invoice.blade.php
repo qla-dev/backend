@@ -1,8 +1,10 @@
 @php
   $money = static fn ($value): string => number_format((float) $value, 2, ',', '.') . ' ' . $invoice['currency'];
   $date = static fn ($value): string => \Illuminate\Support\Carbon::parse($value)->format('d.m.Y');
-  $sellerName = $seller?->name ?: ($shipment->carrier ?: 'SmartFreight partner');
+  $sellerName = $seller?->name ?: ($shipment?->carrier ?: 'SmartFreight partner');
   $buyerName = $buyer?->name ?: 'Kupac';
+  $trackingNumber = $trackingNumber ?? $shipment?->tracking_number ?? $load->public_id ?? $load->id;
+  $shipmentStatus = $shipmentStatus ?? $shipment?->status ?? $load->status ?? '—';
 @endphp
 <!doctype html>
 <html lang="bs">
@@ -85,7 +87,7 @@
       <section class="meta">
         <div><span class="label">Datum izdavanja</span><b>{{ $date($invoice['issued_at']) }}</b></div>
         <div><span class="label">Rok plaćanja</span><b>{{ $date($invoice['due_at']) }}</b></div>
-        <div><span class="label">Broj pošiljke</span><b>{{ $shipment->tracking_number }}</b></div>
+        <div><span class="label">Broj pošiljke</span><b>{{ $trackingNumber }}</b></div>
       </section>
 
       <table>
@@ -105,7 +107,7 @@
 
       <footer>
         Relacija: {{ $origin?->city ?: '—' }} → {{ $destination?->city ?: '—' }}<br>
-        Status pošiljke: {{ $shipment->status }} · Uslovi plaćanja: {{ $load->payment_terms }}
+        Status pošiljke: {{ $shipmentStatus }} · Uslovi plaćanja: {{ $load->payment_terms ?: '—' }}
       </footer>
     </article>
   </main>

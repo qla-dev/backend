@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\EmailTemplateController;
 use App\Http\Controllers\Api\FleetAccessController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
+use App\Http\Controllers\Api\LoadInvoiceDocumentController;
 use App\Http\Controllers\Api\LoadController;
 use App\Http\Controllers\Api\LoadNoteController;
 use App\Http\Controllers\Api\LoadStopController;
@@ -43,6 +44,8 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('loads/{load}/invoice/{document}', LoadInvoiceDocumentController::class)
+        ->where('document', 'predracun|a4-faktura');
     Route::get('shipments/{shipment}/invoice/{document}', ShipmentInvoiceDocumentController::class)
         ->where('document', 'predracun|a4-faktura');
 
