@@ -8,6 +8,17 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Load extends BaseModel
 {
+    public const STATUSES = [
+        'posted',
+        'opened',
+        'sent',
+        'in_delivery',
+        'received',
+        'finished',
+        'pending',
+        'cancelled',
+    ];
+
     protected function casts(): array
     {
         return [

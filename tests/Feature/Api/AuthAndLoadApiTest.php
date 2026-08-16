@@ -10,6 +10,7 @@ use App\Models\Load;
 use App\Models\LoadStop;
 use App\Models\Offer;
 use App\Models\Role;
+use App\Models\Shipment;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -42,6 +43,27 @@ class AuthAndLoadApiTest extends TestCase
             ->getJson('/api/auth/me')
             ->assertOk()
             ->assertJsonPath('data.username', 'customer_demo');
+    }
+
+    public function test_authenticated_user_can_open_shipment_payment_documents(): void
+    {
+        $token = $this->postJson('/api/auth/login', [
+            'login' => 'customer_demo',
+            'password' => 'demo12345',
+        ])->json('data.token');
+        $shipment = Shipment::query()->firstOrFail();
+
+        $this->withToken($token)
+            ->get("/api/shipments/{$shipment->id}/invoice/predracun")
+            ->assertOk()
+            ->assertSee('Predračun')
+            ->assertSee($shipment->tracking_number)
+            ->assertSee('Preuzmi PDF');
+
+        $this->withToken($token)
+            ->get("/api/shipments/{$shipment->id}/invoice/a4-faktura")
+            ->assertOk()
+            ->assertSee('A4 faktura');
     }
 
     public function test_local_frontend_login_uses_bearer_auth_without_csrf(): void

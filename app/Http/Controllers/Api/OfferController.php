@@ -47,7 +47,7 @@ class OfferController extends CrudController
             $offer->freightLoad->update([
                 'assigned_driver_user_id' => $driverId,
                 'company_id' => $offer->company_id ?? $offer->freightLoad->company_id,
-                'status' => 'assigned',
+                'status' => 'sent',
             ]);
 
             return $offer->fresh($this->relations());
