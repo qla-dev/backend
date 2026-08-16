@@ -80,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     Route::middleware('role:superadmin')->group(function (): void {
+        Route::patch('loads/{load}/status', [LoadController::class, 'updateStatus']);
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
         Route::post('customers/{customer}/authorize', [CustomerController::class, 'authorizeCustomer']);

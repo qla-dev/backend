@@ -25,7 +25,21 @@ class Load extends BaseModel
             'loading_methods' => 'array', 'body_types' => 'array', 'contact' => 'array',
             'is_fragile' => 'boolean', 'requires_adr' => 'boolean', 'requires_tail_lift' => 'boolean',
             'must_be_trackable' => 'boolean', 'is_urgent' => 'boolean', 'published_at' => 'datetime', 'completed_at' => 'datetime',
+            'status_change' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Load $load): void {
+            $load->status_change ??= now();
+        });
+
+        static::updating(function (Load $load): void {
+            if ($load->isDirty('status')) {
+                $load->status_change = now();
+            }
+        });
     }
 
     public function customer(): BelongsTo

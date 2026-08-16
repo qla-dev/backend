@@ -90,8 +90,11 @@ class LoadController extends CrudController
         $hasStops = array_key_exists('stops', $data);
         $stops = $data['stops'] ?? [];
         unset($data['stops']);
-        $load = DB::transaction(function () use ($id, $data, $hasStops, $stops) {
+        $load = DB::transaction(function () use ($request, $id, $data, $hasStops, $stops) {
             $load = Load::query()->findOrFail($id);
+            if (array_key_exists('status', $data) && $data['status'] !== $load->status) {
+                abort_unless($request->user()?->role?->name === 'superadmin', 403, 'Only a superadmin can change a load status.');
+            }
             $load->update($data);
             if ($hasStops) {
                 $load->stops()->delete();
@@ -103,5 +106,17 @@ class LoadController extends CrudController
         $load->load($this->relations());
 
         return $this->success((new EntityResource($load))->resolve($request), 'Load updated successfully.');
+    }
+
+    public function updateStatus(Request $request, Load $load): JsonResponse
+    {
+        $data = $request->validate([
+            'status' => ['required', Rule::in(Load::STATUSES)],
+        ]);
+
+        $load->update(['status' => $data['status']]);
+        $load->load($this->relations());
+
+        return $this->success((new EntityResource($load))->resolve($request), 'Load status updated successfully.');
     }
 }
