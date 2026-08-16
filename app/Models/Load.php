@@ -25,19 +25,21 @@ class Load extends BaseModel
             'loading_methods' => 'array', 'body_types' => 'array', 'contact' => 'array',
             'is_fragile' => 'boolean', 'requires_adr' => 'boolean', 'requires_tail_lift' => 'boolean',
             'must_be_trackable' => 'boolean', 'is_urgent' => 'boolean', 'published_at' => 'datetime', 'completed_at' => 'datetime',
-            'status_change' => 'datetime',
+            'status_change' => 'array',
         ];
     }
 
     protected static function booted(): void
     {
         static::creating(function (Load $load): void {
-            $load->status_change ??= now();
+            $load->status_change ??= [$load->status => now()->toIso8601String()];
         });
 
         static::updating(function (Load $load): void {
             if ($load->isDirty('status')) {
-                $load->status_change = now();
+                $history = $load->status_change ?? [];
+                $history[$load->status] = now()->toIso8601String();
+                $load->status_change = $history;
             }
         });
     }

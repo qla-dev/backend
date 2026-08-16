@@ -137,9 +137,9 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseCount('load_stops', 4);
 
         $this->withToken($token)
-            ->putJson("/api/loads/{$loadId}", ['status' => 'opened'])
+            ->putJson("/api/loads/{$loadId}", ['title' => 'Updated cold-chain cargo'])
             ->assertOk()
-            ->assertJsonPath('data.status', 'opened');
+            ->assertJsonPath('data.title', 'Updated cold-chain cargo');
 
         $this->withToken($token)
             ->deleteJson("/api/loads/{$loadId}")
@@ -383,6 +383,27 @@ class AuthAndLoadApiTest extends TestCase
 
         $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => $driver->id, 'status' => 'sent']);
         $this->assertDatabaseHas('offers', ['id' => $offer->id, 'status' => 'accepted']);
+    }
+
+    public function test_only_superadmin_can_change_load_status_and_timestamp_is_recorded(): void
+    {
+        $load = Load::query()->firstOrFail();
+        $customerToken = $this->postJson('/api/auth/login', ['login' => 'customer_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $this->withToken($customerToken)
+            ->patchJson("/api/loads/{$load->id}/status", ['status' => 'opened'])
+            ->assertForbidden();
+
+        $this->flushHeaders();
+        $this->app['auth']->forgetGuards();
+        $superadminToken = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+        $response = $this->withToken($superadminToken)
+            ->patchJson("/api/loads/{$load->id}/status", ['status' => 'opened'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'opened');
+
+        $this->assertNotEmpty($response->json('data.status_change.opened'));
+        $this->assertDatabaseHas('loads', ['id' => $load->id, 'status' => 'opened']);
     }
 
     public function test_superadmin_can_manually_create_a_customer_account(): void
