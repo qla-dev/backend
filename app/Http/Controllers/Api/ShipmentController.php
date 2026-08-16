@@ -13,7 +13,7 @@ class ShipmentController extends CrudController
 
     protected function relations(): array
     {
-        return ['freightLoad.stops', 'events'];
+        return ['freightLoad.stops', 'freightLoad.consignee', 'events'];
     }
 
     protected function searchColumns(): array
