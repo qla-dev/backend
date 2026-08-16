@@ -69,6 +69,7 @@ class LoadController extends CrudController
         $stops = $data['stops'] ?? [];
         unset($data['stops']);
         $data['customer_user_id'] = $data['customer_user_id'] ?? $request->user()->id;
+        $data['status'] = $data['status'] ?? 'pending';
         $data['public_id'] = (string) Str::uuid();
         $load = DB::transaction(function () use ($data, $stops) {
             $load = Load::query()->create($data);

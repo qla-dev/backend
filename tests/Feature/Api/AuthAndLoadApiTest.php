@@ -137,9 +137,9 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseCount('load_stops', 4);
 
         $this->withToken($token)
-            ->putJson("/api/loads/{$loadId}", ['status' => 'booked'])
+            ->putJson("/api/loads/{$loadId}", ['status' => 'opened'])
             ->assertOk()
-            ->assertJsonPath('data.status', 'booked');
+            ->assertJsonPath('data.status', 'opened');
 
         $this->withToken($token)
             ->deleteJson("/api/loads/{$loadId}")
@@ -243,7 +243,7 @@ class AuthAndLoadApiTest extends TestCase
             'notes' => 'Created through the post-load wizard.',
             'internal_comments' => null,
             'external_comments' => null,
-            'status' => 'available',
+            'status' => 'posted',
             'published_at' => '2026-08-15T12:00:00Z',
             'stops' => [
                 [
@@ -259,7 +259,7 @@ class AuthAndLoadApiTest extends TestCase
             ],
         ])->assertCreated()
             ->assertJsonPath('data.title', 'Full modal flow cargo')
-            ->assertJsonPath('data.status', 'available')
+            ->assertJsonPath('data.status', 'posted')
             ->assertJsonPath('data.weight_kg', 24000)
             ->assertJsonPath('data.contact.name', 'Current user')
             ->assertJsonCount(2, 'data.stops');
@@ -269,7 +269,7 @@ class AuthAndLoadApiTest extends TestCase
             'id' => $loadId,
             'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
             'weight_kg' => 24000,
-            'status' => 'available',
+            'status' => 'posted',
         ]);
         $this->assertDatabaseHas('load_stops', [
             'load_id' => $loadId,
@@ -286,11 +286,11 @@ class AuthAndLoadApiTest extends TestCase
             'password' => 'demo12345',
         ])->json('data.token');
 
-        $availableLoad = Load::query()->create([
+        $postedLoad = Load::query()->create([
             'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
             'public_id' => '00000000-0000-4000-8000-000000000099',
-            'title' => 'Available exchange cargo',
-            'status' => 'available',
+            'title' => 'Posted exchange cargo',
+            'status' => 'posted',
             'transport_type' => 'road',
             'cargo_type' => 'FTL',
             'weight_kg' => 1000,
@@ -298,12 +298,12 @@ class AuthAndLoadApiTest extends TestCase
         ]);
 
         $response = $this->withToken($token)
-            ->getJson('/api/loads?status=available&limit=100')
+            ->getJson('/api/loads?status=posted&limit=100')
             ->assertOk();
 
-        $this->assertSame([$availableLoad->id], collect($response->json('data'))->pluck('id')->all());
-        $this->assertNotContains('in_transit', collect($response->json('data'))->pluck('status')->all());
-        $this->assertNotContains('assigned', collect($response->json('data'))->pluck('status')->all());
+        $this->assertSame([$postedLoad->id], collect($response->json('data'))->pluck('id')->all());
+        $this->assertNotContains('in_delivery', collect($response->json('data'))->pluck('status')->all());
+        $this->assertNotContains('sent', collect($response->json('data'))->pluck('status')->all());
     }
 
     public function test_invalid_foreign_key_is_rejected_before_insert(): void
@@ -381,7 +381,7 @@ class AuthAndLoadApiTest extends TestCase
             'driver_user_id' => $driver->id,
         ])->assertOk()->assertJsonPath('data.status', 'accepted');
 
-        $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => $driver->id, 'status' => 'assigned']);
+        $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => $driver->id, 'status' => 'sent']);
         $this->assertDatabaseHas('offers', ['id' => $offer->id, 'status' => 'accepted']);
     }
 
