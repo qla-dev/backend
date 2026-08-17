@@ -36,4 +36,28 @@ class BulkLoadScanController extends Controller
 
         return response()->json(['message' => 'Document scanned.', 'data' => $result, 'meta' => [], 'errors' => []]);
     }
+
+    public function scanText(Request $request, OpenRouterBulkLoadScanner $scanner): JsonResponse
+    {
+        $validated = $request->validate([
+            'text' => ['required', 'string', 'min:8', 'max:40000'],
+        ], [
+            'text.required' => 'Add the spreadsheet data first.',
+            'text.min' => 'There is not enough data to read.',
+            'text.max' => 'That file is too large. Please split it into smaller batches.',
+        ]);
+
+        if (! config('services.openrouter.api_key')) {
+            return response()->json([
+                'message' => 'AI document scanning is not configured on the server.',
+                'data' => null,
+                'meta' => [],
+                'errors' => [],
+            ], 503);
+        }
+
+        $result = $scanner->scanText($validated['text']);
+
+        return response()->json(['message' => 'Spreadsheet parsed.', 'data' => $result, 'meta' => [], 'errors' => []]);
+    }
 }

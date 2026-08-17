@@ -57,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->where('document', 'predracun|a4-faktura');
     Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
     Route::post('load-scans/bulk', [BulkLoadScanController::class, 'store'])->middleware('throttle:5,1');
+    Route::post('load-scans/bulk/text', [BulkLoadScanController::class, 'scanText'])->middleware('throttle:5,1');
 
     Route::apiResources([
         'vehicles' => VehicleController::class,

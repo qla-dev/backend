@@ -20,7 +20,38 @@ class OpenRouterBulkLoadScanner
 
     public function scan(array $images): array
     {
-        $systemPrompt = 'You read a document listing multiple freight loads (a spreadsheet export, a table, a manifest with several rows, '
+        $userPrompt = 'Read every load row in this document. For each row, extract a short title, cargo type, goods type/description, weight in kilograms, '
+            .'pallet/unit count, required trailer body type if stated, pickup city/country code/date, delivery city/country code/date, currency, agreed price, '
+            .'booking or reference number, and any leftover notes.';
+
+        $content = [
+            ['type' => 'text', 'text' => $userPrompt],
+            ...array_map(fn (array $image) => [
+                'type' => 'image_url',
+                'image_url' => [
+                    'url' => 'data:'.($image['mimeType'] ?? 'image/jpeg').';base64,'.$image['base64'],
+                ],
+            ], $images),
+        ];
+
+        return $this->run($this->documentSystemPrompt(), $content, 'images');
+    }
+
+    public function scanText(string $text): array
+    {
+        $userPrompt = 'Read every load row in the spreadsheet/table data below (it may be raw CSV, tab-separated, or a pasted table - the first row is likely a header). '
+            ."For each row, extract a short title, cargo type, goods type/description, weight in kilograms, pallet/unit count, required trailer body type if stated, "
+            .'pickup city/country code/date, delivery city/country code/date, currency, agreed price, booking or reference number, and any leftover notes.'
+            ."\n\nData:\n".$text;
+
+        $content = [['type' => 'text', 'text' => $userPrompt]];
+
+        return $this->run($this->textSystemPrompt(), $content, 'text');
+    }
+
+    private function documentSystemPrompt(): string
+    {
+        return 'You read a document listing multiple freight loads (a spreadsheet export, a table, a manifest with several rows, '
             .'or several shipping orders on one page) to bulk-prefill load posting rows. Do not invent values you cannot read; '
             .'use an empty string or 0 for anything not shown in a given row. Extract every distinct load/row you can find, up to '.self::MAX_ROWS.'. '
             .'Read pickup and delivery locations as city names with their two-letter ISO 3166-1 alpha-2 country codes. '
@@ -33,11 +64,28 @@ class OpenRouterBulkLoadScanner
             .'Put ONLY leftover information with no dedicated field into notes for that row - never repeat the pallet count, dates, or body type inside notes. '
             .'Set isDocument to true only when the image really shows a list of freight loads; otherwise set it to false and return an empty rows array. '
             .'Return only the fields requested in the JSON schema.';
-        $userPrompt = 'Read every load row in this document. For each row, extract a short title, cargo type, goods type/description, weight in kilograms, '
-            .'pallet/unit count, required trailer body type if stated, pickup city/country code/date, delivery city/country code/date, currency, agreed price, '
-            .'booking or reference number, and any leftover notes.';
+    }
 
-        $payload = $this->requestPayload($images, $systemPrompt, $userPrompt);
+    private function textSystemPrompt(): string
+    {
+        return 'You read spreadsheet/table data (exported from Excel/CSV, or pasted text) listing multiple freight loads, one per row, '
+            .'to bulk-prefill load posting rows. Do not invent values that are not present; use an empty string or 0 for anything missing in a given row. '
+            .'Extract every distinct load/row you can find, up to '.self::MAX_ROWS.'. Skip a header row if present - it is not a load. '
+            .'Read pickup and delivery locations as city names with their two-letter ISO 3166-1 alpha-2 country codes. '
+            .'Read pickup and delivery dates separately as YYYY-MM-DD when shown. '
+            .'Read cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
+            .'Read the pallet or unit count as a plain number when a quantity is stated (e.g. "24 pallets" -> 24). '
+            .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; '
+            .'"hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or empty if not stated. '
+            .'Read the currency from the symbol or code shown and return its ISO 4217 code, defaulting to EUR if a price is given without a currency. '
+            .'Put ONLY leftover information with no dedicated field into notes for that row - never repeat the pallet count, dates, or body type inside notes. '
+            .'Set isDocument to true whenever the data contains at least one recognizable load row; set it to false only when the data is unrelated to freight/shipping. '
+            .'Return only the fields requested in the JSON schema.';
+    }
+
+    private function run(string $systemPrompt, array $content, string $errorField): array
+    {
+        $payload = $this->requestPayload($systemPrompt, $content);
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             try {
@@ -50,7 +98,7 @@ class OpenRouterBulkLoadScanner
                     ])
                     ->post((string) config('services.openrouter.url'), $payload);
 
-                $this->ensureSuccessful($response);
+                $this->ensureSuccessful($response, $errorField);
                 $result = json_decode($this->outputText($response->json()), true, 512, JSON_THROW_ON_ERROR);
                 if (! is_array($result)) {
                     throw new RuntimeException('The AI service returned an invalid scan result.');
@@ -63,7 +111,7 @@ class OpenRouterBulkLoadScanner
                         throw $exception;
                     }
                     throw ValidationException::withMessages([
-                        'images' => ['The AI could not read this document after several attempts. Please try again.'],
+                        $errorField => ['The AI could not read this after several attempts. Please try again.'],
                     ]);
                 }
 
@@ -76,7 +124,7 @@ class OpenRouterBulkLoadScanner
         }
     }
 
-    private function requestPayload(array $images, string $systemPrompt, string $userPrompt): array
+    private function requestPayload(string $systemPrompt, array $content): array
     {
         return [
             'model' => config('services.openrouter.model'),
@@ -92,30 +140,19 @@ class OpenRouterBulkLoadScanner
             ],
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],
-                [
-                    'role' => 'user',
-                    'content' => [
-                        ['type' => 'text', 'text' => $userPrompt],
-                        ...array_map(fn (array $image) => [
-                            'type' => 'image_url',
-                            'image_url' => [
-                                'url' => 'data:'.($image['mimeType'] ?? 'image/jpeg').';base64,'.$image['base64'],
-                            ],
-                        ], $images),
-                    ],
-                ],
+                ['role' => 'user', 'content' => $content],
             ],
         ];
     }
 
-    private function ensureSuccessful(Response $response): void
+    private function ensureSuccessful(Response $response, string $errorField): void
     {
         if ($response->successful()) {
             return;
         }
 
         throw ValidationException::withMessages([
-            'images' => ['AI scanning is not available right now. Please try again.'],
+            $errorField => ['AI scanning is not available right now. Please try again.'],
         ]);
     }
 
