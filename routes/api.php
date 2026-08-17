@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\LoadInvoiceDocumentController;
 use App\Http\Controllers\Api\LoadController;
 use App\Http\Controllers\Api\LoadNoteController;
+use App\Http\Controllers\Api\LoadScanController;
 use App\Http\Controllers\Api\LoadStopController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\OfferController;
@@ -66,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     ]);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
+    Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
 
     Route::middleware('role:company,superadmin')->group(function (): void {
         Route::apiResources([
