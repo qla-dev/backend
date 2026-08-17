@@ -18,7 +18,40 @@ class OpenRouterLoadScanner
 
     public function scan(array $images): array
     {
-        $systemPrompt = 'You read a freight document (a shipping order, rate confirmation, bill of lading, cargo manifest, or booking note) '
+        $userPrompt = 'Read a short title summarizing the load, the cargo type (e.g. Pallets, Machinery, Electronics), the goods type/description, '
+            .'the weight in kilograms, the pallet/unit count, the required trailer body type if stated, '
+            .'the pickup city, country code and date, the delivery city, country code and date, the currency, the agreed price or rate, '
+            .'the booking or reference number, and any other short notes that do not belong in a dedicated field.';
+
+        $content = [
+            ['type' => 'text', 'text' => $userPrompt],
+            ...array_map(fn (array $image) => [
+                'type' => 'image_url',
+                'image_url' => [
+                    'url' => 'data:'.($image['mimeType'] ?? 'image/jpeg').';base64,'.$image['base64'],
+                ],
+            ], $images),
+        ];
+
+        return $this->run($this->documentSystemPrompt(), $content, 'images');
+    }
+
+    public function scanText(string $description): array
+    {
+        $userPrompt = 'The shipper described the load in their own words below. Extract a short title, the cargo type '
+            .'(e.g. Pallets, Machinery, Electronics), the goods type/description, the weight in kilograms, the pallet/unit count, '
+            .'the required trailer body type if stated, the pickup city, country code and date, the delivery city, country code and date, '
+            .'the currency, the agreed price or rate, the booking or reference number, and any other short notes that do not belong in a dedicated field.'
+            ."\n\nDescription:\n".$description;
+
+        $content = [['type' => 'text', 'text' => $userPrompt]];
+
+        return $this->run($this->textSystemPrompt(), $content, 'description');
+    }
+
+    private function documentSystemPrompt(): string
+    {
+        return 'You read a freight document (a shipping order, rate confirmation, bill of lading, cargo manifest, or booking note) '
             .'to prefill a new load posting form. Do not invent values you cannot read; use an empty string, 0, or false for anything not shown. '
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is shown, use it for whichever of the two it clearly refers to and leave the other empty. '
@@ -29,12 +62,26 @@ class OpenRouterLoadScanner
             .'Put ONLY leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
             .'Set isDocument to true only when the image really shows a freight/shipping document; otherwise set it to false and do not invent data. '
             .'Return only the fields requested in the JSON schema.';
-        $userPrompt = 'Read a short title summarizing the load, the cargo type (e.g. Pallets, Machinery, Electronics), the goods type/description, '
-            .'the weight in kilograms, the pallet/unit count, the required trailer body type if stated, '
-            .'the pickup city, country code and date, the delivery city, country code and date, the currency, the agreed price or rate, '
-            .'the booking or reference number, and any other short notes that do not belong in a dedicated field.';
+    }
 
-        $payload = $this->requestPayload($images, $systemPrompt, $userPrompt);
+    private function textSystemPrompt(): string
+    {
+        return 'You read a free-text description of a freight load, written by a shipper in plain language (any of English, Bosnian/Croatian/Serbian, or German), '
+            .'to prefill a new load posting form. Do not invent values that are not stated or clearly implied; use an empty string, 0, or false for anything not mentioned. '
+            .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
+            .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is mentioned, use it for whichever of the two it clearly refers to and leave the other empty. '
+            .'Read the cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
+            .'Read the pallet or unit count as a plain number when a quantity is mentioned (e.g. "24 paleta" -> 24). '
+            .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
+            .'Read the currency from the symbol or code mentioned and return its ISO 4217 code, defaulting to EUR if a price is given without a currency. '
+            .'Put ONLY leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
+            .'Set isDocument to true whenever the text describes a freight load (even briefly); set it to false only when the text is unrelated to freight/shipping. '
+            .'Return only the fields requested in the JSON schema.';
+    }
+
+    private function run(string $systemPrompt, array $content, string $errorField): array
+    {
+        $payload = $this->requestPayload($systemPrompt, $content);
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             try {
@@ -47,7 +94,7 @@ class OpenRouterLoadScanner
                     ])
                     ->post((string) config('services.openrouter.url'), $payload);
 
-                $this->ensureSuccessful($response);
+                $this->ensureSuccessful($response, $errorField);
                 $result = json_decode($this->outputText($response->json()), true, 512, JSON_THROW_ON_ERROR);
                 if (! is_array($result)) {
                     throw new RuntimeException('The AI service returned an invalid scan result.');
@@ -60,7 +107,7 @@ class OpenRouterLoadScanner
                         throw $exception;
                     }
                     throw ValidationException::withMessages([
-                        'images' => ['The AI could not read this document after several attempts. Please try again.'],
+                        $errorField => ['The AI could not read this after several attempts. Please try again.'],
                     ]);
                 }
 
@@ -73,7 +120,7 @@ class OpenRouterLoadScanner
         }
     }
 
-    private function requestPayload(array $images, string $systemPrompt, string $userPrompt): array
+    private function requestPayload(string $systemPrompt, array $content): array
     {
         return [
             'model' => config('services.openrouter.model'),
@@ -89,30 +136,19 @@ class OpenRouterLoadScanner
             ],
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],
-                [
-                    'role' => 'user',
-                    'content' => [
-                        ['type' => 'text', 'text' => $userPrompt],
-                        ...array_map(fn (array $image) => [
-                            'type' => 'image_url',
-                            'image_url' => [
-                                'url' => 'data:'.($image['mimeType'] ?? 'image/jpeg').';base64,'.$image['base64'],
-                            ],
-                        ], $images),
-                    ],
-                ],
+                ['role' => 'user', 'content' => $content],
             ],
         ];
     }
 
-    private function ensureSuccessful(Response $response): void
+    private function ensureSuccessful(Response $response, string $errorField): void
     {
         if ($response->successful()) {
             return;
         }
 
         throw ValidationException::withMessages([
-            'images' => ['AI scanning is not available right now. Please try again.'],
+            $errorField => ['AI scanning is not available right now. Please try again.'],
         ]);
     }
 

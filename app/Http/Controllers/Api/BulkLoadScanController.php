@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\OpenRouterLoadScanner;
+use App\Services\OpenRouterBulkLoadScanner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class LoadScanController extends Controller
+class BulkLoadScanController extends Controller
 {
-    public function store(Request $request, OpenRouterLoadScanner $scanner): JsonResponse
+    public function store(Request $request, OpenRouterBulkLoadScanner $scanner): JsonResponse
     {
         $validated = $request->validate([
             'images' => ['required', 'array', 'min:1', 'max:5'],
@@ -35,28 +35,5 @@ class LoadScanController extends Controller
         $result = $scanner->scan($validated['images']);
 
         return response()->json(['message' => 'Document scanned.', 'data' => $result, 'meta' => [], 'errors' => []]);
-    }
-
-    public function scanText(Request $request, OpenRouterLoadScanner $scanner): JsonResponse
-    {
-        $validated = $request->validate([
-            'description' => ['required', 'string', 'min:8', 'max:4000'],
-        ], [
-            'description.required' => 'Describe the load first.',
-            'description.min' => 'Add a bit more detail about the load.',
-        ]);
-
-        if (! config('services.openrouter.api_key')) {
-            return response()->json([
-                'message' => 'AI document scanning is not configured on the server.',
-                'data' => null,
-                'meta' => [],
-                'errors' => [],
-            ], 503);
-        }
-
-        $result = $scanner->scanText($validated['description']);
-
-        return response()->json(['message' => 'Description parsed.', 'data' => $result, 'meta' => [], 'errors' => []]);
     }
 }

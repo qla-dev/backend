@@ -126,4 +126,38 @@ class LoadController extends CrudController
 
         return $this->success((new EntityResource($load))->resolve($request), 'Load status updated successfully.');
     }
+
+    public function bulkStore(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'loads' => ['required', 'array', 'min:1', 'max:50'],
+        ]);
+
+        $loads = DB::transaction(function () use ($payload, $request): array {
+            $created = [];
+            foreach ($payload['loads'] as $index => $loadPayload) {
+                $data = validator(
+                    is_array($loadPayload) ? $loadPayload : [],
+                    $this->rules(),
+                )->validate();
+                $stops = $data['stops'] ?? [];
+                unset($data['stops']);
+                $data['customer_user_id'] = $data['customer_user_id'] ?? $request->user()->id;
+                $data['status'] = $data['status'] ?? 'pending';
+                $data['public_id'] = (string) Str::uuid();
+
+                $load = Load::query()->create($data);
+                if ($stops !== []) {
+                    $load->stops()->createMany($stops);
+                }
+                $created[] = $load;
+            }
+
+            return $created;
+        });
+
+        $resources = collect($loads)->map(fn (Load $load) => (new EntityResource($load->load($this->relations())))->resolve($request));
+
+        return $this->success($resources->all(), 'Loads created successfully.', status: 201);
+    }
 }
