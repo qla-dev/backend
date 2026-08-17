@@ -103,6 +103,7 @@ class AuthController extends Controller
             'phone' => ['nullable', 'string', 'max:50'], 'language' => ['nullable', 'string', 'max:5'],
             'country_code' => ['nullable', 'string', 'size:2'], 'avatar_url' => ['nullable', 'url'],
             'password' => ['sometimes', 'string', 'min:8'],
+            'role_id' => ['sometimes', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->where('name', '!=', 'superadmin'))],
         ]);
         if (isset($data['country_code'])) {
             $data['country_code'] = strtoupper($data['country_code']);

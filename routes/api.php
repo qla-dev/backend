@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     ]);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
+    Route::get('role-options', [RoleController::class, 'options']);
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
 
     Route::middleware('role:company,superadmin')->group(function (): void {

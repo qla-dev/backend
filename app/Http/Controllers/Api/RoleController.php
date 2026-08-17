@@ -3,9 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Role;
+use Illuminate\Http\JsonResponse;
 
 class RoleController extends CrudController
 {
+    public function options(): JsonResponse
+    {
+        $roles = Role::query()->where('is_active', true)->where('name', '!=', 'superadmin')
+            ->orderBy('label')->get(['id', 'name', 'label']);
+
+        return response()->json(['message' => 'Roles retrieved.', 'data' => $roles, 'meta' => [], 'errors' => []]);
+    }
+
     protected function modelClass(): string
     {
         return Role::class;
