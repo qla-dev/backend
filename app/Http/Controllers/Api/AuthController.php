@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -123,23 +124,28 @@ class AuthController extends Controller
 
     public function google(Request $request): JsonResponse
     {
-        $token = $request->validate(['id_token' => ['required', 'string']])['id_token'];
-        $account = $this->verifyGoogleIdToken($token);
+        $validated = $request->validate([
+            'id_token' => ['required', 'string'],
+            'role' => ['sometimes', 'nullable', 'in:user,driver,company,finance'],
+        ]);
+        $account = $this->verifyGoogleIdToken($validated['id_token']);
 
-        return $this->authenticateSocial($request, 'google_id', $account['sub'] ?? null, $account['email'] ?? null);
+        return $this->authenticateSocial($request, 'google_id', $account['sub'] ?? null, $account['email'] ?? null, $account['name'] ?? null, $validated['role'] ?? null);
     }
 
     public function apple(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'identity_token' => ['required', 'string'],
+            'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'role' => ['sometimes', 'nullable', 'in:user,driver,company,finance'],
         ]);
         $account = $this->verifyAppleIdentityToken($validated['identity_token']);
 
-        return $this->authenticateSocial($request, 'apple_id', $account['sub'] ?? null, $account['email'] ?? null);
+        return $this->authenticateSocial($request, 'apple_id', $account['sub'] ?? null, $account['email'] ?? null, $validated['full_name'] ?? null, $validated['role'] ?? null);
     }
 
-    private function authenticateSocial(Request $request, string $providerField, mixed $providerId, mixed $email): JsonResponse
+    private function authenticateSocial(Request $request, string $providerField, mixed $providerId, mixed $email, mixed $name, ?string $role): JsonResponse
     {
         if (! is_string($providerId) || $providerId === '') {
             throw ValidationException::withMessages(['token' => ['The sign-in provider did not return a valid account ID.']]);
@@ -152,23 +158,78 @@ class AuthController extends Controller
         $user = $query->first();
 
         if (! $user) {
-            throw ValidationException::withMessages([
-                'token' => ['No Freightbook.ai account is linked to this account yet. Please register first, then connect it from your profile.'],
-            ]);
-        }
+            if (! $role) {
+                return response()->json([
+                    'message' => 'Registration required.',
+                    'data' => ['needs_registration' => true, 'email' => $email, 'name' => $name],
+                    'meta' => [], 'errors' => [],
+                ]);
+            }
 
-        if (! $user->is_active) {
+            if (! is_string($email) || $email === '') {
+                throw ValidationException::withMessages([
+                    'token' => ['The sign-in provider did not share an email, so an account could not be created.'],
+                ]);
+            }
+
+            $roleModel = Role::query()->where('name', $role)->firstOrFail();
+            $user = DB::transaction(function () use ($email, $name, $role, $roleModel, $providerField, $providerId): User {
+                $user = User::query()->create([
+                    'role_id' => $roleModel->id,
+                    'name' => trim((string) $name) ?: Str::before($email, '@'),
+                    'email' => $email,
+                    'username' => $this->generateUsernameFromEmail($email),
+                    'password' => Str::random(40),
+                    'is_active' => true,
+                    'email_verified_at' => now(),
+                    $providerField => $providerId,
+                ]);
+                if ($role === 'user') {
+                    Customer::query()->create([
+                        'user_id' => $user->id,
+                        'customer_type' => 'private',
+                        'status' => 'active',
+                        'profile_authorized_at' => now(),
+                    ]);
+                }
+                if ($role === 'driver') {
+                    Driver::query()->create([
+                        'user_id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'profile_authorized_at' => now(),
+                        'license_number' => 'PENDING-'.$user->id,
+                        'license_country_code' => 'XX',
+                        'license_expires_at' => now()->addYear(),
+                        'availability_status' => 'available',
+                    ]);
+                }
+
+                return $user->load(['role', 'companies', 'customerProfile', 'driver']);
+            });
+        } elseif (! $user->is_active) {
             throw ValidationException::withMessages(['token' => ['This account is not active.']]);
-        }
-
-        if ($user->{$providerField} !== $providerId) {
+        } elseif ($user->{$providerField} !== $providerId) {
             $user->forceFill([$providerField => $providerId])->save();
         }
-        $user->forceFill(['last_login_at' => now()])->save();
 
+        $user->forceFill(['last_login_at' => now()])->save();
         $token = $user->createToken('freightbook-mobile')->plainTextToken;
 
         return response()->json(['message' => 'Login successful.', 'data' => ['token' => $token, 'token_type' => 'Bearer', 'user' => (new EntityResource($user))->resolve($request)], 'meta' => [], 'errors' => []]);
+    }
+
+    private function generateUsernameFromEmail(string $email): string
+    {
+        $base = Str::slug(Str::before($email, '@'), '') ?: 'user';
+        $username = $base;
+        $suffix = 0;
+        while (User::query()->where('username', $username)->exists()) {
+            $suffix++;
+            $username = $base.$suffix;
+        }
+
+        return $username;
     }
 
     private function verifyGoogleIdToken(string $idToken): array
