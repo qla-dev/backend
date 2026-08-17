@@ -14,18 +14,25 @@ class OpenRouterLoadScanner
 {
     private const MAX_ATTEMPTS = 3;
 
+    private const BODY_TYPES = ['Curtain', 'Box', 'Reefer', 'Mega', 'Tautliner', 'Flatbed'];
+
     public function scan(array $images): array
     {
         $systemPrompt = 'You read a freight document (a shipping order, rate confirmation, bill of lading, cargo manifest, or booking note) '
             .'to prefill a new load posting form. Do not invent values you cannot read; use an empty string, 0, or false for anything not shown. '
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
+            .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is shown, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'Read the cargo weight in kilograms, converting from other units if the document states them explicitly (e.g. lbs, tons). '
+            .'Read the pallet or unit count as a plain number when the document states a quantity (e.g. "24 pallets" -> 24). '
+            .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the currency from the symbol or code printed on the document and return its ISO 4217 code. '
+            .'Put ONLY leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
             .'Set isDocument to true only when the image really shows a freight/shipping document; otherwise set it to false and do not invent data. '
             .'Return only the fields requested in the JSON schema.';
         $userPrompt = 'Read a short title summarizing the load, the cargo type (e.g. Pallets, Machinery, Electronics), the goods type/description, '
-            .'the weight in kilograms, the pickup city and country code, the delivery city and country code, the currency, the agreed price or rate, '
-            .'the booking or reference number, and any other short notes.';
+            .'the weight in kilograms, the pallet/unit count, the required trailer body type if stated, '
+            .'the pickup city, country code and date, the delivery city, country code and date, the currency, the agreed price or rate, '
+            .'the booking or reference number, and any other short notes that do not belong in a dedicated field.';
 
         $payload = $this->requestPayload($images, $systemPrompt, $userPrompt);
 
@@ -134,6 +141,11 @@ class OpenRouterLoadScanner
             $currency = 'EUR';
         }
 
+        $bodyType = $this->stringValue($result['bodyType'] ?? '');
+        if (! in_array($bodyType, self::BODY_TYPES, true)) {
+            $bodyType = '';
+        }
+
         $warnings = array_values(array_filter(
             is_array($result['warnings'] ?? null) ? $result['warnings'] : [],
             fn ($warning) => is_string($warning) && trim($warning) !== '',
@@ -148,10 +160,14 @@ class OpenRouterLoadScanner
             'cargoType' => $this->stringValue($result['cargoType'] ?? ''),
             'goodsType' => $this->stringValue($result['goodsType'] ?? ''),
             'weightKg' => $this->numericValue($result['weightKg'] ?? 0),
+            'pallets' => (int) $this->numericValue($result['pallets'] ?? 0),
+            'bodyType' => $bodyType,
             'pickupCity' => $this->stringValue($result['pickupCity'] ?? ''),
             'pickupCountryCode' => strtoupper($this->stringValue($result['pickupCountryCode'] ?? '')),
+            'pickupDate' => $this->dateValue($result['pickupDate'] ?? ''),
             'deliveryCity' => $this->stringValue($result['deliveryCity'] ?? ''),
             'deliveryCountryCode' => strtoupper($this->stringValue($result['deliveryCountryCode'] ?? '')),
+            'deliveryDate' => $this->dateValue($result['deliveryDate'] ?? ''),
             'currency' => $currency,
             'budget' => $this->numericValue($result['budget'] ?? 0),
             'bookingReference' => $this->stringValue($result['bookingReference'] ?? ''),
@@ -159,6 +175,14 @@ class OpenRouterLoadScanner
             'confidence' => max(0.0, min(1.0, $this->numericValue($result['confidence'] ?? 0))),
             'warnings' => $warnings,
         ];
+    }
+
+    private function dateValue(mixed $value): string
+    {
+        $value = $this->stringValue($value);
+        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        return $parsed && $parsed->format('Y-m-d') === $value ? $value : '';
     }
 
     private function stringValue(mixed $value, string $fallback = ''): string
@@ -181,17 +205,21 @@ class OpenRouterLoadScanner
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['isDocument', 'title', 'cargoType', 'goodsType', 'weightKg', 'pickupCity', 'pickupCountryCode', 'deliveryCity', 'deliveryCountryCode', 'currency', 'budget', 'bookingReference', 'notes', 'confidence', 'warnings'],
+            'required' => ['isDocument', 'title', 'cargoType', 'goodsType', 'weightKg', 'pallets', 'bodyType', 'pickupCity', 'pickupCountryCode', 'pickupDate', 'deliveryCity', 'deliveryCountryCode', 'deliveryDate', 'currency', 'budget', 'bookingReference', 'notes', 'confidence', 'warnings'],
             'properties' => [
                 'isDocument' => ['type' => 'boolean', 'description' => 'True only when the image shows a freight/shipping document.'],
                 'title' => ['type' => 'string'],
                 'cargoType' => ['type' => 'string'],
                 'goodsType' => ['type' => 'string'],
                 'weightKg' => ['type' => 'number'],
+                'pallets' => ['type' => 'number', 'description' => 'Pallet or unit count, 0 if not stated.'],
+                'bodyType' => ['type' => 'string', 'enum' => [...self::BODY_TYPES, ''], 'description' => 'Required trailer/body type, or empty string if not stated.'],
                 'pickupCity' => ['type' => 'string'],
                 'pickupCountryCode' => ['type' => 'string', 'description' => 'Two-letter ISO 3166-1 alpha-2 country code.'],
+                'pickupDate' => ['type' => 'string', 'description' => 'YYYY-MM-DD, or empty string if not stated.'],
                 'deliveryCity' => ['type' => 'string'],
                 'deliveryCountryCode' => ['type' => 'string', 'description' => 'Two-letter ISO 3166-1 alpha-2 country code.'],
+                'deliveryDate' => ['type' => 'string', 'description' => 'YYYY-MM-DD, or empty string if not stated.'],
                 'currency' => ['type' => 'string'],
                 'budget' => ['type' => 'number'],
                 'bookingReference' => ['type' => 'string'],

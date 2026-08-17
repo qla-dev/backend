@@ -34,6 +34,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('health', fn () => response()->json(['message' => 'Freightbook.ai API is healthy.', 'data' => ['status' => 'ok', 'timestamp' => now()->toIso8601String()], 'meta' => [], 'errors' => []]));
 
+// Public: the social-registration screen needs to list roles before the user has a session token.
+Route::get('role-options', [RoleController::class, 'options']);
+
 Route::prefix('auth')->group(function (): void {
     Route::post('login', [AuthController::class, 'login']);
     Route::post('register', [AuthController::class, 'register']);
@@ -69,7 +72,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     ]);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
-    Route::get('role-options', [RoleController::class, 'options']);
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
 
     Route::middleware('role:company,superadmin')->group(function (): void {
