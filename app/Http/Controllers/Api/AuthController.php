@@ -35,7 +35,7 @@ class AuthController extends Controller
         }
 
         $user->forceFill(['last_login_at' => now()])->save();
-        $token = $user->createToken('smartfreight-web')->plainTextToken;
+        $token = $user->createToken('freightbook-web')->plainTextToken;
 
         return response()->json(['message' => 'Login successful.', 'data' => ['token' => $token, 'token_type' => 'Bearer', 'user' => (new EntityResource($user))->resolve($request)], 'meta' => [], 'errors' => []]);
     }
@@ -84,7 +84,7 @@ class AuthController extends Controller
             return $user->load(['role', 'customerProfile', 'driver']);
         });
 
-        return response()->json(['message' => 'Registration successful.', 'data' => ['token' => $user->createToken('smartfreight-web')->plainTextToken, 'token_type' => 'Bearer', 'user' => (new EntityResource($user))->resolve($request)], 'meta' => [], 'errors' => []], 201);
+        return response()->json(['message' => 'Registration successful.', 'data' => ['token' => $user->createToken('freightbook-web')->plainTextToken, 'token_type' => 'Bearer', 'user' => (new EntityResource($user))->resolve($request)], 'meta' => [], 'errors' => []], 201);
     }
 
     public function me(Request $request): JsonResponse

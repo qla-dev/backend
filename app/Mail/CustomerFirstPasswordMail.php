@@ -20,7 +20,7 @@ class CustomerFirstPasswordMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Your SmartFreight account is ready');
+        return new Envelope(subject: 'Your Freightbook.ai account is ready');
     }
 
     public function content(): Content

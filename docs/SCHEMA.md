@@ -1,4 +1,4 @@
-# Smartfreight relational model
+# Freightbook relational model
 
 Core relationship chain:
 

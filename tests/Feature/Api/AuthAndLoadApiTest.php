@@ -237,7 +237,7 @@ class AuthAndLoadApiTest extends TestCase
                 'name' => 'Current user',
                 'phone' => '+38733123456',
                 'mobile' => '',
-                'email' => 'customer@smartfreight.test',
+                'email' => 'customer@freightbook.test',
                 'fax' => '',
             ],
             'notes' => 'Created through the post-load wizard.',
@@ -359,7 +359,7 @@ class AuthAndLoadApiTest extends TestCase
         $this->withToken($adminToken)
             ->getJson('/api/companies')
             ->assertOk()
-            ->assertJsonPath('data.0.name', 'Smartfreight Logistics Hub');
+            ->assertJsonPath('data.0.name', 'Freightbook Logistics Hub');
     }
 
     public function test_superadmin_can_approve_an_offer_and_assign_its_driver(): void
@@ -500,7 +500,7 @@ class AuthAndLoadApiTest extends TestCase
             ->assertJsonValidationErrors('email');
 
         $this->withToken($token)
-            ->postJson("/api/customers/{$customer->id}/authorize", ['email' => 'customer_demo@smartfreight.test'])
+            ->postJson("/api/customers/{$customer->id}/authorize", ['email' => 'customer_demo@freightbook.test'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('email');
 

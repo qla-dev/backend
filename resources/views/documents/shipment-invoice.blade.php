@@ -1,7 +1,7 @@
 @php
   $money = static fn ($value): string => number_format((float) $value, 2, ',', '.') . ' ' . $invoice['currency'];
   $date = static fn ($value): string => \Illuminate\Support\Carbon::parse($value)->format('d.m.Y');
-  $sellerName = $seller?->name ?: ($shipment?->carrier ?: 'SmartFreight partner');
+  $sellerName = $seller?->name ?: ($shipment?->carrier ?: 'Freightbook partner');
   $buyerName = $buyer?->name ?: 'Kupac';
   $trackingNumber = $trackingNumber ?? $shipment?->tracking_number ?? $load->public_id ?? $load->id;
   $shipmentStatus = $shipmentStatus ?? $shipment?->status ?? $load->status ?? '—';

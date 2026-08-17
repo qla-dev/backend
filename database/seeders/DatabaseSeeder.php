@@ -26,13 +26,13 @@ class DatabaseSeeder extends Seeder
             'superadmin_demo' => ['role' => 'superadmin', 'name' => 'John Doe'],
             'customer_demo' => ['role' => 'user', 'name' => 'Demo Customer'],
             'driver_demo' => ['role' => 'driver', 'name' => 'Demo Driver'],
-            'company_demo' => ['role' => 'company', 'name' => 'Smartfreight Logistics Hub'],
+            'company_demo' => ['role' => 'company', 'name' => 'Freightbook Logistics Hub'],
             'finance_demo' => ['role' => 'finance', 'name' => 'Demo Finance'],
         ];
 
         $users = collect($accounts)->mapWithKeys(function (array $account, string $username) use ($roles) {
             $user = User::query()->updateOrCreate(['username' => $username], [
-                'role_id' => $roles[$account['role']]->id, 'name' => $account['name'], 'email' => "{$username}@smartfreight.test",
+                'role_id' => $roles[$account['role']]->id, 'name' => $account['name'], 'email' => "{$username}@freightbook.test",
                 'password' => 'demo12345', 'language' => 'bs', 'country_code' => 'BA', 'is_active' => true, 'email_verified_at' => now(),
             ]);
 
@@ -50,8 +50,8 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        $company = Company::query()->updateOrCreate(['slug' => 'smartfreight-logistics-hub'], [
-            'owner_user_id' => $users['company_demo']->id, 'name' => 'Smartfreight Logistics Hub', 'email' => 'company_demo@smartfreight.test',
+        $company = Company::query()->updateOrCreate(['slug' => 'freightbook-logistics-hub'], [
+            'owner_user_id' => $users['company_demo']->id, 'name' => 'Freightbook Logistics Hub', 'email' => 'company_demo@freightbook.test',
             'country_code' => 'BA', 'city' => 'Sarajevo', 'plan' => 'enterprise', 'status' => 'verified', 'verified_at' => now(),
         ]);
         $company->users()->syncWithoutDetaching([
