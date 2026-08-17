@@ -37,6 +37,8 @@ Route::get('health', fn () => response()->json(['message' => 'Freightbook.ai API
 Route::prefix('auth')->group(function (): void {
     Route::post('login', [AuthController::class, 'login']);
     Route::post('register', [AuthController::class, 'register']);
+    Route::post('google', [AuthController::class, 'google']);
+    Route::post('apple', [AuthController::class, 'apple']);
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('me', [AuthController::class, 'me']);
         Route::put('profile', [AuthController::class, 'updateProfile']);
