@@ -24,7 +24,7 @@ class Load extends BaseModel
         return [
             'loading_methods' => 'array', 'body_types' => 'array', 'special_requirements' => 'array', 'contact' => 'array',
             'is_fragile' => 'boolean', 'requires_adr' => 'boolean', 'requires_tail_lift' => 'boolean',
-            'must_be_trackable' => 'boolean', 'is_urgent' => 'boolean', 'published_at' => 'datetime', 'completed_at' => 'datetime',
+            'must_be_trackable' => 'boolean', 'is_urgent' => 'boolean', 'is_negotiable' => 'boolean', 'published_at' => 'datetime', 'completed_at' => 'datetime',
             'status_change' => 'array',
             'etd_at' => 'datetime', 'atd_at' => 'datetime',
         ];

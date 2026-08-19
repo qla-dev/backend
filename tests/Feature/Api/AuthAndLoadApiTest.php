@@ -366,6 +366,85 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertNotContains('Someone elses cargo', collect($response->json('data'))->pluck('title')->all());
     }
 
+    public function test_driver_can_instantly_book_a_posted_non_negotiable_load(): void
+    {
+        $load = Load::query()->create([
+            'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
+            'public_id' => '00000000-0000-4000-8000-000000000097',
+            'title' => 'Fixed price cargo', 'status' => 'posted', 'transport_type' => 'road',
+            'cargo_type' => 'FTL', 'weight_kg' => 1000, 'currency' => 'EUR', 'budget' => 500,
+            'is_negotiable' => false,
+        ]);
+        $driver = User::query()->where('username', 'driver_demo')->firstOrFail();
+        $token = $this->postJson('/api/auth/login', ['login' => 'driver_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $this->withToken($token)->postJson("/api/loads/{$load->id}/book")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'sent')
+            ->assertJsonPath('data.assigned_driver_user_id', $driver->id);
+
+        $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => $driver->id, 'status' => 'sent']);
+    }
+
+    public function test_driver_cannot_instantly_book_a_negotiable_load(): void
+    {
+        $load = Load::query()->create([
+            'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
+            'public_id' => '00000000-0000-4000-8000-000000000096',
+            'title' => 'Negotiable cargo', 'status' => 'posted', 'transport_type' => 'road',
+            'cargo_type' => 'FTL', 'weight_kg' => 1000, 'currency' => 'EUR', 'is_negotiable' => true,
+        ]);
+        $token = $this->postJson('/api/auth/login', ['login' => 'driver_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $this->withToken($token)->postJson("/api/loads/{$load->id}/book")
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => null, 'status' => 'posted']);
+    }
+
+    public function test_customer_and_company_cannot_instantly_book_a_load(): void
+    {
+        $load = Load::query()->create([
+            'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
+            'public_id' => '00000000-0000-4000-8000-000000000095',
+            'title' => 'Fixed price cargo 2', 'status' => 'posted', 'transport_type' => 'road',
+            'cargo_type' => 'FTL', 'weight_kg' => 1000, 'currency' => 'EUR', 'is_negotiable' => false,
+        ]);
+
+        $customerToken = $this->postJson('/api/auth/login', ['login' => 'customer_demo', 'password' => 'demo12345'])->json('data.token');
+        $this->withToken($customerToken)->postJson("/api/loads/{$load->id}/book")->assertForbidden();
+
+        $this->flushHeaders();
+        $this->app['auth']->forgetGuards();
+        $companyToken = $this->postJson('/api/auth/login', ['login' => 'company_demo', 'password' => 'demo12345'])->json('data.token');
+        $this->withToken($companyToken)->postJson("/api/loads/{$load->id}/book")->assertForbidden();
+    }
+
+    public function test_driver_can_submit_an_offer_on_a_negotiable_load(): void
+    {
+        $load = Load::query()->create([
+            'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
+            'public_id' => '00000000-0000-4000-8000-000000000094',
+            'title' => 'Negotiable cargo 2', 'status' => 'posted', 'transport_type' => 'road',
+            'cargo_type' => 'FTL', 'weight_kg' => 1000, 'currency' => 'EUR', 'is_negotiable' => true,
+        ]);
+        $driver = User::query()->where('username', 'driver_demo')->firstOrFail();
+        $token = $this->postJson('/api/auth/login', ['login' => 'driver_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $this->withToken($token)->postJson('/api/offers', [
+            'load_id' => $load->id,
+            'driver_user_id' => $driver->id,
+            'created_by_user_id' => $driver->id,
+            'amount' => 950,
+            'currency' => 'EUR',
+            'message' => 'Can do it Thursday.',
+        ])->assertCreated()
+            ->assertJsonPath('data.amount', '950.00')
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->assertDatabaseHas('offers', ['load_id' => $load->id, 'driver_user_id' => $driver->id, 'amount' => 950]);
+    }
+
     public function test_invalid_foreign_key_is_rejected_before_insert(): void
     {
         $token = $this->postJson('/api/auth/login', [

@@ -60,6 +60,7 @@ class LoadController extends CrudController
             'price_insurance' => ['nullable', 'string'], 'profit_loss' => ['nullable', 'string'], 'temperature_min' => ['nullable', 'numeric'],
             'temperature_max' => ['nullable', 'numeric'], 'declared_value' => ['nullable', 'numeric', 'min:0'], 'shipment_value_currency' => ['nullable', 'string', 'size:3'], 'budget' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['sometimes', 'string', 'size:3'], 'payment_terms' => ['sometimes', 'string', 'max:50'], 'payment_due_days' => ['nullable', 'integer', 'min:0'],
+            'is_negotiable' => ['sometimes', 'boolean'],
             'is_fragile' => ['sometimes', 'boolean'], 'requires_adr' => ['sometimes', 'boolean'], 'requires_tail_lift' => ['sometimes', 'boolean'],
             'must_be_trackable' => ['sometimes', 'boolean'], 'is_urgent' => ['sometimes', 'boolean'], 'loading_methods' => ['nullable', 'array'],
             'vehicle_type' => ['nullable', 'string', 'max:100'], 'transport_mode' => ['nullable', 'string', 'max:120'], 'special_requirements' => ['nullable', 'array'], 'special_requirements.*' => ['string', 'max:255'], 'characteristics' => ['nullable', 'string', 'max:255'], 'delivery_proof' => ['nullable', 'string', 'max:30'],
@@ -132,6 +133,27 @@ class LoadController extends CrudController
         $load->load($this->relations());
 
         return $this->success((new EntityResource($load))->resolve($request), 'Load status updated successfully.');
+    }
+
+    public function book(Request $request, Load $load): JsonResponse
+    {
+        $updated = DB::transaction(function () use ($request, $load) {
+            $load = Load::query()->lockForUpdate()->findOrFail($load->id);
+            abort_if($load->is_negotiable, 422, 'This load accepts offers instead of direct booking.');
+            abort_unless($load->status === 'posted' && ! $load->assigned_driver_user_id, 409, 'This load is no longer available.');
+
+            $driver = $request->user();
+            $load->update([
+                'assigned_driver_user_id' => $driver->id,
+                'company_id' => $load->company_id ?? $driver->driver?->primary_company_id,
+                'status' => 'sent',
+            ]);
+
+            return $load;
+        });
+        $updated->load($this->relations());
+
+        return $this->success((new EntityResource($updated))->resolve($request), 'Load booked successfully.');
     }
 
     public function bulkStore(Request $request): JsonResponse

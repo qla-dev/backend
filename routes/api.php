@@ -58,10 +58,15 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('load-scans/bulk', [BulkLoadScanController::class, 'store'])->middleware('throttle:5,1');
     Route::post('load-scans/bulk/text', [BulkLoadScanController::class, 'scanText'])->middleware('throttle:5,1');
 
-    // Booking a load (creating it) is a customer action; superadmin keeps its usual override.
+    // Posting a load (creating it) is a customer action; superadmin keeps its usual override.
     Route::middleware('role:user,superadmin')->group(function (): void {
         Route::post('loads', [LoadController::class, 'store']);
         Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
+    });
+
+    // Instant-booking a posted, non-negotiable load is a driver action.
+    Route::middleware('role:driver,superadmin')->group(function (): void {
+        Route::post('loads/{load}/book', [LoadController::class, 'book']);
     });
 
     Route::apiResources([
