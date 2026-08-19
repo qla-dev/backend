@@ -55,14 +55,18 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->where('document', 'predracun|a4-faktura');
     Route::get('shipments/{shipment}/invoice/{document}', ShipmentInvoiceDocumentController::class)
         ->where('document', 'predracun|a4-faktura');
-    Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
     Route::post('load-scans/bulk', [BulkLoadScanController::class, 'store'])->middleware('throttle:5,1');
     Route::post('load-scans/bulk/text', [BulkLoadScanController::class, 'scanText'])->middleware('throttle:5,1');
+
+    // Booking a load (creating it) is a customer action; superadmin keeps its usual override.
+    Route::middleware('role:user,superadmin')->group(function (): void {
+        Route::post('loads', [LoadController::class, 'store']);
+        Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
+    });
 
     Route::apiResources([
         'vehicles' => VehicleController::class,
         'vehicle-locations' => VehicleLocationController::class,
-        'loads' => LoadController::class,
         'load-stops' => LoadStopController::class,
         'offers' => OfferController::class,
         'shipments' => ShipmentController::class,
@@ -74,6 +78,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'conversations' => ConversationController::class,
         'messages' => MessageController::class,
     ]);
+    Route::apiResource('loads', LoadController::class)->except(['store']);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');

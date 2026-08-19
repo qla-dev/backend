@@ -306,6 +306,66 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertNotContains('sent', collect($response->json('data'))->pluck('status')->all());
     }
 
+    public function test_only_customers_and_superadmin_can_book_a_load(): void
+    {
+        $bookingPayload = [
+            'title' => 'Attempted booking', 'cargo_type' => 'FTL', 'weight_kg' => 1000,
+        ];
+
+        $driverToken = $this->postJson('/api/auth/login', ['login' => 'driver_demo', 'password' => 'demo12345'])->json('data.token');
+        $this->withToken($driverToken)->postJson('/api/loads', $bookingPayload)->assertForbidden();
+
+        $this->flushHeaders();
+        $this->app['auth']->forgetGuards();
+        $companyToken = $this->postJson('/api/auth/login', ['login' => 'company_demo', 'password' => 'demo12345'])->json('data.token');
+        $this->withToken($companyToken)->postJson('/api/loads', $bookingPayload)->assertForbidden();
+
+        $this->flushHeaders();
+        $this->app['auth']->forgetGuards();
+        $superadminToken = $this->postJson('/api/auth/login', ['login' => 'superadmin_demo', 'password' => 'demo12345'])->json('data.token');
+        $this->withToken($superadminToken)->postJson('/api/loads', $bookingPayload)->assertCreated();
+    }
+
+    public function test_customer_cannot_book_a_load_under_another_customers_identity(): void
+    {
+        $otherCustomer = User::query()->create([
+            'role_id' => \App\Models\Role::query()->where('name', 'user')->value('id'),
+            'name' => 'Other Customer', 'email' => 'other.customer@example.com', 'username' => 'other_customer',
+            'password' => Hash::make('secure-pass-123'), 'is_active' => true,
+        ]);
+        $token = $this->postJson('/api/auth/login', ['login' => 'customer_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $response = $this->withToken($token)->postJson('/api/loads', [
+            'customer_user_id' => $otherCustomer->id,
+            'title' => 'Spoofed booking', 'cargo_type' => 'FTL', 'weight_kg' => 1000,
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('loads', [
+            'id' => $response->json('data.id'),
+            'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
+        ]);
+    }
+
+    public function test_customer_only_sees_their_own_loads_in_the_listing(): void
+    {
+        $otherCustomer = User::query()->create([
+            'role_id' => \App\Models\Role::query()->where('name', 'user')->value('id'),
+            'name' => 'Other Customer', 'email' => 'other.customer2@example.com', 'username' => 'other_customer2',
+            'password' => Hash::make('secure-pass-123'), 'is_active' => true,
+        ]);
+        Load::query()->create([
+            'customer_user_id' => $otherCustomer->id,
+            'public_id' => '00000000-0000-4000-8000-000000000098',
+            'title' => 'Someone elses cargo', 'status' => 'pending', 'transport_type' => 'road',
+            'cargo_type' => 'FTL', 'weight_kg' => 500, 'currency' => 'EUR',
+        ]);
+
+        $token = $this->postJson('/api/auth/login', ['login' => 'customer_demo', 'password' => 'demo12345'])->json('data.token');
+        $response = $this->withToken($token)->getJson('/api/loads?limit=500')->assertOk();
+
+        $this->assertNotContains('Someone elses cargo', collect($response->json('data'))->pluck('title')->all());
+    }
+
     public function test_invalid_foreign_key_is_rejected_before_insert(): void
     {
         $token = $this->postJson('/api/auth/login', [

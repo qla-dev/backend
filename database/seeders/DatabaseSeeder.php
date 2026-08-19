@@ -19,8 +19,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $roleLabels = ['superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration'];
-        $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => $name === 'superadmin' ? ['*'] : [], 'is_active' => true])]);
+        $roleLabels = ['superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'guest' => 'Guest'];
+        $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => $name === 'superadmin' ? ['*'] : [], 'is_active' => $name !== 'guest'])]);
 
         $accounts = [
             'superadmin_demo' => ['role' => 'superadmin', 'name' => 'John Doe'],
@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             'driver_demo' => ['role' => 'driver', 'name' => 'Demo Driver'],
             'company_demo' => ['role' => 'company', 'name' => 'Freightbook Logistics Hub'],
             'finance_demo' => ['role' => 'finance', 'name' => 'Demo Finance'],
+            'guest_demo' => ['role' => 'guest', 'name' => 'Guest'],
         ];
 
         $users = collect($accounts)->mapWithKeys(function (array $account, string $username) use ($roles) {

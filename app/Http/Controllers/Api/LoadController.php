@@ -35,6 +35,10 @@ class LoadController extends CrudController
         if ($status !== '') {
             $query->where('status', $status);
         }
+
+        if ($request->user()?->role?->name === 'user') {
+            $query->where('customer_user_id', $request->user()->id);
+        }
     }
 
     protected function rules(bool $updating = false): array
@@ -75,6 +79,9 @@ class LoadController extends CrudController
         $data = $request->validate($this->rules());
         $stops = $data['stops'] ?? [];
         unset($data['stops']);
+        if ($request->user()?->role?->name === 'user') {
+            $data['customer_user_id'] = $request->user()->id;
+        }
         $data['customer_user_id'] = $data['customer_user_id'] ?? $request->user()->id;
         $data['status'] = $data['status'] ?? 'pending';
         $data['public_id'] = (string) Str::uuid();
@@ -142,6 +149,9 @@ class LoadController extends CrudController
                 )->validate();
                 $stops = $data['stops'] ?? [];
                 unset($data['stops']);
+                if ($request->user()?->role?->name === 'user') {
+                    $data['customer_user_id'] = $request->user()->id;
+                }
                 $data['customer_user_id'] = $data['customer_user_id'] ?? $request->user()->id;
                 $data['status'] = $data['status'] ?? 'pending';
                 $data['public_id'] = (string) Str::uuid();
