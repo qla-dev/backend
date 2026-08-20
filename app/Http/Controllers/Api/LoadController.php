@@ -109,6 +109,15 @@ class LoadController extends CrudController
         if ($request->user()?->role?->name === 'user') {
             $data['customer_user_id'] = $request->user()->id;
         }
+        if ($request->user()?->role?->name === 'superadmin') {
+            $demoCompanyId = Company::query()
+                ->where('slug', 'smartfreight-logistics-hub')
+                ->value('id');
+
+            if ($demoCompanyId) {
+                $data['company_id'] = $demoCompanyId;
+            }
+        }
         $data['customer_user_id'] = $data['customer_user_id'] ?? $request->user()->id;
         $data['status'] = $data['status'] ?? 'pending';
         $data['public_id'] = (string) Str::uuid();
