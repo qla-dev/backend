@@ -81,7 +81,8 @@ class DispatchChatController extends Controller
             .'You do not have live GPS access. If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
             .'Once a city or area is known (from a load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves — never invent specific business names, addresses, or phone numbers you cannot verify. '
             .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link. '
-            .'Keep replies concise (2-3 sentences) and professional.'
+            .'Keep replies concise and professional. When a current load record is available and the user asks for a route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts that hidden signal into a live data card; never mention the signal or write HTML yourself. '
+            .'Whenever you emit or cause the application to show a booking action, always write a complete, natural sentence first in the user\'s language explaining that the direct booking action is available below. The action must never appear without that preceding message.'
             .($load
                 ? ' You are chatting about one specific load. Answer questions using ONLY the load record given below — it is re-fetched from the database right before every reply you give, so it is always the current, authoritative state, even for fields you or the user discussed earlier in this conversation. '
                     .'If something you said earlier in this thread conflicts with the record below (for example you previously said a field was unavailable but it now appears below), the record below is correct — quietly use it and answer normally, do not repeat the earlier claim or say the record changed. '
@@ -104,7 +105,11 @@ class DispatchChatController extends Controller
             ->sortBy('sent_at')
             ->map(fn (Message $message) => [
                 'role' => $message->sender_user_id === $aiDispatcherId ? 'assistant' : 'user',
-                'content' => $message->body,
+                'content' => trim((string) preg_replace(
+                    '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?)\]\]/',
+                    '',
+                    $message->body
+                )),
             ])
             ->values()
             ->all();
@@ -116,10 +121,15 @@ class DispatchChatController extends Controller
         }
 
         $attachedLoadOfferedBooking = $load && $this->isOpenForDirectBooking($load) && str_contains($reply, '[[OFFER_BOOKING]]');
-        $reply = trim((string) preg_replace('/\[\[OFFER_BOOKING(?::\d+)?\]\]/', '', $reply));
-        if ($matchedGeneralLoad && $this->isOpenForDirectBooking($matchedGeneralLoad)) {
+        $attachedLoadDetails = $contextLoad && str_contains($reply, '[[LOAD_DETAILS]]');
+        $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?)\]\]/', '', $reply));
+        $hasTextReply = filled($reply);
+        if ($hasTextReply && $attachedLoadDetails) {
+            $reply .= "\n[[LOAD_DETAILS:{$contextLoad->id}]]";
+        }
+        if ($hasTextReply && $matchedGeneralLoad && $this->isOpenForDirectBooking($matchedGeneralLoad)) {
             $reply .= "\n[[OFFER_BOOKING:{$matchedGeneralLoad->id}]]";
-        } elseif ($attachedLoadOfferedBooking) {
+        } elseif ($hasTextReply && $attachedLoadOfferedBooking) {
             $reply .= "\n[[OFFER_BOOKING]]";
         }
 
