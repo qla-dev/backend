@@ -36,8 +36,33 @@ class LoadController extends CrudController
             $query->where('status', $status);
         }
 
-        if ($request->user()?->role?->name === 'user') {
-            $query->where('customer_user_id', $request->user()->id);
+        $user = $request->user();
+        $role = $user?->role?->name;
+
+        // The freight marketplace (status=posted) is a shared pool every role browses to find
+        // or offer work — only restrict visibility once a load has moved past that public
+        // listing stage into an actual booking/relationship.
+        if (! $user || $role === 'superadmin' || $status === 'posted') {
+            return;
+        }
+
+        if ($role === 'user') {
+            $query->where('customer_user_id', $user->id);
+
+            return;
+        }
+
+        if ($role === 'driver') {
+            $query->where('assigned_driver_user_id', $user->id);
+
+            return;
+        }
+
+        if (in_array($role, ['company', 'finance'], true)) {
+            $companyIds = $user->companies()->pluck('companies.id');
+            $query->where(function (Builder $scope) use ($user, $companyIds): void {
+                $scope->where('customer_user_id', $user->id)->orWhereIn('company_id', $companyIds);
+            });
         }
     }
 
