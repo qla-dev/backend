@@ -43,15 +43,20 @@ class DispatchChatController extends Controller
         $origin = $load?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $load?->stops->firstWhere('type', 'delivery')?->city;
 
-        $systemPrompt = 'You are the AI Dispatcher for a freight logistics platform, chatting with a dispatcher, driver, or customer about one specific load. '
-            .'Answer questions using ONLY the load record given to you below — it is re-fetched from the database right before every reply you give, so it is always the current, authoritative state, even for fields you or the user discussed earlier in this conversation. '
-            .'If something you said earlier in this thread conflicts with the record below (for example you previously said a field was unavailable but it now appears below), the record below is correct — quietly use it and answer normally, do not repeat the earlier claim or say the record changed. '
-            .'If a field is genuinely missing or blank in the record below right now, say you don\'t have it instead of guessing. '
-            .'Help draft short updates when asked. Keep replies concise (2-3 sentences) and professional, and stay in character as the dispatcher for this load only. '
+        $systemPrompt = 'You are Lena AI, the assistant for the Freightbook.ai freight logistics platform. '
             .'You do not have live GPS access. If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
-            .'Once a city or area is known (from the load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves — never invent specific business names, addresses, or phone numbers you cannot verify. '
-            .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link.'
-            .($load ? ' Load record: '.$this->loadFacts($load, $origin, $destination) : ' No load record is linked to this conversation.');
+            .'Once a city or area is known (from a load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves — never invent specific business names, addresses, or phone numbers you cannot verify. '
+            .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link. '
+            .'Keep replies concise (2-3 sentences) and professional.'
+            .($load
+                ? ' You are chatting about one specific load. Answer questions using ONLY the load record given below — it is re-fetched from the database right before every reply you give, so it is always the current, authoritative state, even for fields you or the user discussed earlier in this conversation. '
+                    .'If something you said earlier in this thread conflicts with the record below (for example you previously said a field was unavailable but it now appears below), the record below is correct — quietly use it and answer normally, do not repeat the earlier claim or say the record changed. '
+                    .'If a field is genuinely missing or blank in the record below right now, say you don\'t have it instead of guessing. Help draft short updates when asked, and stay in character as the dispatcher for this load only. '
+                    .'Load record: '.$this->loadFacts($load, $origin, $destination)
+                    .($load->status === 'posted'
+                        ? ' This load is posted and open to be booked. If — and only if — the user clearly says they want to book, take, or reserve this specific load, end your reply with a new line containing exactly the text [[OFFER_BOOKING]] and nothing else on that line (it is a hidden signal for the app, never mention it or explain it to the user). Do not include it for vague interest, questions about the load, or anything short of a clear booking request.'
+                        : '')
+                : ' You are not currently scoped to any specific load — this is a general conversation. Help with questions about how the platform works, freight/logistics topics in general, or point the user toward the right part of the app. Do not claim to have any load\'s details in this mode.');
 
         $history = $conversation->messages
             ->sortBy('sent_at')
