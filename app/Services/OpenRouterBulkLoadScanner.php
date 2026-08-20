@@ -26,12 +26,20 @@ class OpenRouterBulkLoadScanner
 
         $content = [
             ['type' => 'text', 'text' => $userPrompt],
-            ...array_map(fn (array $image) => [
-                'type' => 'image_url',
-                'image_url' => [
-                    'url' => 'data:'.($image['mimeType'] ?? 'image/jpeg').';base64,'.$image['base64'],
-                ],
-            ], $images),
+            ...array_map(fn (array $file) => ($file['mimeType'] ?? '') === 'application/pdf'
+                ? [
+                    'type' => 'file',
+                    'file' => [
+                        'filename' => $file['filename'] ?? 'freight-list.pdf',
+                        'file_data' => 'data:application/pdf;base64,'.$file['base64'],
+                    ],
+                ]
+                : [
+                    'type' => 'image_url',
+                    'image_url' => [
+                        'url' => 'data:'.($file['mimeType'] ?? 'image/jpeg').';base64,'.$file['base64'],
+                    ],
+                ], $images),
         ];
 
         return $this->run($this->documentSystemPrompt(), $content, 'images');

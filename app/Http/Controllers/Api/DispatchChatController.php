@@ -47,6 +47,15 @@ class DispatchChatController extends Controller
             ->sortByDesc('sent_at')
             ->values();
         $latestUserMessage = $userMessages->first()?->body;
+        $canvasEnabled = (bool) $conversation->canvas;
+        if ($this->asksToOpenLoadCanvas($latestUserMessage)) {
+            $canvasEnabled = true;
+        } elseif ($this->asksToCloseLoadCanvas($latestUserMessage)) {
+            $canvasEnabled = false;
+        }
+        if ($canvasEnabled !== (bool) $conversation->canvas) {
+            $conversation->update(['canvas' => $canvasEnabled]);
+        }
         $shouldGenerateTitle = ! $load
             && $userMessages->count() === 1
             && in_array(trim((string) $conversation->subject), ['', 'AI Dispatch — General'], true);
@@ -95,6 +104,9 @@ class DispatchChatController extends Controller
         $systemPrompt = 'You are LenaAI, the assistant for the Freightbook.ai freight logistics platform. '
             .'Determine the language of the most recent user message and write your ENTIRE reply in that language. Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. If the latest message is only a reference number, continue in the language already used by the user in this conversation. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
             .'Bosnian freight terminology is strict: translate the logistics noun "load" as "teret". Never call a load "opterećenje" in Bosnian. Use the correct grammatical form of "teret" for the sentence. '
+            .($canvasEnabled
+                ? ' The conversation load-post canvas is active. Help the user prepare a new load posting by collecting only facts they provide: pickup, delivery, dates, cargo, weight, equipment, price, currency, terms, and special requirements. Briefly point out the most important missing fields, but do not invent values. Attached-file extraction results appear in the user message context and are authoritative for this draft.'
+                : ' The load-post canvas is currently off. If the user asks to create, publish, post, or bulk-import a new load, explain that you opened the load-post canvas and help collect the required posting data.')
             .'Never discuss whether you have GPS access and never answer a location question with a generic GPS limitation. For questions about where a load is now, use the latest shipment coordinates or tracking event in the authoritative load record. If no current coordinate exists, state the latest known route point or pickup location without presenting it as a live position. '
             .'If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
             .'Once a city or area is known (from a load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves. Never invent specific business names, addresses, or phone numbers you cannot verify. '
@@ -130,7 +142,7 @@ class DispatchChatController extends Controller
                     '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
                     '',
                     $message->body
-                )),
+                )).$this->attachmentContext($message),
             ])
             ->values()
             ->all();
@@ -407,6 +419,40 @@ class DispatchChatController extends Controller
         return $load->status === 'posted'
             && ! $load->is_negotiable
             && ! $load->assigned_driver_user_id;
+    }
+
+    private function asksToOpenLoadCanvas(?string $message): bool
+    {
+        $normalized = Str::lower(Str::ascii((string) $message));
+
+        return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|bulk\s+import|novi\s+teret|nov\s+teret|objav\w*\s+teret|kreir\w*\s+teret|naprav\w*\s+teret|masovni\s+uvoz|neue\s+ladung|ladung\s+(?:erstellen|veroffentlichen)|massenimport)\b/i', $normalized) === 1;
+    }
+
+    private function asksToCloseLoadCanvas(?string $message): bool
+    {
+        $normalized = Str::lower(Str::ascii((string) $message));
+
+        return preg_match('/\b(close|disable|turn\s+off|exit|hide|zatvori|iskljuci|ugasi|izadi|beenden|ausschalten)\b.*\b(canvas|platno|nacrt)\b/i', $normalized) === 1;
+    }
+
+    private function attachmentContext(Message $message): string
+    {
+        $attachments = collect($message->attachments ?? [])->map(function ($attachment): array {
+            if (! is_array($attachment)) {
+                return [];
+            }
+
+            return array_filter([
+                'file' => $attachment['name'] ?? null,
+                'type' => $attachment['type'] ?? null,
+                'loadScan' => $attachment['loadScan'] ?? null,
+                'bulkRows' => $attachment['bulkRows'] ?? null,
+            ], fn ($value) => $value !== null && $value !== [] && $value !== '');
+        })->filter()->values()->all();
+
+        return $attachments === []
+            ? ''
+            : "\n\nAttached file extraction context:\n".json_encode($attachments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private function unavailable(string $message, int $status = 503): JsonResponse

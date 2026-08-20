@@ -14,13 +14,14 @@ class BulkLoadScanController extends Controller
         $validated = $request->validate([
             'images' => ['required', 'array', 'min:1', 'max:5'],
             'images.*.base64' => ['required', 'string'],
-            'images.*.mimeType' => ['sometimes', 'nullable', 'string', 'in:image/jpeg,image/png,image/webp,image/heic,image/heif'],
+            'images.*.mimeType' => ['sometimes', 'nullable', 'string', 'in:image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf'],
+            'images.*.filename' => ['sometimes', 'nullable', 'string', 'max:255'],
         ], [
             'images.required' => 'Add at least one photo.',
             'images.min' => 'Add at least one photo.',
             'images.max' => 'You can add at most 5 photos.',
             'images.*.base64.required' => 'The selected photo could not be processed.',
-            'images.*.mimeType.in' => 'This photo format is not supported.',
+            'images.*.mimeType.in' => 'This file format is not supported.',
         ]);
 
         if (! config('services.openrouter.api_key')) {

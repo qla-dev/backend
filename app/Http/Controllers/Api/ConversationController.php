@@ -41,7 +41,7 @@ class ConversationController extends CrudController
     {
         $p = $u ? 'sometimes' : 'required';
 
-        return ['company_id' => ['nullable', 'integer', 'exists:companies,id'], 'load_id' => ['nullable', 'integer', 'exists:loads,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'channel' => ['sometimes', 'in:inapp,whatsapp,telegram'], 'subject' => ['nullable', 'string', 'max:255'], 'last_message_at' => ['nullable', 'date'], 'participant_ids' => ['sometimes', 'array'], 'participant_ids.*' => ['integer', 'exists:users,id']];
+        return ['company_id' => ['nullable', 'integer', 'exists:companies,id'], 'load_id' => ['nullable', 'integer', 'exists:loads,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'channel' => ['sometimes', 'in:inapp,whatsapp,telegram'], 'subject' => ['nullable', 'string', 'max:255'], 'canvas' => ['sometimes', 'boolean'], 'last_message_at' => ['nullable', 'date'], 'participant_ids' => ['sometimes', 'array'], 'participant_ids.*' => ['integer', 'exists:users,id']];
     }
 
     public function store(Request $request): JsonResponse
@@ -64,5 +64,22 @@ class ConversationController extends CrudController
         $record = $query->findOrFail($id);
 
         return $this->success((new EntityResource($record))->resolve($request), 'Resource retrieved successfully.');
+    }
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $query = Conversation::query();
+        $this->scopeConversationToParticipant($query, $request->user()?->id);
+        $record = $query->findOrFail($id);
+        $data = $request->validate($this->rules(true));
+        $participantIds = $data['participant_ids'] ?? null;
+        unset($data['participant_ids']);
+        $record->update($data);
+        if (is_array($participantIds)) {
+            $record->participants()->syncWithoutDetaching($participantIds);
+        }
+        $record->load($this->relations());
+
+        return $this->success((new EntityResource($record))->resolve($request), 'Resource updated successfully.');
     }
 }

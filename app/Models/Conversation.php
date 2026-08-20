@@ -10,7 +10,7 @@ class Conversation extends BaseModel
 {
     protected function casts(): array
     {
-        return ['last_message_at' => 'datetime'];
+        return ['canvas' => 'boolean', 'last_message_at' => 'datetime'];
     }
 
     public function company(): BelongsTo
