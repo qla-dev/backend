@@ -125,10 +125,13 @@ class AuthController extends Controller
     public function google(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'id_token' => ['required', 'string'],
+            'id_token' => ['required_without:access_token', 'nullable', 'string'],
+            'access_token' => ['required_without:id_token', 'nullable', 'string'],
             'role' => ['sometimes', 'nullable', 'in:user,driver,company,finance'],
         ]);
-        $account = $this->verifyGoogleIdToken($validated['id_token']);
+        $account = isset($validated['access_token'])
+            ? $this->verifyGoogleAccessToken($validated['access_token'])
+            : $this->verifyGoogleIdToken($validated['id_token']);
 
         return $this->authenticateSocial($request, 'google_id', $account['sub'] ?? null, $account['email'] ?? null, $account['name'] ?? null, $validated['role'] ?? null);
     }
@@ -247,6 +250,33 @@ class AuthController extends Controller
             || ! in_array($payload['email_verified'] ?? null, [true, 'true'], true)
             || ($payload['exp'] ?? 0) < time()) {
             throw ValidationException::withMessages(['id_token' => ['Invalid or expired Google token.']]);
+        }
+
+        return $payload;
+    }
+
+    private function verifyGoogleAccessToken(string $accessToken): array
+    {
+        $clientIds = config('services.google.client_ids', []);
+        if ($clientIds === []) {
+            throw ValidationException::withMessages(['access_token' => ['Google sign-in is not configured.']]);
+        }
+
+        // Access tokens don't carry a verifiable signature the way ID tokens do, so confirm
+        // with Google that this exact token is live and was issued to one of our own client
+        // IDs before trusting anything the userinfo endpoint later says about it.
+        $tokenInfo = Http::get('https://oauth2.googleapis.com/tokeninfo', ['access_token' => $accessToken]);
+        $tokenPayload = $tokenInfo->json();
+        if (! $tokenInfo->ok()
+            || ! in_array($tokenPayload['aud'] ?? null, $clientIds, true)
+            || ($tokenPayload['exp'] ?? 0) < time()) {
+            throw ValidationException::withMessages(['access_token' => ['Invalid or expired Google token.']]);
+        }
+
+        $userInfo = Http::withToken($accessToken)->get('https://openidconnect.googleapis.com/v1/userinfo');
+        $payload = $userInfo->json();
+        if (! $userInfo->ok() || ! in_array($payload['email_verified'] ?? null, [true, 'true'], true)) {
+            throw ValidationException::withMessages(['access_token' => ['Invalid or expired Google token.']]);
         }
 
         return $payload;
