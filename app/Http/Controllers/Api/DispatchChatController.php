@@ -94,6 +94,7 @@ class DispatchChatController extends Controller
 
         $systemPrompt = 'You are LenaAI, the assistant for the Freightbook.ai freight logistics platform. '
             .'Determine the language of the most recent user message and write your ENTIRE reply in that language. Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. If the latest message is only a reference number, continue in the language already used by the user in this conversation. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
+            .'Bosnian freight terminology is strict: translate the logistics noun "load" as "teret". Never call a load "opterećenje" in Bosnian. Use the correct grammatical form of "teret" for the sentence. '
             .'Never discuss whether you have GPS access and never answer a location question with a generic GPS limitation. For questions about where a load is now, use the latest shipment coordinates or tracking event in the authoritative load record. If no current coordinate exists, state the latest known route point or pickup location without presenting it as a live position. '
             .'If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
             .'Once a city or area is known (from a load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves. Never invent specific business names, addresses, or phone numbers you cannot verify. '
@@ -164,6 +165,13 @@ class DispatchChatController extends Controller
             || $this->asksAboutLoadLocation($latestUserMessage)
         );
         $reply = str_replace(['—', '–'], '-', $reply);
+        // LenaAI terminology guard: in Bosnian logistics, a load is always "teret",
+        // never the literal and contextually incorrect translation "opterećenje".
+        $reply = str_replace(
+            ['Opterećenjem', 'Opterećenju', 'Opterećenja', 'Opterećenje', 'opterećenjem', 'opterećenju', 'opterećenja', 'opterećenje', 'Opterecenjem', 'Opterecenju', 'Opterecenja', 'Opterecenje', 'opterecenjem', 'opterecenju', 'opterecenja', 'opterecenje'],
+            ['Teretom', 'Teretu', 'Tereta', 'Teret', 'teretom', 'teretu', 'tereta', 'teret', 'Teretom', 'Teretu', 'Tereta', 'Teret', 'teretom', 'teretu', 'tereta', 'teret'],
+            $reply
+        );
         $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
         $hasTextReply = filled($reply);
         if ($hasTextReply && $attachedLoadDetails) {

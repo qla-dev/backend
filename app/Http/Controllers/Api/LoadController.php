@@ -14,6 +14,52 @@ use Illuminate\Validation\Rule;
 
 class LoadController extends CrudController
 {
+    public function publicIndex(): JsonResponse
+    {
+        $loads = Load::query()
+            ->with([
+                'company:id,name',
+                'stops' => fn ($query) => $query
+                    ->select(['id', 'load_id', 'type', 'position', 'city', 'country_code', 'window_starts_at', 'window_ends_at'])
+                    ->orderBy('position'),
+            ])
+            ->where('status', 'posted')
+            ->latest('published_at')
+            ->latest('id')
+            ->limit(8)
+            ->get()
+            ->map(fn (Load $load): array => [
+                'id' => $load->id,
+                'title' => $load->title,
+                'status' => $load->status,
+                'cargo_type' => $load->cargo_type,
+                'goods_type' => $load->goods_type,
+                'weight_kg' => $load->weight_kg,
+                'currency' => $load->currency,
+                'budget' => $load->budget,
+                'payment_terms' => $load->payment_terms,
+                'payment_due_days' => $load->payment_due_days,
+                'transport_type' => $load->transport_type,
+                'is_negotiable' => $load->is_negotiable,
+                'published_at' => $load->published_at,
+                'created_at' => $load->created_at,
+                'company' => $load->company ? ['name' => $load->company->name] : null,
+                'stops' => $load->stops->map(fn ($stop): array => [
+                    'type' => $stop->type,
+                    'position' => $stop->position,
+                    'city' => $stop->city,
+                    'country_code' => $stop->country_code,
+                    'window_starts_at' => $stop->window_starts_at,
+                    'window_ends_at' => $stop->window_ends_at,
+                ])->values(),
+            ])
+            ->values();
+
+        return $this->success($loads, 'Public loads retrieved successfully.', [
+            'total' => $loads->count(),
+        ]);
+    }
+
     protected function modelClass(): string
     {
         return Load::class;

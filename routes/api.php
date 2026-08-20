@@ -39,6 +39,9 @@ Route::get('health', fn () => response()->json(['message' => 'Freightbook.ai API
 // Public: the social-registration screen needs to list roles before the user has a session token.
 Route::get('role-options', [RoleController::class, 'options']);
 
+// Public landing-page preview. This returns only safe summary fields for currently posted loads.
+Route::get('public-loads', [LoadController::class, 'publicIndex']);
+
 Route::prefix('auth')->group(function (): void {
     Route::post('login', [AuthController::class, 'login']);
     Route::post('register', [AuthController::class, 'register']);
