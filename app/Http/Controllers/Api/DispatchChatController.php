@@ -36,7 +36,10 @@ class DispatchChatController extends Controller
         $destination = $load?->stops->firstWhere('type', 'delivery')?->city;
 
         $systemPrompt = 'You are the AI Dispatcher for a freight logistics platform, chatting with a dispatcher, driver, or customer about one specific load. '
-            .'Answer questions about this load\'s status, ETA, and route, and help draft short updates when asked. Keep replies concise (2-3 sentences) and professional, and stay in character as the dispatcher for this load only.'
+            .'Answer questions about this load\'s status, ETA, and route, and help draft short updates when asked. Keep replies concise (2-3 sentences) and professional, and stay in character as the dispatcher for this load only. '
+            .'You do not have live GPS access. If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
+            .'Once a city or area is known (from the load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves — never invent specific business names, addresses, or phone numbers you cannot verify. '
+            .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link.'
             .($load ? sprintf(
                 ' Load details: title "%s", status "%s", route %s -> %s.',
                 $load->title,
