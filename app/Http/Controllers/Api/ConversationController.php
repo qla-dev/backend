@@ -17,7 +17,7 @@ class ConversationController extends CrudController
 
     protected function relations(): array
     {
-        return ['company', 'freightLoad.consignee', 'creator', 'participants.role', 'messages.sender'];
+        return ['company', 'freightLoad.consignee', 'freightLoad.stops', 'creator', 'participants.role', 'messages.sender'];
     }
 
     protected function searchColumns(): array
