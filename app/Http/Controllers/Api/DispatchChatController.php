@@ -39,7 +39,7 @@ class DispatchChatController extends Controller
             return $this->unavailable('AI dispatcher is not configured.');
         }
 
-        $conversation = Conversation::query()->with(['messages', 'freightLoad.stops', 'freightLoad.consignee', 'freightLoad.company'])->findOrFail($validated['conversation_id']);
+        $conversation = Conversation::query()->with(['messages', 'freightLoad.stops', 'freightLoad.consignee', 'freightLoad.company', 'freightLoad.shipment.events'])->findOrFail($validated['conversation_id']);
 
         $load = $conversation->freightLoad;
         $userMessages = $conversation->messages
@@ -94,10 +94,11 @@ class DispatchChatController extends Controller
 
         $systemPrompt = 'You are LenaAI, the assistant for the Freightbook.ai freight logistics platform. '
             .'Determine the language of the most recent user message and write your ENTIRE reply in that language. Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. If the latest message is only a reference number, continue in the language already used by the user in this conversation. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
-            .'You do not have live GPS access. If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
+            .'Never discuss whether you have GPS access and never answer a location question with a generic GPS limitation. For questions about where a load is now, use the latest shipment coordinates or tracking event in the authoritative load record. If no current coordinate exists, state the latest known route point or pickup location without presenting it as a live position. '
+            .'If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
             .'Once a city or area is known (from a load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves. Never invent specific business names, addresses, or phone numbers you cannot verify. '
             .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link. '
-            .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks specifically about its pickup, destination, locations, endpoints, addresses, or where the route starts or ends, first answer naturally and then end the reply with a new line containing exactly [[LOAD_LOCATION]]. When the user asks for a broader route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts these hidden signals into live data cards; never mention the signals or write HTML yourself. '
+            .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks where the load is now or for its current or latest location, first answer naturally from the latest available record and then end the reply with a new line containing exactly [[LOAD_MAP]]. When the user asks specifically about pickup, destination, route endpoints, or addresses, first answer naturally and then end the reply with a new line containing exactly [[LOAD_LOCATION]]. When the user asks for a broader route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts these hidden signals into live data cards; never mention the signals or write HTML yourself. '
             .'Whenever you emit or cause the application to show a booking action, always write a complete, natural sentence first in the user\'s language explaining that the direct booking action is available below. The action must never appear without that preceding message.'
             .($shouldGenerateTitle
                 ? ' This is the first user message in a new general LenaAI chat. Start your reply with one line in the exact form [[CHAT_TITLE:title]], where title is a concise, meaningful 3 to 7 word chat title in the user\'s language based on their request. Do not use quotation marks, brackets, em dashes, or en dashes inside the title. The application saves this hidden title; never discuss it.'
@@ -125,7 +126,7 @@ class DispatchChatController extends Controller
             ->map(fn (Message $message) => [
                 'role' => $message->sender_user_id === $aiDispatcherId ? 'assistant' : 'user',
                 'content' => trim((string) preg_replace(
-                    '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
+                    '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
                     '',
                     $message->body
                 )),
@@ -148,22 +149,31 @@ class DispatchChatController extends Controller
             $generatedTitle = $this->fallbackConversationTitle($latestUserMessage);
         }
 
-        $askedToBookLoad = $this->asksToBookLoad($latestUserMessage);
-        $attachedLoadOfferedBooking = $load && $askedToBookLoad && $this->isOpenForDirectBooking($load) && str_contains($reply, '[[OFFER_BOOKING]]');
-        $matchedGeneralLoadOfferedBooking = $matchedGeneralLoad && $askedToBookLoad && $this->isOpenForDirectBooking($matchedGeneralLoad) && str_contains($reply, '[[OFFER_BOOKING]]');
+        $previousUserMessage = $userMessages->get(1)?->body;
+        $askedToBookLoad = $this->asksToBookLoad($latestUserMessage)
+            || ($this->confirmsPreviousAction($latestUserMessage) && $this->asksToBookLoad($previousUserMessage));
+        $attachedLoadOfferedBooking = $load && $askedToBookLoad && $this->isOpenForDirectBooking($load);
+        $matchedGeneralLoadOfferedBooking = $matchedGeneralLoad && $askedToBookLoad && $this->isOpenForDirectBooking($matchedGeneralLoad);
         $attachedLoadDetails = $contextLoad && str_contains($reply, '[[LOAD_DETAILS]]');
-        $attachedLoadLocation = $contextLoad && (
+        $attachedLoadMap = $contextLoad && (
+            str_contains($reply, '[[LOAD_MAP]]')
+            || $this->asksWhereLoadIsNow($latestUserMessage)
+        );
+        $attachedLoadLocation = $contextLoad && ! $attachedLoadMap && (
             str_contains($reply, '[[LOAD_LOCATION]]')
             || $this->asksAboutLoadLocation($latestUserMessage)
         );
         $reply = str_replace(['—', '–'], '-', $reply);
-        $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
+        $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
         $hasTextReply = filled($reply);
         if ($hasTextReply && $attachedLoadDetails) {
             $reply .= "\n[[LOAD_DETAILS:{$contextLoad->id}]]";
         }
         if ($hasTextReply && $attachedLoadLocation) {
             $reply .= "\n[[LOAD_LOCATION:{$contextLoad->id}]]";
+        }
+        if ($hasTextReply && $attachedLoadMap) {
+            $reply .= "\n[[LOAD_MAP:{$contextLoad->id}]]";
         }
         if ($hasTextReply && $matchedGeneralLoadOfferedBooking) {
             $reply .= "\n[[OFFER_BOOKING:{$matchedGeneralLoad->id}]]";
@@ -196,6 +206,9 @@ class DispatchChatController extends Controller
     private function loadFacts(Load $load, ?string $origin, ?string $destination): string
     {
         $consignee = $load->consignee;
+        $shipment = $load->shipment;
+        $latestTrackingEvent = $shipment?->events
+            ?->first(fn ($event) => filled($event->location) || (filled($event->latitude) && filled($event->longitude)));
 
         return collect([
             'Title' => $load->title,
@@ -214,6 +227,13 @@ class DispatchChatController extends Controller
             'Container number' => $load->container_number,
             'Origin' => $origin,
             'Destination' => $destination,
+            'Latest known location' => $latestTrackingEvent?->location,
+            'Latest known coordinates' => filled($latestTrackingEvent?->latitude) && filled($latestTrackingEvent?->longitude)
+                ? "{$latestTrackingEvent->latitude}, {$latestTrackingEvent->longitude}"
+                : (filled($shipment?->current_latitude) && filled($shipment?->current_longitude)
+                    ? "{$shipment->current_latitude}, {$shipment->current_longitude}"
+                    : null),
+            'Latest location recorded at' => optional($latestTrackingEvent?->occurred_at)->toIso8601String(),
             'ETD' => optional($load->etd_at)->toDateString(),
             'ATD' => optional($load->atd_at)->toDateString(),
             'Carrier / company' => $load->company?->name,
@@ -269,7 +289,7 @@ class DispatchChatController extends Controller
             ->first();
 
         return $match
-            ? Load::query()->with(['stops', 'consignee', 'company'])->find($match->id)
+            ? Load::query()->with(['stops', 'consignee', 'company', 'shipment.events'])->find($match->id)
             : null;
     }
 
@@ -326,15 +346,43 @@ class DispatchChatController extends Controller
         ) === 1;
     }
 
-    private function asksToBookLoad(?string $message): bool
+    private function asksWhereLoadIsNow(?string $message): bool
     {
         if (blank($message)) {
             return false;
         }
 
         return preg_match(
-            '/\b(book\pL*|reserve\pL*|reservation\pL*|take\s+(?:this|the)\s+load|accept\s+(?:this|the)\s+load|rezerv\pL*|uzm\pL*|prihvat\pL*|buchen|buchung\pL*|reservier\pL*|annehm\pL*|diese\s+ladung\s+nehmen)\b/iu',
+            '/\b(where\s+(?:is|s)\s+(?:the\s+)?load|current\s+location|latest\s+location|whereabouts|gdje\s+je\s+teret|gde\s+je\s+teret|trenutn\pL*\s+lokacij\pL*|zadnj\pL*\s+lokacij\pL*|wo\s+ist\s+(?:die\s+)?ladung|aktuell\pL*\s+standort|letzt\pL*\s+standort)\b/iu',
             $message
+        ) === 1;
+    }
+
+    private function asksToBookLoad(?string $message): bool
+    {
+        if (blank($message)) {
+            return false;
+        }
+
+        $normalized = Str::ascii(Str::lower(trim($message)));
+
+        return preg_match(
+            '/\b(book\w*|reserv\w*|take\s+(?:this|the)\s+load|accept\s+(?:this|the)\s+load|want\s+(?:this|the)\s+load|rezerv\w*|buk\w*|uz(?:mi|imam|eti)\w*|prihvat\w*|preuzimam|hocu\s+(?:ovaj\s+)?teret|zelim\s+(?:ovaj\s+)?teret|dodijel\w*\s+mi|buchen|buchung\w*|annehm\w*|diese\s+ladung\s+nehmen|ich\s+mochte\s+diese\s+ladung)\b/i',
+            $normalized
+        ) === 1;
+    }
+
+    private function confirmsPreviousAction(?string $message): bool
+    {
+        if (blank($message)) {
+            return false;
+        }
+
+        $normalized = Str::ascii(Str::lower(trim($message)));
+
+        return preg_match(
+            '/^(?:pa\s+)?(?:hajde|moze|da|uradi|potvrdi|nastavi|yes|yeah|sure|go\s+ahead|do\s+it|please|okay|ok|ja|bitte|mach\s+es|weiter)\s*[.!?]*$/i',
+            $normalized
         ) === 1;
     }
 
