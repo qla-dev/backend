@@ -47,6 +47,9 @@ class DispatchChatController extends Controller
             ->sortByDesc('sent_at')
             ->values();
         $latestUserMessage = $userMessages->first()?->body;
+        $shouldGenerateTitle = ! $load
+            && $userMessages->count() === 1
+            && in_array(trim((string) $conversation->subject), ['', 'AI Dispatch — General'], true);
         $matchedGeneralLoad = $load ? null : $this->findVisibleLoadByBookingReference($latestUserMessage, $request->user());
 
         // General LenaAI chats are not permanently attached to a load. Keep the most recently
@@ -94,8 +97,11 @@ class DispatchChatController extends Controller
             .'You do not have live GPS access. If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
             .'Once a city or area is known (from a load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves. Never invent specific business names, addresses, or phone numbers you cannot verify. '
             .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link. '
-            .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks for a route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts that hidden signal into a live data card; never mention the signal or write HTML yourself. '
+            .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks specifically about its pickup, destination, locations, endpoints, addresses, or where the route starts or ends, first answer naturally and then end the reply with a new line containing exactly [[LOAD_LOCATION]]. When the user asks for a broader route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts these hidden signals into live data cards; never mention the signals or write HTML yourself. '
             .'Whenever you emit or cause the application to show a booking action, always write a complete, natural sentence first in the user\'s language explaining that the direct booking action is available below. The action must never appear without that preceding message.'
+            .($shouldGenerateTitle
+                ? ' This is the first user message in a new general LenaAI chat. Start your reply with one line in the exact form [[CHAT_TITLE:title]], where title is a concise, meaningful 3 to 7 word chat title in the user\'s language based on their request. Do not use quotation marks, brackets, em dashes, or en dashes inside the title. The application saves this hidden title; never discuss it.'
+                : '')
             .($load
                 ? ' You are chatting about one specific load. Answer questions using ONLY the load record given below. It is re-fetched from the database right before every reply you give, so it is always the current, authoritative state, even for fields you or the user discussed earlier in this conversation. '
                     .'If something you said earlier in this thread conflicts with the record below (for example you previously said a field was unavailable but it now appears below), the record below is correct. Quietly use it and answer normally, do not repeat the earlier claim or say the record changed. '
@@ -109,7 +115,7 @@ class DispatchChatController extends Controller
                     ? ' This is a general LenaAI conversation, and the database search found the load whose booking reference the user supplied. Use only the current authoritative load record below when discussing it. '
                         .'Load record: '.$this->loadFacts($matchedGeneralLoad, $origin, $destination).'. '
                         .($this->isOpenForDirectBooking($matchedGeneralLoad)
-                            ? ' This load is currently posted and open for direct booking. Tell the user it was found and is available; the application will add the booking action automatically. Never write or explain an OFFER_BOOKING signal yourself.'
+                            ? ' This load is currently posted and open for direct booking. Only if the latest user message clearly asks to book, take, or reserve it, explain that booking is available below and end the reply with a new line containing exactly [[OFFER_BOOKING]]. For every other question, including details, price, status, route, and location questions, do not emit OFFER_BOOKING and do not offer a reservation action.'
                             : ' This load is currently '.$statusPlain.' and is not open for a new booking. State that plainly and do not emit any OFFER_BOOKING signal.')
                     : ' You are not currently scoped to a specific load. You can help search the actual load database by booking reference; the application performs that lookup from the reference in the user\'s latest message. If the user wants to find, book, take, or reserve a load but has not supplied its booking reference, ask for the booking reference first. Do not send them to browse the marketplace instead. If the conversation indicates they just supplied a reference and no matching visible load was found, clearly say that no load was found for that reference and ask them to check it. '
                         .'The app also has a freight marketplace for browsing available loads, a section for tracking the user\'s own loads with shipment details, a live map, return-route suggestions, invoices and reports, a Messages inbox, fleet management for companies, and analytics. Answer questions about how the platform works and freight logistics generally. If earlier turns described you as limited to one load, ignore that limitation in this general conversation.'));
@@ -119,7 +125,7 @@ class DispatchChatController extends Controller
             ->map(fn (Message $message) => [
                 'role' => $message->sender_user_id === $aiDispatcherId ? 'assistant' : 'user',
                 'content' => trim((string) preg_replace(
-                    '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?)\]\]/',
+                    '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
                     '',
                     $message->body
                 )),
@@ -133,15 +139,33 @@ class DispatchChatController extends Controller
             return $this->unavailable($exception->getMessage());
         }
 
-        $attachedLoadOfferedBooking = $load && $this->isOpenForDirectBooking($load) && str_contains($reply, '[[OFFER_BOOKING]]');
+        $generatedTitle = null;
+        if ($shouldGenerateTitle && preg_match('/\[\[CHAT_TITLE:([^\]\r\n]+)\]\]/u', $reply, $titleMatch) === 1) {
+            $generatedTitle = trim((string) preg_replace('/\s+/u', ' ', str_replace(['—', '–'], '-', $titleMatch[1])), " \t\n\r\0\x0B\"'");
+            $generatedTitle = Str::limit($generatedTitle, 70, '');
+        }
+        if ($shouldGenerateTitle && blank($generatedTitle)) {
+            $generatedTitle = $this->fallbackConversationTitle($latestUserMessage);
+        }
+
+        $askedToBookLoad = $this->asksToBookLoad($latestUserMessage);
+        $attachedLoadOfferedBooking = $load && $askedToBookLoad && $this->isOpenForDirectBooking($load) && str_contains($reply, '[[OFFER_BOOKING]]');
+        $matchedGeneralLoadOfferedBooking = $matchedGeneralLoad && $askedToBookLoad && $this->isOpenForDirectBooking($matchedGeneralLoad) && str_contains($reply, '[[OFFER_BOOKING]]');
         $attachedLoadDetails = $contextLoad && str_contains($reply, '[[LOAD_DETAILS]]');
+        $attachedLoadLocation = $contextLoad && (
+            str_contains($reply, '[[LOAD_LOCATION]]')
+            || $this->asksAboutLoadLocation($latestUserMessage)
+        );
         $reply = str_replace(['—', '–'], '-', $reply);
-        $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?)\]\]/', '', $reply));
+        $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
         $hasTextReply = filled($reply);
         if ($hasTextReply && $attachedLoadDetails) {
             $reply .= "\n[[LOAD_DETAILS:{$contextLoad->id}]]";
         }
-        if ($hasTextReply && $matchedGeneralLoad && $this->isOpenForDirectBooking($matchedGeneralLoad)) {
+        if ($hasTextReply && $attachedLoadLocation) {
+            $reply .= "\n[[LOAD_LOCATION:{$contextLoad->id}]]";
+        }
+        if ($hasTextReply && $matchedGeneralLoadOfferedBooking) {
             $reply .= "\n[[OFFER_BOOKING:{$matchedGeneralLoad->id}]]";
         } elseif ($hasTextReply && $attachedLoadOfferedBooking) {
             $reply .= "\n[[OFFER_BOOKING]]";
@@ -153,7 +177,11 @@ class DispatchChatController extends Controller
             'body' => $reply,
             'sent_at' => now(),
         ]);
-        $conversation->update(['last_message_at' => $message->sent_at]);
+        $conversationUpdate = ['last_message_at' => $message->sent_at];
+        if (filled($generatedTitle)) {
+            $conversationUpdate['subject'] = 'AI Dispatch — '.$generatedTitle;
+        }
+        $conversation->update($conversationUpdate);
         $conversation->participants()->syncWithoutDetaching([$aiDispatcherId]);
         $message->load('sender');
 
@@ -284,6 +312,38 @@ class DispatchChatController extends Controller
             '/(?<![\pL\pN])(?=[\pL\pN-]{3,}(?![\pL\pN-]))(?=[\pL\pN-]*\pL)(?=[\pL\pN-]*\pN)[\pL\pN]+(?:-[\pL\pN]+)*(?![\pL\pN-])|(?<!\d)\d{4,}(?!\d)/u',
             $message
         ) === 1;
+    }
+
+    private function asksAboutLoadLocation(?string $message): bool
+    {
+        if (blank($message)) {
+            return false;
+        }
+
+        return preg_match(
+            '/\b(destination|origin|pickup|delivery|location|address|where|route|destinacij\pL*|odredišt\pL*|polazišt\pL*|lokacij\pL*|adres\pL*|preuzimanj\pL*|dostav\pL*|odakle|dokle|gdje|kuda|ziel\pL*|startort\pL*|standort\pL*|adresse\pL*|abholung\pL*|lieferung\pL*|route|wohin|woher|wo)\b/iu',
+            $message
+        ) === 1;
+    }
+
+    private function asksToBookLoad(?string $message): bool
+    {
+        if (blank($message)) {
+            return false;
+        }
+
+        return preg_match(
+            '/\b(book\pL*|reserve\pL*|reservation\pL*|take\s+(?:this|the)\s+load|accept\s+(?:this|the)\s+load|rezerv\pL*|uzm\pL*|prihvat\pL*|buchen|buchung\pL*|reservier\pL*|annehm\pL*|diese\s+ladung\s+nehmen)\b/iu',
+            $message
+        ) === 1;
+    }
+
+    private function fallbackConversationTitle(?string $message): string
+    {
+        $plain = trim((string) preg_replace('/\s+/u', ' ', strip_tags((string) $message)));
+        $plain = trim(str_replace(['—', '–'], '-', $plain), " \t\n\r\0\x0B\"'.,!?;:");
+
+        return Str::limit(Str::words($plain, 7, ''), 70, '');
     }
 
     private function isOpenForDirectBooking(Load $load): bool
