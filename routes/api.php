@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CompanyInvitationController;
 use App\Http\Controllers\Api\CompanyMembershipController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\DispatchChatController;
 use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\EmailCampaignController;
@@ -86,7 +87,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::apiResource('loads', LoadController::class)->except(['store']);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
-    Route::get('ai-dispatcher', [UserController::class, 'aiDispatcher']);
+    Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
     Route::post('load-scans/text', [LoadScanController::class, 'scanText'])->middleware('throttle:10,1');
 

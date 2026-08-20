@@ -4,18 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class UserController extends CrudController
 {
-    public function aiDispatcher(): JsonResponse
-    {
-        $user = User::query()->where('username', 'ai_dispatcher')->first(['id', 'name']);
-
-        return $this->success($user, $user ? 'AI dispatcher resolved.' : 'AI dispatcher not configured.');
-    }
-
     protected function modelClass(): string
     {
         return User::class;
