@@ -16,6 +16,7 @@ class LoadScanController extends Controller
             'images.*.base64' => ['required', 'string'],
             'images.*.mimeType' => ['sometimes', 'nullable', 'string', 'in:image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf'],
             'images.*.filename' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'current' => ['sometimes', 'nullable', 'array'],
         ], [
             'images.required' => 'Add at least one photo.',
             'images.min' => 'Add at least one photo.',
@@ -33,7 +34,7 @@ class LoadScanController extends Controller
             ], 503);
         }
 
-        $result = $scanner->scan($validated['images']);
+        $result = $scanner->scan($validated['images'], $validated['current'] ?? []);
 
         return response()->json(['message' => 'Document scanned.', 'data' => $result, 'meta' => [], 'errors' => []]);
     }
@@ -42,6 +43,7 @@ class LoadScanController extends Controller
     {
         $validated = $request->validate([
             'description' => ['required', 'string', 'min:8', 'max:4000'],
+            'current' => ['sometimes', 'nullable', 'array'],
         ], [
             'description.required' => 'Describe the load first.',
             'description.min' => 'Add a bit more detail about the load.',
@@ -56,7 +58,7 @@ class LoadScanController extends Controller
             ], 503);
         }
 
-        $result = $scanner->scanText($validated['description']);
+        $result = $scanner->scanText($validated['description'], $validated['current'] ?? []);
 
         return response()->json(['message' => 'Description parsed.', 'data' => $result, 'meta' => [], 'errors' => []]);
     }

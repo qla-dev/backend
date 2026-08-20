@@ -16,14 +16,15 @@ class OpenRouterLoadScanner
 
     private const BODY_TYPES = ['Curtain', 'Box', 'Reefer', 'Mega', 'Tautliner', 'Flatbed'];
 
-    public function scan(array $images): array
+    public function scan(array $images, array $current = []): array
     {
         $userPrompt = 'Read a short title summarizing the load, the cargo type (e.g. Pallets, Machinery, Electronics), the goods type/description, '
             .'the weight in kilograms, the pallet/unit count, the required trailer body type if stated, '
             .'dimensions and volume, required vehicle type, '
             .'the pickup city, country code and date, the delivery city, country code and date, the currency, the agreed price or rate, '
             .'Incoterm, deferred payment days, temperature range, ADR, tail-lift and urgency requirements, contact name/phone/email, '
-            .'the booking or reference number, and any other short notes that do not belong in a dedicated field.';
+            .'the booking or reference number, and any other short notes that do not belong in a dedicated field.'
+            .$this->currentDraftContext($current);
 
         $content = [
             ['type' => 'text', 'text' => $userPrompt],
@@ -43,27 +44,50 @@ class OpenRouterLoadScanner
                 ], $images),
         ];
 
-        return $this->run($this->documentSystemPrompt(), $content, 'images');
+        return $this->run($this->documentSystemPrompt($current), $content, 'images');
     }
 
-    public function scanText(string $description): array
+    public function scanText(string $description, array $current = []): array
     {
         $userPrompt = 'The shipper described the load in their own words below. Extract a short title, the cargo type '
             .'(e.g. Pallets, Machinery, Electronics), the goods type/description, the weight in kilograms, the pallet/unit count, '
             .'the required trailer body type if stated, the pickup city, country code and date, the delivery city, country code and date, '
             .'dimensions, volume, vehicle, the currency, agreed price or rate, Incoterm, deferred payment days, temperature range, ADR, tail-lift, urgency, contact details, '
             .'the booking or reference number, and any other short notes that do not belong in a dedicated field.'
+            .$this->currentDraftContext($current)
             ."\n\nDescription:\n".$description;
 
         $content = [['type' => 'text', 'text' => $userPrompt]];
 
-        return $this->run($this->textSystemPrompt(), $content, 'description');
+        return $this->run($this->textSystemPrompt($current), $content, 'description');
     }
 
-    private function documentSystemPrompt(): string
+    private function currentDraftContext(array $current): string
+    {
+        $meaningful = array_filter(
+            $current,
+            fn ($value) => $value !== '' && $value !== 0 && $value !== false && $value !== null && $value !== []
+        );
+        if ($meaningful === []) {
+            return '';
+        }
+
+        return "\n\nCurrent known draft (already confirmed in earlier turns, as JSON):\n"
+            .json_encode($meaningful, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            ."\n\nThis draft already exists; you are updating it, not starting over. Copy every field from it into your answer unchanged, "
+            .'EXCEPT the field(s) the new message actually addresses. '
+            .'When the message asks to add, increase, remove, or decrease a quantity or amount (e.g. "add 10 more pallets", "add another 5", "smanji za 2"), '
+            .'compute the new value from the current draft value above, do not just repeat the number mentioned. '
+            .'When the message clearly sets or replaces a field (e.g. "change destination to X", "make it 30 pallets total"), use the new value. '
+            .'If the new message is not about the load at all (a question, a complaint, small talk, or anything with no new load information), '
+            .'return the draft above completely unchanged and leave notes exactly as it already was; never place unrelated conversational text into notes.';
+    }
+
+    private function documentSystemPrompt(array $current = []): string
     {
         return 'You read a freight document (a shipping order, rate confirmation, bill of lading, cargo manifest, or booking note) '
-            .'to prefill a new load posting form. Do not invent values you cannot read; use an empty string, 0, or false for anything not shown. '
+            .'to prefill a new load posting form. Do not invent values you cannot read; use an empty string, 0, or false for anything not shown, '
+            .(($current !== []) ? 'unless a current draft is given below, in which case carry its existing values forward for anything this document does not address. ' : '')
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is shown, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'Read the cargo weight in kilograms, converting from other units if the document states them explicitly (e.g. lbs, tons). '
@@ -76,10 +100,11 @@ class OpenRouterLoadScanner
             .'Return only the fields requested in the JSON schema.';
     }
 
-    private function textSystemPrompt(): string
+    private function textSystemPrompt(array $current = []): string
     {
         return 'You read a free-text description of a freight load, written by a shipper in plain language (any of English, Bosnian/Croatian/Serbian, or German), '
-            .'to prefill a new load posting form. Do not invent values that are not stated or clearly implied; use an empty string, 0, or false for anything not mentioned. '
+            .'to prefill a new load posting form. Do not invent values that are not stated or clearly implied; use an empty string, 0, or false for anything not mentioned, '
+            .(($current !== []) ? 'unless a current draft is given below, in which case carry its existing values forward for anything this message does not address, and correctly apply incremental changes (add, increase, remove, decrease) using the current value as the base. ' : '')
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is mentioned, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'Read the cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
