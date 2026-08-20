@@ -42,11 +42,24 @@ class DispatchChatController extends Controller
         $conversation = Conversation::query()->with(['messages', 'freightLoad.stops', 'freightLoad.consignee', 'freightLoad.company'])->findOrFail($validated['conversation_id']);
 
         $load = $conversation->freightLoad;
-        $latestUserMessage = $conversation->messages
+        $userMessages = $conversation->messages
             ->where('sender_user_id', '!=', $aiDispatcherId)
             ->sortByDesc('sent_at')
-            ->first()?->body;
+            ->values();
+        $latestUserMessage = $userMessages->first()?->body;
         $matchedGeneralLoad = $load ? null : $this->findVisibleLoadByBookingReference($latestUserMessage, $request->user());
+
+        // General LenaAI chats are not permanently attached to a load. Keep the most recently
+        // resolved booking reference as conversational context for follow-ups such as "show the
+        // details again", while never falling back to an old load after a new invalid reference.
+        if (! $load && ! $matchedGeneralLoad && ! $this->mentionsBookingReference($latestUserMessage)) {
+            foreach ($userMessages->skip(1) as $earlierUserMessage) {
+                $matchedGeneralLoad = $this->findVisibleLoadByBookingReference($earlierUserMessage->body, $request->user());
+                if ($matchedGeneralLoad) {
+                    break;
+                }
+            }
+        }
         $contextLoad = $load ?? $matchedGeneralLoad;
         $origin = $contextLoad?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $contextLoad?->stops->firstWhere('type', 'delivery')?->city;
@@ -259,6 +272,18 @@ class DispatchChatController extends Controller
     private function normalizeReference(string $value): string
     {
         return preg_replace('/[^\pL\pN]+/u', '', Str::lower($value)) ?? '';
+    }
+
+    private function mentionsBookingReference(?string $message): bool
+    {
+        if (blank($message)) {
+            return false;
+        }
+
+        return preg_match(
+            '/(?<![\pL\pN])(?=[\pL\pN-]{3,}(?![\pL\pN-]))(?=[\pL\pN-]*\pL)(?=[\pL\pN-]*\pN)[\pL\pN]+(?:-[\pL\pN]+)*(?![\pL\pN-])|(?<!\d)\d{4,}(?!\d)/u',
+            $message
+        ) === 1;
     }
 
     private function isOpenForDirectBooking(Load $load): bool
