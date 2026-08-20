@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\EntityResource;
+use App\Models\Load;
 use App\Models\Offer;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -27,6 +28,42 @@ class OfferController extends CrudController
         $p = $u ? 'sometimes' : 'required';
 
         return ['load_id' => [$p, 'integer', 'exists:loads,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'], 'driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'amount' => [$p, 'numeric', 'min:0'], 'currency' => ['sometimes', 'string', 'size:3'], 'status' => ['sometimes', 'string', 'max:50'], 'valid_until' => ['nullable', 'date'], 'message' => ['nullable', 'string']];
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate($this->rules());
+
+        $offer = DB::transaction(function () use ($data) {
+            $load = Load::query()->lockForUpdate()->findOrFail($data['load_id']);
+            $this->validateBidFloor($load, (float) $data['amount']);
+
+            return Offer::query()->create($data);
+        });
+        $offer->load($this->relations());
+
+        return $this->success((new EntityResource($offer))->resolve($request), 'Offer created successfully.', status: 201);
+    }
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate($this->rules(true));
+
+        $offer = DB::transaction(function () use ($id, $data) {
+            $offer = Offer::query()->lockForUpdate()->findOrFail($id);
+            $load = Load::query()->lockForUpdate()->findOrFail($data['load_id'] ?? $offer->load_id);
+
+            if (array_key_exists('amount', $data)) {
+                $this->validateBidFloor($load, (float) $data['amount']);
+            }
+
+            $offer->update($data);
+
+            return $offer;
+        });
+        $offer->load($this->relations());
+
+        return $this->success((new EntityResource($offer))->resolve($request), 'Offer updated successfully.');
     }
 
     public function approve(Request $request, int $id): JsonResponse
@@ -54,5 +91,24 @@ class OfferController extends CrudController
         });
 
         return $this->success((new EntityResource($offer))->resolve($request), 'Offer approved and driver assigned.');
+    }
+
+    private function validateBidFloor(Load $load, float $amount): void
+    {
+        if (! $load->is_negotiable || $load->status !== 'posted') {
+            throw ValidationException::withMessages(['amount' => 'This load is not accepting offers.']);
+        }
+
+        $highestOffer = Offer::query()
+            ->where('load_id', $load->id)
+            ->where('status', '!=', 'rejected')
+            ->max('amount');
+        $minimum = $highestOffer !== null ? (float) $highestOffer : (float) ($load->budget ?? 0);
+
+        if ($amount < $minimum) {
+            throw ValidationException::withMessages([
+                'amount' => "The offer must be at least {$load->currency} ".number_format($minimum, 2, '.', ''),
+            ]);
+        }
     }
 }
