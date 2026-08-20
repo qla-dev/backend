@@ -23,7 +23,8 @@ class OpenRouterLoadScanner
             .'dimensions and volume, required vehicle type, '
             .'the pickup city, country code and date, the delivery city, country code and date, the currency, the agreed price or rate, '
             .'Incoterm, deferred payment days, temperature range, ADR, tail-lift and urgency requirements, contact name/phone/email, '
-            .'the booking or reference number, and any other short notes that do not belong in a dedicated field.'
+            .'the booking or reference number, any other short notes that do not belong in a dedicated field, '
+            .'and any distinct fact that should be tracked as its own separate custom item rather than folded into notes.'
             .$this->currentDraftContext($current);
 
         $content = [
@@ -53,7 +54,8 @@ class OpenRouterLoadScanner
             .'(e.g. Pallets, Machinery, Electronics), the goods type/description, the weight in kilograms, the pallet/unit count, '
             .'the required trailer body type if stated, the pickup city, country code and date, the delivery city, country code and date, '
             .'dimensions, volume, vehicle, the currency, agreed price or rate, Incoterm, deferred payment days, temperature range, ADR, tail-lift, urgency, contact details, '
-            .'the booking or reference number, and any other short notes that do not belong in a dedicated field.'
+            .'the booking or reference number, any other short notes that do not belong in a dedicated field, '
+            .'and any distinct fact that should be tracked as its own separate custom item rather than folded into notes.'
             .$this->currentDraftContext($current)
             ."\n\nDescription:\n".$description;
 
@@ -79,8 +81,9 @@ class OpenRouterLoadScanner
             .'When the message asks to add, increase, remove, or decrease a quantity or amount (e.g. "add 10 more pallets", "add another 5", "smanji za 2"), '
             .'compute the new value from the current draft value above, do not just repeat the number mentioned. '
             .'When the message clearly sets or replaces a field (e.g. "change destination to X", "make it 30 pallets total"), use the new value. '
+            .'The customFields list works the same way: keep every existing entry from the current draft above and only append a new one or edit a matching one, never drop existing entries just because the new message does not mention them. '
             .'If the new message is not about the load at all (a question, a complaint, small talk, or anything with no new load information), '
-            .'return the draft above completely unchanged and leave notes exactly as it already was; never place unrelated conversational text into notes.';
+            .'return the draft above completely unchanged and leave notes and customFields exactly as they already were; never place unrelated conversational text into notes or customFields.';
     }
 
     private function documentSystemPrompt(array $current = []): string
@@ -95,7 +98,8 @@ class OpenRouterLoadScanner
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Extract dimensions in meters, volume in cubic meters, vehicle type, Incoterm, deferred payment days, temperature range in Celsius, ADR/tail-lift/urgency flags, and contact details only when explicitly present. '
             .'Read the currency from the symbol or code printed on the document and return its ISO 4217 code. '
-            .'Put ONLY leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
+            .'Put leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
+            .'If the shipper explicitly asks for something to be tracked as its own separate item rather than lumped into notes (e.g. "add this as a new item, not as notes", "dodaj kao novi item, ne kao notes"), add one entry to customFields instead, with a short label in the language they used and its value; do not also duplicate that same fact inside notes. '
             .'Set isDocument to true only when the image really shows a freight/shipping document; otherwise set it to false and do not invent data. '
             .'Return only the fields requested in the JSON schema.';
     }
@@ -112,7 +116,8 @@ class OpenRouterLoadScanner
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Extract dimensions in meters, volume in cubic meters, vehicle type, Incoterm, deferred payment days, temperature range in Celsius, ADR/tail-lift/urgency flags, and contact details only when stated. '
             .'Read the currency from the symbol or code mentioned and return its ISO 4217 code, defaulting to EUR if a price is given without a currency. '
-            .'Put ONLY leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
+            .'Put leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
+            .'If the shipper explicitly asks for something to be tracked as its own separate item rather than lumped into notes (e.g. "add this as a new item, not as notes", "dodaj kao novi item, ne kao notes", "dodaj kao zasebnu stavku"), add one entry to customFields instead, with a short label in the language they used and its value; do not also duplicate that same fact inside notes. '
             .'Set isDocument to true whenever the text describes a freight load (even briefly); set it to false only when the text is unrelated to freight/shipping. '
             .'Return only the fields requested in the JSON schema.';
     }
@@ -261,9 +266,28 @@ class OpenRouterLoadScanner
             'contactEmail' => $this->stringValue($result['contactEmail'] ?? ''),
             'bookingReference' => $this->stringValue($result['bookingReference'] ?? ''),
             'notes' => $this->stringValue($result['notes'] ?? ''),
+            'customFields' => $this->customFieldsValue($result['customFields'] ?? null),
             'confidence' => max(0.0, min(1.0, $this->numericValue($result['confidence'] ?? 0))),
             'warnings' => $warnings,
         ];
+    }
+
+    private function customFieldsValue(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return collect($value)
+            ->filter(fn ($item) => is_array($item))
+            ->map(fn ($item) => [
+                'label' => $this->stringValue($item['label'] ?? ''),
+                'value' => $this->stringValue($item['value'] ?? ''),
+            ])
+            ->filter(fn ($item) => $item['label'] !== '' && $item['value'] !== '')
+            ->take(8)
+            ->values()
+            ->all();
     }
 
     private function dateValue(mixed $value): string
@@ -294,7 +318,7 @@ class OpenRouterLoadScanner
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['isDocument', 'title', 'cargoType', 'goodsType', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'pickupCity', 'pickupCountryCode', 'pickupDate', 'deliveryCity', 'deliveryCountryCode', 'deliveryDate', 'currency', 'budget', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'isUrgent', 'contactName', 'contactPhone', 'contactEmail', 'bookingReference', 'notes', 'confidence', 'warnings'],
+            'required' => ['isDocument', 'title', 'cargoType', 'goodsType', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'pickupCity', 'pickupCountryCode', 'pickupDate', 'deliveryCity', 'deliveryCountryCode', 'deliveryDate', 'currency', 'budget', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'isUrgent', 'contactName', 'contactPhone', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
             'properties' => [
                 'isDocument' => ['type' => 'boolean', 'description' => 'True only when the image shows a freight/shipping document.'],
                 'title' => ['type' => 'string'],
@@ -328,6 +352,20 @@ class OpenRouterLoadScanner
                 'contactEmail' => ['type' => 'string'],
                 'bookingReference' => ['type' => 'string'],
                 'notes' => ['type' => 'string'],
+                'customFields' => [
+                    'type' => 'array',
+                    'maxItems' => 8,
+                    'description' => 'Distinct facts the shipper explicitly wants tracked as their own item, not folded into notes.',
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'required' => ['label', 'value'],
+                        'properties' => [
+                            'label' => ['type' => 'string'],
+                            'value' => ['type' => 'string'],
+                        ],
+                    ],
+                ],
                 'confidence' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
                 'warnings' => ['type' => 'array', 'items' => ['type' => 'string']],
             ],
