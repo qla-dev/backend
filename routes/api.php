@@ -86,6 +86,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::apiResource('loads', LoadController::class)->except(['store']);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
+    Route::get('ai-dispatcher', [UserController::class, 'aiDispatcher']);
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
     Route::post('load-scans/text', [LoadScanController::class, 'scanText'])->middleware('throttle:10,1');
 
