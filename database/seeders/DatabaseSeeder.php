@@ -19,8 +19,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $roleLabels = ['superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'guest' => 'Guest'];
-        $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => $name === 'superadmin' ? ['*'] : [], 'is_active' => $name !== 'guest'])]);
+        $roleLabels = ['superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'guest' => 'Guest', 'system' => 'AI Assistant'];
+        $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => $name === 'superadmin' ? ['*'] : [], 'is_active' => ! in_array($name, ['guest', 'system'], true)])]);
 
         $accounts = [
             'superadmin_demo' => ['role' => 'superadmin', 'name' => 'John Doe'],
@@ -29,12 +29,13 @@ class DatabaseSeeder extends Seeder
             'company_demo' => ['role' => 'company', 'name' => 'Freightbook Logistics Hub'],
             'finance_demo' => ['role' => 'finance', 'name' => 'Demo Finance'],
             'guest_demo' => ['role' => 'guest', 'name' => 'Guest'],
+            'ai_dispatcher' => ['role' => 'system', 'name' => 'AI Dispatcher'],
         ];
 
         $users = collect($accounts)->mapWithKeys(function (array $account, string $username) use ($roles) {
             $user = User::query()->updateOrCreate(['username' => $username], [
                 'role_id' => $roles[$account['role']]->id, 'name' => $account['name'], 'email' => "{$username}@freightbook.test",
-                'password' => 'demo12345', 'language' => 'bs', 'country_code' => 'BA', 'is_active' => true, 'email_verified_at' => now(),
+                'password' => 'demo12345', 'language' => 'bs', 'country_code' => 'BA', 'is_active' => $account['role'] !== 'system', 'email_verified_at' => now(),
             ]);
 
             return [$username => $user];
