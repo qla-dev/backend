@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\EntityResource;
+use App\Models\Company;
 use App\Models\Load;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -162,15 +163,46 @@ class LoadController extends CrudController
 
     public function book(Request $request, Load $load): JsonResponse
     {
-        $updated = DB::transaction(function () use ($request, $load) {
+        $role = $request->user()?->role?->name;
+        $data = $request->validate([
+            'company_id' => ['nullable', 'integer', 'exists:companies,id'],
+            'driver_user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $updated = DB::transaction(function () use ($request, $load, $role, $data) {
             $load = Load::query()->lockForUpdate()->findOrFail($load->id);
             abort_if($load->is_negotiable, 422, 'This load accepts offers instead of direct booking.');
             abort_unless($load->status === 'posted' && ! $load->assigned_driver_user_id, 409, 'This load is no longer available.');
 
-            $driver = $request->user();
+            $user = $request->user();
+            $companyId = null;
+            $driverUserId = null;
+
+            if ($role === 'driver') {
+                // Unchanged: a driver books for themselves immediately, same as before.
+                $companyId = $load->company_id ?? $user->driver?->primary_company_id;
+                $driverUserId = $user->id;
+            } elseif ($role === 'company') {
+                // A company claims the load for itself now; assigning a driver from their team
+                // is optional at booking time and can be done later instead.
+                $myCompanyIds = $user->companies()->pluck('companies.id');
+                abort_if($myCompanyIds->isEmpty(), 422, 'You are not linked to a company.');
+                $companyId = $data['company_id'] ?? $myCompanyIds->first();
+                abort_unless($myCompanyIds->contains($companyId), 403, 'You can only book for your own company.');
+                $driverUserId = $this->resolveCompanyDriver($companyId, $data['driver_user_id'] ?? null);
+            } elseif ($role === 'superadmin') {
+                // Superadmin can dedicate the load to any company and/or any driver, or neither.
+                $companyId = $data['company_id'] ?? null;
+                $driverUserId = $companyId
+                    ? $this->resolveCompanyDriver($companyId, $data['driver_user_id'] ?? null)
+                    : ($data['driver_user_id'] ?? null);
+            } else {
+                abort(403, 'You are not allowed to book loads.');
+            }
+
             $load->update([
-                'assigned_driver_user_id' => $driver->id,
-                'company_id' => $load->company_id ?? $driver->driver?->primary_company_id,
+                'assigned_driver_user_id' => $driverUserId,
+                'company_id' => $companyId,
                 'status' => 'sent',
             ]);
 
@@ -179,6 +211,18 @@ class LoadController extends CrudController
         $updated->load($this->relations());
 
         return $this->success((new EntityResource($updated))->resolve($request), 'Load booked successfully.');
+    }
+
+    private function resolveCompanyDriver(int $companyId, ?int $driverUserId): ?int
+    {
+        if (! $driverUserId) {
+            return null;
+        }
+
+        $company = Company::query()->findOrFail($companyId);
+        abort_unless($company->users()->where('users.id', $driverUserId)->exists(), 422, 'The selected driver is not part of this company.');
+
+        return $driverUserId;
     }
 
     public function bulkStore(Request $request): JsonResponse

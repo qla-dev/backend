@@ -55,6 +55,12 @@ class DriverController extends CrudController
         if ($request->filled('availability_status')) {
             $query->where('availability_status', $request->string('availability_status'));
         }
+
+        $user = $request->user();
+        if ($user?->role?->name === 'company') {
+            $companyIds = $user->companies()->pluck('companies.id');
+            $query->whereIn('primary_company_id', $companyIds);
+        }
     }
 
     public function store(Request $request): JsonResponse

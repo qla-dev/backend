@@ -65,8 +65,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
     });
 
-    // Instant-booking a posted, non-negotiable load is a driver action.
-    Route::middleware('role:driver,superadmin')->group(function (): void {
+    // Instant-booking a posted, non-negotiable load. Drivers book for themselves; companies book
+    // for their company (optionally assigning a driver right away); superadmin can assign either.
+    Route::middleware('role:driver,company,superadmin')->group(function (): void {
         Route::post('loads/{load}/book', [LoadController::class, 'book']);
     });
 
