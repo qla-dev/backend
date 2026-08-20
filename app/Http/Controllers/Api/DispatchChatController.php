@@ -43,6 +43,25 @@ class DispatchChatController extends Controller
         $origin = $load?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $load?->stops->firstWhere('type', 'delivery')?->city;
 
+        $statusLabels = [
+            'posted' => 'posted and open for booking',
+            'opened' => 'opened',
+            'sent' => 'booked and in preparation',
+            'in_delivery' => 'booked and in transit',
+            'received' => 'received at its destination',
+            'finished' => 'finished',
+            'pending' => 'pending, not yet published',
+            'cancelled' => 'cancelled',
+        ];
+        $statusPlain = $load ? ($statusLabels[$load->status] ?? $load->status) : null;
+
+        $askingUser = $request->user();
+        $isLoadOwner = $load && $askingUser && (
+            (int) $load->assigned_driver_user_id === (int) $askingUser->id
+            || (int) $load->customer_user_id === (int) $askingUser->id
+            || ($load->company_id && $askingUser->companies()->where('companies.id', $load->company_id)->exists())
+        );
+
         $systemPrompt = 'You are Lena AI, the assistant for the Freightbook.ai freight logistics platform. '
             .'You do not have live GPS access. If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
             .'Once a city or area is known (from a load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves — never invent specific business names, addresses, or phone numbers you cannot verify. '
@@ -55,7 +74,8 @@ class DispatchChatController extends Controller
                     .'Load record: '.$this->loadFacts($load, $origin, $destination)
                     .($load->status === 'posted'
                         ? ' This load is posted and open to be booked. If — and only if — the user clearly says they want to book, take, or reserve this specific load, end your reply with a new line containing exactly the text [[OFFER_BOOKING]] and nothing else on that line (it is a hidden signal for the app, never mention it or explain it to the user). Do not include it for vague interest, questions about the load, or anything short of a clear booking request.'
-                        : '')
+                        : ' This load is currently '.$statusPlain.' — it is NOT open for new booking. If the user asks why they cannot book it, or asks to book/take/reserve it, never suggest contacting another team, hub, or outside channel (no such channel exists) — just tell them plainly, in one short sentence, that it is already '.$statusPlain.'.'
+                            .($isLoadOwner ? ' Important: the person you are chatting with is already the driver or company assigned to this exact load, so make that clear in your answer — they are not being blocked from booking a load that belongs to someone else, they already have this one; there is nothing further for them to book.' : ''))
                 : ' You are not currently scoped to any specific load — this is a general conversation about the Freightbook.ai app itself. '
                     .'The app has a freight marketplace ("Berza tereta") for browsing and booking loads, "Moj teret" for tracking your own loads (with shipment details, a live map, return-route suggestions, invoices, and reports), a Messages inbox, a fleet section for companies, and analytics. '
                     .'Answer questions about how the platform works, freight/logistics topics in general, or point the user to the right part of the app. You are able to discuss the app itself — never refuse to. '
