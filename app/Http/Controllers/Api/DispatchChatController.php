@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ScopesConversationAccess;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EntityResource;
 use App\Models\Conversation;
@@ -15,11 +16,17 @@ use RuntimeException;
 
 class DispatchChatController extends Controller
 {
+    use ScopesConversationAccess;
+
     public function store(Request $request, OpenRouterDispatchAssistant $assistant): JsonResponse
     {
         $validated = $request->validate([
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
         ]);
+
+        if (! $this->userIsConversationParticipant($validated['conversation_id'], $request->user()?->id)) {
+            return $this->unavailable('You are not part of this conversation.', 403);
+        }
 
         if (! config('services.openrouter.api_key')) {
             return $this->unavailable('AI dispatcher is not configured on the server.');
@@ -117,8 +124,8 @@ class DispatchChatController extends Controller
             ->implode('; ');
     }
 
-    private function unavailable(string $message): JsonResponse
+    private function unavailable(string $message, int $status = 503): JsonResponse
     {
-        return response()->json(['message' => $message, 'data' => null, 'meta' => [], 'errors' => []], 503);
+        return response()->json(['message' => $message, 'data' => null, 'meta' => [], 'errors' => []], $status);
     }
 }

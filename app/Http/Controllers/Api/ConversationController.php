@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ScopesConversationAccess;
 use App\Http\Resources\EntityResource;
 use App\Models\Conversation;
 use Illuminate\Database\Eloquent\Builder;
@@ -10,6 +11,8 @@ use Illuminate\Http\Request;
 
 class ConversationController extends CrudController
 {
+    use ScopesConversationAccess;
+
     protected function modelClass(): string
     {
         return Conversation::class;
@@ -30,6 +33,8 @@ class ConversationController extends CrudController
         if ($request->filled('load_id')) {
             $query->where('load_id', $request->integer('load_id'));
         }
+
+        $this->scopeConversationToParticipant($query, $request->user()?->id);
     }
 
     protected function rules(bool $u = false): array
@@ -50,5 +55,14 @@ class ConversationController extends CrudController
         $record->load($this->relations());
 
         return $this->success((new EntityResource($record))->resolve($request), 'Resource created successfully.', status: 201);
+    }
+
+    public function show(Request $request, int $id): JsonResponse
+    {
+        $query = Conversation::query()->with($this->relations());
+        $this->scopeConversationToParticipant($query, $request->user()?->id);
+        $record = $query->findOrFail($id);
+
+        return $this->success((new EntityResource($record))->resolve($request), 'Resource retrieved successfully.');
     }
 }
