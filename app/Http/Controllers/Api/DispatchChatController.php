@@ -47,15 +47,6 @@ class DispatchChatController extends Controller
             ->sortByDesc('sent_at')
             ->values();
         $latestUserMessage = $userMessages->first()?->body;
-        $canvasEnabled = (bool) $conversation->canvas;
-        if ($this->asksToOpenLoadCanvas($latestUserMessage)) {
-            $canvasEnabled = true;
-        } elseif ($this->asksToCloseLoadCanvas($latestUserMessage)) {
-            $canvasEnabled = false;
-        }
-        if ($canvasEnabled !== (bool) $conversation->canvas) {
-            $conversation->update(['canvas' => $canvasEnabled]);
-        }
         $shouldGenerateTitle = ! $load
             && $userMessages->count() === 1
             && in_array(trim((string) $conversation->subject), ['', 'AI Dispatch — General'], true);
@@ -73,6 +64,17 @@ class DispatchChatController extends Controller
             }
         }
         $contextLoad = $load ?? $matchedGeneralLoad;
+        $requestedLoadCanvas = $this->asksToOpenLoadCanvas($latestUserMessage);
+        $canvasBlockedByExistingLoad = $requestedLoadCanvas && $contextLoad;
+        $canvasEnabled = (bool) $conversation->canvas;
+        if ($canvasBlockedByExistingLoad || $this->asksToCloseLoadCanvas($latestUserMessage)) {
+            $canvasEnabled = false;
+        } elseif ($requestedLoadCanvas) {
+            $canvasEnabled = true;
+        }
+        if ($canvasEnabled !== (bool) $conversation->canvas) {
+            $conversation->update(['canvas' => $canvasEnabled]);
+        }
         $origin = $contextLoad?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $contextLoad?->stops->firstWhere('type', 'delivery')?->city;
 
@@ -105,13 +107,16 @@ class DispatchChatController extends Controller
             .'Determine the language of the most recent user message and write your ENTIRE reply in that language. Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. If the latest message is only a reference number, continue in the language already used by the user in this conversation. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
             .'Bosnian freight terminology is strict: translate the logistics noun "load" as "teret". Never call a load "opterećenje" in Bosnian. Use the correct grammatical form of "teret" for the sentence. '
             .($canvasEnabled
-                ? ' The conversation load-post canvas is active. Help the user prepare a new load posting by collecting only facts they provide: pickup, delivery, dates, cargo, weight, equipment, price, currency, terms, and special requirements. Briefly point out the most important missing fields, but do not invent values. Attached-file extraction results appear in the user message context and are authoritative for this draft.'
-                : ' The load-post canvas is currently off. If the user asks to create, publish, post, or bulk-import a new load, explain that you opened the load-post canvas and help collect the required posting data.')
+                ? ' The conversation load-post canvas is active. Help the user prepare a new load posting by collecting only facts they provide: pickup, delivery, dates, cargo, weight, equipment, price, currency, terms, and special requirements. Briefly point out the most important missing fields, but do not invent values. Attached-file extraction results appear in the user message context and are authoritative for this draft. As soon as text or an attached file provides usable load data, ask the user to open edit mode to review and complete the posting.'
+                : ' The load-post canvas is currently off. When no existing load is in context, remind the user that the "Post a new load" option can open it. If the user asks to create, publish, post, or bulk-import a new load, explain that you opened the load-post canvas and help collect the required posting data.')
+            .($canvasBlockedByExistingLoad
+                ? ' The user asked to post a new load while an existing load is already in context. Do not open the new-load canvas and do not suggest creating a duplicate. Tell them plainly, in their language, that this load already exists and is already in status '.$statusPlain.'.'
+                : '')
             .'Never discuss whether you have GPS access and never answer a location question with a generic GPS limitation. For questions about where a load is now, use the latest shipment coordinates or tracking event in the authoritative load record. If no current coordinate exists, state the latest known route point or pickup location without presenting it as a live position. '
             .'If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
             .'Once a city or area is known (from a load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves. Never invent specific business names, addresses, or phone numbers you cannot verify. '
             .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link. '
-            .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks where the load is now or for its current or latest location, first answer naturally from the latest available record and then end the reply with a new line containing exactly [[LOAD_MAP]]. When the user asks specifically about pickup, destination, route endpoints, or addresses, first answer naturally and then end the reply with a new line containing exactly [[LOAD_LOCATION]]. When the user asks for a broader route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts these hidden signals into live data cards; never mention the signals or write HTML yourself. '
+            .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks where the load is now or for its current or latest location, first answer naturally from the latest available record and then end the reply with a new line containing exactly [[LOAD_MAP]]. When the user asks specifically about pickup, destination, route endpoints, or addresses, first answer naturally and then end the reply with a new line containing exactly [[LOAD_LOCATION]]. When the user asks for the load status, first answer naturally and then end the reply with a new line containing exactly [[LOAD_STATUS]]. When the user asks for a broader route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts these hidden signals into live data cards; never mention the signals or write HTML yourself. '
             .'Whenever you emit or cause the application to show a booking action, always write a complete, natural sentence first in the user\'s language explaining that the direct booking action is available below. The action must never appear without that preceding message.'
             .($shouldGenerateTitle
                 ? ' This is the first user message in a new general LenaAI chat. Start your reply with one line in the exact form [[CHAT_TITLE:title]], where title is a concise, meaningful 3 to 7 word chat title in the user\'s language based on their request. Do not use quotation marks, brackets, em dashes, or en dashes inside the title. The application saves this hidden title; never discuss it.'
@@ -139,7 +144,7 @@ class DispatchChatController extends Controller
             ->map(fn (Message $message) => [
                 'role' => $message->sender_user_id === $aiDispatcherId ? 'assistant' : 'user',
                 'content' => trim((string) preg_replace(
-                    '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
+                    '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
                     '',
                     $message->body
                 )).$this->attachmentContext($message),
@@ -168,6 +173,10 @@ class DispatchChatController extends Controller
         $attachedLoadOfferedBooking = $load && $askedToBookLoad && $this->isOpenForDirectBooking($load);
         $matchedGeneralLoadOfferedBooking = $matchedGeneralLoad && $askedToBookLoad && $this->isOpenForDirectBooking($matchedGeneralLoad);
         $attachedLoadDetails = $contextLoad && str_contains($reply, '[[LOAD_DETAILS]]');
+        $attachedLoadStatus = $contextLoad && (
+            str_contains($reply, '[[LOAD_STATUS]]')
+            || $this->asksAboutLoadStatus($latestUserMessage)
+        );
         $attachedLoadMap = $contextLoad && (
             str_contains($reply, '[[LOAD_MAP]]')
             || $this->asksWhereLoadIsNow($latestUserMessage)
@@ -184,7 +193,7 @@ class DispatchChatController extends Controller
             ['Teretom', 'Teretu', 'Tereta', 'Teret', 'teretom', 'teretu', 'tereta', 'teret', 'Teretom', 'Teretu', 'Tereta', 'Teret', 'teretom', 'teretu', 'tereta', 'teret'],
             $reply
         );
-        $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
+        $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
         $hasTextReply = filled($reply);
         if ($hasTextReply && $attachedLoadDetails) {
             $reply .= "\n[[LOAD_DETAILS:{$contextLoad->id}]]";
@@ -194,6 +203,9 @@ class DispatchChatController extends Controller
         }
         if ($hasTextReply && $attachedLoadMap) {
             $reply .= "\n[[LOAD_MAP:{$contextLoad->id}]]";
+        }
+        if ($hasTextReply && $attachedLoadStatus) {
+            $reply .= "\n[[LOAD_STATUS:{$contextLoad->id}]]";
         }
         if ($hasTextReply && $matchedGeneralLoadOfferedBooking) {
             $reply .= "\n[[OFFER_BOOKING:{$matchedGeneralLoad->id}]]";
@@ -378,6 +390,17 @@ class DispatchChatController extends Controller
         ) === 1;
     }
 
+    private function asksAboutLoadStatus(?string $message): bool
+    {
+        if (blank($message)) {
+            return false;
+        }
+
+        $normalized = Str::lower(Str::ascii((string) $message));
+
+        return preg_match('/\b(status|state|stage|stanje|faza|statusu|stand|zustand)\b/i', $normalized) === 1;
+    }
+
     private function asksToBookLoad(?string $message): bool
     {
         if (blank($message)) {
@@ -425,7 +448,7 @@ class DispatchChatController extends Controller
     {
         $normalized = Str::lower(Str::ascii((string) $message));
 
-        return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|bulk\s+import|novi\s+teret|nov\s+teret|objav\w*\s+teret|kreir\w*\s+teret|naprav\w*\s+teret|masovni\s+uvoz|neue\s+ladung|ladung\s+(?:erstellen|veroffentlichen)|massenimport)\b/i', $normalized) === 1;
+        return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|bulk\s+import|novi\s+teret|nov\s+teret|objav\w*\s+teret|kreir\w*\s+teret|naprav\w*\s+teret|masovni\s+uvoz|neue\s+ladung|ladung\s+(?:erstellen|veroffentlichen)|massenimport|(open|enable|show|otvori|ukljuci|prikazi|offne|aktiviere)\w*\s+(?:the\s+)?(canvas|platno|nacrt))\b/i', $normalized) === 1;
     }
 
     private function asksToCloseLoadCanvas(?string $message): bool
