@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EntityResource;
 use App\Models\Conversation;
+use App\Models\Load;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\OpenRouterDispatchAssistant;
@@ -29,24 +30,19 @@ class DispatchChatController extends Controller
             return $this->unavailable('AI dispatcher is not configured.');
         }
 
-        $conversation = Conversation::query()->with(['messages', 'freightLoad.stops'])->findOrFail($validated['conversation_id']);
+        $conversation = Conversation::query()->with(['messages', 'freightLoad.stops', 'freightLoad.consignee', 'freightLoad.company'])->findOrFail($validated['conversation_id']);
 
         $load = $conversation->freightLoad;
         $origin = $load?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $load?->stops->firstWhere('type', 'delivery')?->city;
 
         $systemPrompt = 'You are the AI Dispatcher for a freight logistics platform, chatting with a dispatcher, driver, or customer about one specific load. '
-            .'Answer questions about this load\'s status, ETA, and route, and help draft short updates when asked. Keep replies concise (2-3 sentences) and professional, and stay in character as the dispatcher for this load only. '
+            .'Answer questions using ONLY the load record given to you below — it is fetched fresh from the database on every message, so treat it as current. If a field is missing or blank in the record, say you don\'t have it instead of guessing. '
+            .'Help draft short updates when asked. Keep replies concise (2-3 sentences) and professional, and stay in character as the dispatcher for this load only. '
             .'You do not have live GPS access. If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
             .'Once a city or area is known (from the load\'s route or from what the user tells you), you may share a plain Google Maps search link in the form https://www.google.com/maps/search/?api=1&query=<url-encoded search terms> (e.g. query=fuel+stations+near+Stuttgart) so they can look it up themselves — never invent specific business names, addresses, or phone numbers you cannot verify. '
             .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link.'
-            .($load ? sprintf(
-                ' Load details: title "%s", status "%s", route %s -> %s.',
-                $load->title,
-                $load->status,
-                $origin ?: 'unknown origin',
-                $destination ?: 'unknown destination'
-            ) : '');
+            .($load ? ' Load record: '.$this->loadFacts($load, $origin, $destination) : ' No load record is linked to this conversation.');
 
         $history = $conversation->messages
             ->sortBy('sent_at')
@@ -79,6 +75,44 @@ class DispatchChatController extends Controller
             'meta' => [],
             'errors' => [],
         ], 201);
+    }
+
+    private function loadFacts(Load $load, ?string $origin, ?string $destination): string
+    {
+        $consignee = $load->consignee;
+
+        return collect([
+            'Title' => $load->title,
+            'Status' => $load->status,
+            'Booking reference' => $load->booking_reference,
+            'Department' => $load->department,
+            'Subdepartment' => $load->subdepartment,
+            'Freight mode' => $load->freight_mode ?: $load->transport_type,
+            'Cargo type' => $load->cargo_type,
+            'Goods type' => $load->goods_type,
+            'Weight' => $load->weight_kg ? "{$load->weight_kg} kg" : null,
+            'Quantity / measure' => $load->quantity_measure,
+            'Volume' => $load->volume_m3 ? "{$load->volume_m3} m3" : null,
+            'TEU' => $load->teu,
+            'Container types' => $load->container_types,
+            'Container number' => $load->container_number,
+            'Origin' => $origin,
+            'Destination' => $destination,
+            'ETD' => optional($load->etd_at)->toDateString(),
+            'ATD' => optional($load->atd_at)->toDateString(),
+            'Carrier / company' => $load->company?->name,
+            'Shipper name' => $load->shipper_name,
+            'Consignee' => $consignee?->company_name ?: $consignee?->name,
+            'Mediator' => $load->mediator,
+            'Incoterms' => $load->incoterms,
+            'Insurance' => $load->insurance,
+            'Price + insurance' => $load->price_insurance,
+            'Budget' => $load->budget ? "{$load->currency} {$load->budget}" : null,
+            'Profit & loss' => $load->profit_loss,
+        ])
+            ->filter(fn ($value) => filled($value))
+            ->map(fn ($value, $label) => "{$label}: {$value}")
+            ->implode('; ');
     }
 
     private function unavailable(string $message): JsonResponse
