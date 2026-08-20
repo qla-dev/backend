@@ -56,7 +56,10 @@ class DispatchChatController extends Controller
                     .($load->status === 'posted'
                         ? ' This load is posted and open to be booked. If — and only if — the user clearly says they want to book, take, or reserve this specific load, end your reply with a new line containing exactly the text [[OFFER_BOOKING]] and nothing else on that line (it is a hidden signal for the app, never mention it or explain it to the user). Do not include it for vague interest, questions about the load, or anything short of a clear booking request.'
                         : '')
-                : ' You are not currently scoped to any specific load — this is a general conversation. Help with questions about how the platform works, freight/logistics topics in general, or point the user toward the right part of the app. Do not claim to have any load\'s details in this mode.');
+                : ' You are not currently scoped to any specific load — this is a general conversation about the Freightbook.ai app itself. '
+                    .'The app has a freight marketplace ("Berza tereta") for browsing and booking loads, "Moj teret" for tracking your own loads (with shipment details, a live map, return-route suggestions, invoices, and reports), a Messages inbox, a fleet section for companies, and analytics. '
+                    .'Answer questions about how the platform works, freight/logistics topics in general, or point the user to the right part of the app. You are able to discuss the app itself — never refuse to. '
+                    .'If earlier turns in this thread described you as only able to discuss one specific load, ignore that — it does not apply here; this conversation has no load attached, so treat it as a normal general conversation and never repeat that earlier limitation.');
 
         $history = $conversation->messages
             ->sortBy('sent_at')
