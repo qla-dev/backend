@@ -26,8 +26,34 @@ class OfferController extends CrudController
     protected function rules(bool $u = false): array
     {
         $p = $u ? 'sometimes' : 'required';
+        $confirmed = $u ? ['sometimes', 'boolean'] : [$p, 'accepted'];
 
-        return ['load_id' => [$p, 'integer', 'exists:loads,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'], 'driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'amount' => [$p, 'numeric', 'min:0'], 'currency' => ['sometimes', 'string', 'size:3'], 'status' => ['sometimes', 'string', 'max:50'], 'valid_until' => ['nullable', 'date'], 'message' => ['nullable', 'string']];
+        return [
+            'load_id' => [$p, 'integer', 'exists:loads,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'], 'driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'amount' => [$p, 'numeric', 'min:0'], 'currency' => ['sometimes', 'string', 'size:3'], 'status' => ['sometimes', 'string', 'max:50'], 'valid_until' => [$p, 'date'], 'message' => ['nullable', 'string'],
+            'price_basis' => [$p, 'string', 'in:fixed_total,per_km,per_ton,per_pallet'],
+            'vat' => [$p, 'string', 'in:included,excluded'],
+            'payment_terms' => [$p, 'string', 'max:30'],
+            'included_charges' => ['nullable', 'array'],
+            'included_charges.*' => ['string', 'max:60'],
+            'excluded_charges' => ['nullable', 'array'],
+            'excluded_charges.*' => ['string', 'max:60'],
+            'equipment_type' => [$p, 'string', 'max:60'],
+            'vehicle_availability' => [$p, 'string', 'in:available,not_available'],
+            'available_date' => [$p, 'date'],
+            'exact_loading_date' => [$p, 'date'],
+            'estimated_transit_days' => [$p, 'integer', 'min:0'],
+            'estimated_delivery_date' => ['nullable', 'date'],
+            'can_perform_as_required' => ['sometimes', 'boolean'],
+            'additional_charges' => ['nullable', 'array'],
+            'additional_charges.*.type' => ['nullable', 'string', 'max:120'],
+            'additional_charges.*.condition' => ['nullable', 'string', 'max:120'],
+            'additional_charges.*.rate' => ['nullable', 'numeric'],
+            'additional_charges.*.unit' => ['nullable', 'string', 'max:30'],
+            'has_exceptions' => ['sometimes', 'boolean'],
+            'confirmed_authorized' => $confirmed,
+            'confirmed_details_match' => $confirmed,
+            'confirmed_terms' => $confirmed,
+        ];
     }
 
     public function store(Request $request): JsonResponse
