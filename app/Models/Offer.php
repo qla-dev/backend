@@ -32,6 +32,11 @@ class Offer extends BaseModel
         return $this->belongsTo(User::class, 'driver_user_id');
     }
 
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');

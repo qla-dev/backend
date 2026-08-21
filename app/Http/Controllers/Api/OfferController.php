@@ -20,7 +20,7 @@ class OfferController extends CrudController
 
     protected function relations(): array
     {
-        return ['freightLoad.stops', 'company', 'driver', 'creator'];
+        return ['freightLoad.stops', 'company', 'driver', 'creator', 'vehicle'];
     }
 
     protected function rules(bool $u = false): array
@@ -39,6 +39,7 @@ class OfferController extends CrudController
             'excluded_charges.*' => ['string', 'max:60'],
             'equipment_type' => [$p, 'string', 'max:60'],
             'vehicle_availability' => [$p, 'string', 'in:available,not_available'],
+            'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'available_date' => [$p, 'date'],
             'exact_loading_date' => [$p, 'date'],
             'estimated_transit_days' => [$p, 'integer', 'min:0'],
