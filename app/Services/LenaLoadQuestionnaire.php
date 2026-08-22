@@ -69,6 +69,14 @@ class LenaLoadQuestionnaire
                 continue;
             }
 
+            if (preg_match('/\[\[LENA_SKIP:([a-zA-Z]+)\]\]/', (string) $message->body, $match) === 1
+                && array_key_exists($match[1], self::STEPS)) {
+                $answered[$match[1]] = true;
+                $pendingStep = null;
+
+                continue;
+            }
+
             if ($pendingStep && $this->isNegativeOrEmptyAnswer((string) $message->body)) {
                 $answered[$pendingStep] = true;
             }
