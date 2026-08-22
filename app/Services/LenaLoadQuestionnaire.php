@@ -81,7 +81,7 @@ class LenaLoadQuestionnaire
     {
         $normalized = mb_strtolower(trim($answer));
 
-        return preg_match('/^(?:0|ne|nema|nemam|nikakv\w*|bez|ništa|nista|nije potrebno|nije poznato|no|none|nothing|unknown|not needed|no preference|nein|keine|keiner|keins|nichts|unbekannt|nicht erforderlich)(?:\b.*)?[.!]?$/ui', $normalized) === 1;
+        return preg_match('/^(?:0|ne|nema|nemam|nikakv\w*|bez|ništa|nista|nije potrebno|nije poznato|nije navedeno|no|none|nothing|unknown|not needed|not specified|no preference|nein|keine|keiner|keins|nichts|unbekannt|nicht erforderlich|nicht angegeben)(?:\b.*)?[.!]?$/ui', $normalized) === 1;
     }
 
     private function isSkipped(string $key, array $draft): bool
@@ -119,7 +119,7 @@ class LenaLoadQuestionnaire
             'declaredValue' => $positive('declaredValue'),
             'terms' => $filled('incoterm') || $positive('paymentDueDays'),
             'temperature' => ($draft['temperatureMin'] ?? null) !== null || ($draft['temperatureMax'] ?? null) !== null,
-            'requirements' => $true('requiresAdr') || $true('requiresTailLift') || $true('insuranceRequired') || $true('certificationRequired') || $true('inspectionServicesRequired') || $true('isUrgent') || $true('requiresTracking'),
+            'requirements' => $true('requiresAdr') || $true('requiresTailLift') || $true('tollRoadsIncluded') || $true('ferryIncluded') || $true('cmrRequired') || $true('palletExchangeRequired') || $true('customsRequired') || $true('insuranceRequired') || $true('certificationRequired') || $true('inspectionServicesRequired') || $true('isUrgent') || $true('requiresTracking'),
             'contact' => $filled('contactName') || $filled('contactPhone') || $filled('contactMobile') || $filled('contactFax') || $filled('contactEmail'),
             'notes' => $filled('notes') || $filled('bookingReference') || ! empty($draft['customFields']),
             default => false,

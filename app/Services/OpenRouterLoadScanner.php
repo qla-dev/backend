@@ -18,7 +18,7 @@ class OpenRouterLoadScanner
 
     private const TRANSPORT_TYPES = ['road', 'air', 'sea'];
 
-    private const LOADING_EQUIPMENT_TYPES = ['Vehicle with ramp', 'Vehicle without ramp', 'Forklift: Yes', 'Forklift: No', 'Other loading/unloading equipment'];
+    private const LOADING_EQUIPMENT_TYPES = ['Vehicle with ramp', 'Vehicle without ramp', 'Forklift: Yes', 'Forklift: No', 'Other loading/unloading equipment', 'Not specified'];
 
     private const PRICE_TERMS = ['fixed', 'negotiable'];
 
@@ -31,7 +31,7 @@ class OpenRouterLoadScanner
             .'dimensions and volume, required vehicle type, loading/unloading equipment, road or air handling characteristics, special requirements, transport mode, delivery proof requirement, whether tracking is required, '
             .'the pickup city, country code, street address and date (plus a date-range end and time window if given), the delivery city, country code, street address and date (plus a date-range end and time window if given), '
             .'the currency, the agreed price or rate, whether the price is fixed or open to offers, the declared cargo value and its currency, '
-            .'Incoterm, deferred payment days, temperature range, ADR, tail-lift and urgency requirements, contact name/phone/mobile/fax/email, '
+            .'Incoterm, deferred payment days, temperature range, ADR, tail-lift, toll-road, ferry, CMR, pallet-exchange, customs and urgency requirements, contact name/phone/mobile/fax/email, '
             .'the booking or reference number, any other short notes that do not belong in a dedicated field, '
             .'and any distinct fact that should be tracked as its own separate custom item rather than folded into notes.'
             .$this->currentDraftContext($current);
@@ -67,7 +67,7 @@ class OpenRouterLoadScanner
             .'the delivery city, country code, street address and date (plus a date-range end and time window if given), '
             .'dimensions, volume, vehicle, loading/unloading equipment, road or air handling characteristics, special requirements, transport mode, delivery proof requirement, whether tracking is required, '
             .'the currency, agreed price or rate, whether the price is fixed or open to offers, the declared cargo value and its currency, '
-            .'Incoterm, deferred payment days, temperature range, ADR, tail-lift, urgency, contact name/phone/mobile/fax/email, '
+            .'Incoterm, deferred payment days, temperature range, ADR, tail-lift, toll-road, ferry, CMR, pallet-exchange, customs, urgency, contact name/phone/mobile/fax/email, '
             .'the booking or reference number, any other short notes that do not belong in a dedicated field, '
             .'and any distinct fact that should be tracked as its own separate custom item rather than folded into notes.'
             ."\n\nAuthoritative server date: {$serverDate} ({$serverTimezone}). Resolve every relative date from this date."
@@ -115,10 +115,10 @@ class OpenRouterLoadScanner
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
             .'Read the street address separately from the city when one is given. If a pickup or delivery is a date range, put the start in the date field and the end in the matching "date to" field; read a stated time window into the matching "time from"/"time to" fields as HH:MM, 24-hour format. '
-            .'Read loading/unloading equipment only when explicitly stated, choosing exactly one of: Vehicle with ramp, Vehicle without ramp, Forklift: Yes, Forklift: No, Other loading/unloading equipment - or an empty string if not stated. '
+            .'Read loading/unloading equipment only when explicitly stated, choosing exactly one of: Vehicle with ramp, Vehicle without ramp, Forklift: Yes, Forklift: No, Other loading/unloading equipment, Not specified - or an empty string if not stated. '
             .'Read road or air handling characteristics (e.g. ADR, CMR, GDP, TIR, Lift, Express for road; Non-DG, DG, TCG, MED, VAL for air) and any special requirements only when explicitly stated. Read the transport mode (e.g. "Airport to airport") and whether proof of delivery is required only for air/sea shipments when stated. Set requiresTracking to true only when live tracking is explicitly requested. '
             .'Read whether the price is fixed or open to negotiation/offers as priceTerms (fixed or negotiable) only when the document is explicit about it; otherwise leave it an empty string. Read a declared/insured cargo value and its currency separately from the freight price when stated. '
-            .'Extract dimensions in meters, volume in cubic meters, vehicle type, Incoterm, deferred payment days, temperature range in Celsius, ADR/tail-lift/urgency flags, insurance, certification, inspection-service requirements, and contact details only when explicitly present. '
+            .'Extract dimensions in meters, volume in cubic meters, vehicle type, Incoterm, deferred payment days, temperature range in Celsius, ADR/tail-lift/toll-road/ferry/CMR/pallet-exchange/customs/urgency flags, insurance, certification, inspection-service requirements, and contact details only when explicitly present. '
             .'Read the currency from the symbol or code printed on the document and return its ISO 4217 code. '
             .'Put leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
             .'If the shipper explicitly asks for something to be tracked as its own separate item rather than lumped into notes (e.g. "add this as a new item, not as notes", "dodaj kao novi item, ne kao notes"), add one entry to customFields instead, with a short label in the language they used and its value; do not also duplicate that same fact inside notes. '
@@ -139,10 +139,10 @@ class OpenRouterLoadScanner
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
             .'Read the street address separately from the city when one is given. If a pickup or delivery is a date range, put the start in the date field and the end in the matching "date to" field; read a stated time window into the matching "time from"/"time to" fields as HH:MM, 24-hour format. '
-            .'Read loading/unloading equipment only when explicitly stated, choosing exactly one of: Vehicle with ramp, Vehicle without ramp, Forklift: Yes, Forklift: No, Other loading/unloading equipment - or an empty string if not stated. '
+            .'Read loading/unloading equipment only when explicitly stated, choosing exactly one of: Vehicle with ramp, Vehicle without ramp, Forklift: Yes, Forklift: No, Other loading/unloading equipment, Not specified - or an empty string if not stated. '
             .'Read road or air handling characteristics (e.g. ADR, CMR, GDP, TIR, Lift, Express for road; Non-DG, DG, TCG, MED, VAL for air) and any special requirements only when explicitly stated. Read the transport mode (e.g. "Airport to airport") and whether proof of delivery is required only for air/sea shipments when stated. Set requiresTracking to true only when live tracking is explicitly requested. '
             .'Read whether the price is fixed or open to negotiation/offers as priceTerms (fixed or negotiable) only when the message is explicit about it; otherwise leave it an empty string. Read a declared/insured cargo value and its currency separately from the freight price when stated. '
-            .'Extract dimensions in meters, volume in cubic meters, vehicle type, Incoterm, deferred payment days, temperature range in Celsius, ADR/tail-lift/urgency flags, insurance, certification, inspection-service requirements, and contact details only when stated. '
+            .'Extract dimensions in meters, volume in cubic meters, vehicle type, Incoterm, deferred payment days, temperature range in Celsius, ADR/tail-lift/toll-road/ferry/CMR/pallet-exchange/customs/urgency flags, insurance, certification, inspection-service requirements, and contact details only when stated. '
             .'Read the currency from the symbol or code mentioned and return its ISO 4217 code, defaulting to EUR if a price is given without a currency. '
             .'Put leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
             .'If the shipper explicitly asks for something to be tracked as its own separate item rather than lumped into notes (e.g. "add this as a new item, not as notes", "dodaj kao novi item, ne kao notes", "dodaj kao zasebnu stavku"), add one entry to customFields instead, with a short label in the language they used and its value; do not also duplicate that same fact inside notes. '
@@ -326,6 +326,11 @@ class OpenRouterLoadScanner
             'temperatureMax' => is_numeric($result['temperatureMax'] ?? null) ? (float) $result['temperatureMax'] : null,
             'requiresAdr' => ($result['requiresAdr'] ?? false) === true,
             'requiresTailLift' => ($result['requiresTailLift'] ?? false) === true,
+            'tollRoadsIncluded' => ($result['tollRoadsIncluded'] ?? false) === true,
+            'ferryIncluded' => ($result['ferryIncluded'] ?? false) === true,
+            'cmrRequired' => ($result['cmrRequired'] ?? false) === true,
+            'palletExchangeRequired' => ($result['palletExchangeRequired'] ?? false) === true,
+            'customsRequired' => ($result['customsRequired'] ?? false) === true,
             'insuranceRequired' => ($result['insuranceRequired'] ?? false) === true,
             'certificationRequired' => ($result['certificationRequired'] ?? false) === true,
             'inspectionServicesRequired' => ($result['inspectionServicesRequired'] ?? false) === true,
@@ -397,7 +402,7 @@ class OpenRouterLoadScanner
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['isDocument', 'title', 'transportType', 'cargoType', 'goodsType', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
+            'required' => ['isDocument', 'title', 'transportType', 'cargoType', 'goodsType', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
             'properties' => [
                 'isDocument' => ['type' => 'boolean', 'description' => 'True only when the image shows a freight/shipping document.'],
                 'title' => ['type' => 'string'],
@@ -443,6 +448,11 @@ class OpenRouterLoadScanner
                 'temperatureMax' => ['type' => ['number', 'null']],
                 'requiresAdr' => ['type' => 'boolean'],
                 'requiresTailLift' => ['type' => 'boolean'],
+                'tollRoadsIncluded' => ['type' => 'boolean'],
+                'ferryIncluded' => ['type' => 'boolean'],
+                'cmrRequired' => ['type' => 'boolean'],
+                'palletExchangeRequired' => ['type' => 'boolean'],
+                'customsRequired' => ['type' => 'boolean'],
                 'insuranceRequired' => ['type' => 'boolean', 'description' => 'True only when cargo insurance is explicitly required.'],
                 'certificationRequired' => ['type' => 'boolean', 'description' => 'True only when certification documents are explicitly required.'],
                 'inspectionServicesRequired' => ['type' => 'boolean', 'description' => 'True only when cargo inspection services are explicitly required.'],
