@@ -46,6 +46,18 @@ class LenaLoadQuestionnaireTest extends TestCase
         $this->assertSame('specialRequirements', $next['key']);
     }
 
+    public function test_choose_later_skips_the_current_step_and_continues(): void
+    {
+        $messages = new Collection([
+            $this->message(99, 'Special requirements? [[LENA_STEP:specialRequirements]]', '2026-08-22 10:00:00'),
+            $this->message(1, '[[LENA_SKIP:specialRequirements]]', '2026-08-22 10:01:00'),
+        ]);
+
+        $next = (new LenaLoadQuestionnaire)->nextStep($this->draftThroughCharacteristics(), $messages, 99);
+
+        $this->assertSame('pickup', $next['key']);
+    }
+
     public function test_it_finishes_only_after_the_complete_scan_field_sequence(): void
     {
         $draft = $this->draftThroughCharacteristics() + [

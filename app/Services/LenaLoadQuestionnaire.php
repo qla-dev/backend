@@ -18,7 +18,7 @@ class LenaLoadQuestionnaire
         'vehicleType' => 'the required vehicle type, or whether there is no preference',
         'loadingEquipment' => 'loading or unloading equipment requirements, or none',
         'characteristics' => 'transport characteristics such as ADR, CMR, GDP, TIR, Lift, Express, or none',
-        'specialRequirements' => 'special requirements or notes, or none',
+        'specialRequirements' => 'one or more special requirements or notes, or none; explicitly mention that multiple options may be selected',
         'transportMode' => 'the air/sea transport mode, or none',
         'deliveryProof' => 'the proof-of-delivery requirement, or none',
         'pickup' => 'the pickup city, country, and address if available',
