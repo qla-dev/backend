@@ -1,0 +1,128 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Message;
+use Illuminate\Support\Collection;
+
+class LenaLoadQuestionnaire
+{
+    private const STEPS = [
+        'title' => 'a short load title',
+        'transportType' => 'the transport type: road, air, or sea',
+        'goodsType' => 'the goods or cargo type',
+        'weight' => 'the cargo weight in kilograms',
+        'pallets' => 'the pallet or unit count, including zero or none',
+        'bodyType' => 'the trailer or body type, or whether none is required',
+        'dimensions' => 'the dimensions or volume, or whether they are unknown/not needed',
+        'vehicleType' => 'the required vehicle type, or whether there is no preference',
+        'loadingEquipment' => 'loading or unloading equipment requirements, or none',
+        'characteristics' => 'transport characteristics such as ADR, CMR, GDP, TIR, Lift, Express, or none',
+        'specialRequirements' => 'special requirements or notes, or none',
+        'transportMode' => 'the air/sea transport mode, or none',
+        'deliveryProof' => 'the proof-of-delivery requirement, or none',
+        'pickup' => 'the pickup city, country, and address if available',
+        'pickupDate' => 'the pickup date or date/time window',
+        'delivery' => 'the delivery city, country, and address if available',
+        'deliveryDate' => 'the delivery date or date/time window',
+        'budget' => 'the freight price and currency',
+        'priceTerms' => 'whether the price is fixed or open to offers',
+        'declaredValue' => 'the declared cargo value and currency, or none',
+        'terms' => 'Incoterm and deferred-payment terms, or none',
+        'temperature' => 'temperature-control requirements, or none',
+        'requirements' => 'ADR, tail lift, insurance, certification, inspection, urgency, and tracking requirements, or none',
+        'contact' => 'the contact name and available phone or email details, or none',
+        'notes' => 'any final notes, booking reference, or custom items, or none',
+    ];
+
+    public function nextStep(array $draft, Collection $messages, int $aiDispatcherId): ?array
+    {
+        $answeredWithoutValue = $this->negativeAnswersByStep($messages, $aiDispatcherId);
+
+        foreach (self::STEPS as $key => $description) {
+            if ($this->isSkipped($key, $draft) || $this->hasValue($key, $draft) || isset($answeredWithoutValue[$key])) {
+                continue;
+            }
+
+            return ['key' => $key, 'description' => $description];
+        }
+
+        return null;
+    }
+
+    public function hasCompleteReadyMarker(Collection $messages): bool
+    {
+        return $messages->contains(fn (Message $message) => str_contains((string) $message->body, '[[LOAD_READY_TO_POST:complete]]'));
+    }
+
+    private function negativeAnswersByStep(Collection $messages, int $aiDispatcherId): array
+    {
+        $pendingStep = null;
+        $answered = [];
+
+        foreach ($messages->sortBy('sent_at') as $message) {
+            if ((int) $message->sender_user_id === $aiDispatcherId) {
+                if (preg_match('/\[\[LENA_STEP:([a-zA-Z]+)\]\]/', (string) $message->body, $match) === 1) {
+                    $pendingStep = $match[1];
+                }
+
+                continue;
+            }
+
+            if ($pendingStep && $this->isNegativeOrEmptyAnswer((string) $message->body)) {
+                $answered[$pendingStep] = true;
+            }
+        }
+
+        return $answered;
+    }
+
+    private function isNegativeOrEmptyAnswer(string $answer): bool
+    {
+        $normalized = mb_strtolower(trim($answer));
+
+        return preg_match('/^(?:0|ne|nema|nemam|nikakv\w*|bez|ništa|nista|nije potrebno|nije poznato|no|none|nothing|unknown|not needed|no preference|nein|keine|keiner|keins|nichts|unbekannt|nicht erforderlich)(?:\b.*)?[.!]?$/ui', $normalized) === 1;
+    }
+
+    private function isSkipped(string $key, array $draft): bool
+    {
+        return in_array($key, ['transportMode', 'deliveryProof'], true)
+            && ($draft['transportType'] ?? '') === 'road';
+    }
+
+    private function hasValue(string $key, array $draft): bool
+    {
+        $filled = fn (string $field): bool => filled($draft[$field] ?? null);
+        $positive = fn (string $field): bool => is_numeric($draft[$field] ?? null) && (float) $draft[$field] > 0;
+        $true = fn (string $field): bool => ($draft[$field] ?? false) === true;
+
+        return match ($key) {
+            'title' => $filled('title') && mb_strtolower(trim((string) $draft['title'])) !== 'new load',
+            'transportType' => in_array($draft['transportType'] ?? '', ['road', 'air', 'sea'], true),
+            'goodsType' => $filled('goodsType') || $filled('cargoType'),
+            'weight' => $positive('weightKg'),
+            'pallets' => $positive('pallets'),
+            'bodyType' => $filled('bodyType'),
+            'dimensions' => $positive('lengthM') || $positive('widthM') || $positive('heightM') || $positive('volumeM3'),
+            'vehicleType' => $filled('vehicleType'),
+            'loadingEquipment' => $filled('loadingEquipment'),
+            'characteristics' => $filled('characteristics'),
+            'specialRequirements' => ! empty($draft['specialRequirements']),
+            'transportMode' => $filled('transportMode'),
+            'deliveryProof' => $filled('deliveryProof'),
+            'pickup' => $filled('pickupCity') || $filled('pickupCountryCode') || $filled('pickupAddress'),
+            'pickupDate' => $filled('pickupDate') || $filled('pickupTimeFrom'),
+            'delivery' => $filled('deliveryCity') || $filled('deliveryCountryCode') || $filled('deliveryAddress'),
+            'deliveryDate' => $filled('deliveryDate') || $filled('deliveryTimeFrom'),
+            'budget' => $positive('budget') && $filled('currency'),
+            'priceTerms' => in_array($draft['priceTerms'] ?? '', ['fixed', 'negotiable'], true),
+            'declaredValue' => $positive('declaredValue'),
+            'terms' => $filled('incoterm') || $positive('paymentDueDays'),
+            'temperature' => ($draft['temperatureMin'] ?? null) !== null || ($draft['temperatureMax'] ?? null) !== null,
+            'requirements' => $true('requiresAdr') || $true('requiresTailLift') || $true('insuranceRequired') || $true('certificationRequired') || $true('inspectionServicesRequired') || $true('isUrgent') || $true('requiresTracking'),
+            'contact' => $filled('contactName') || $filled('contactPhone') || $filled('contactMobile') || $filled('contactFax') || $filled('contactEmail'),
+            'notes' => $filled('notes') || $filled('bookingReference') || ! empty($draft['customFields']),
+            default => false,
+        };
+    }
+}

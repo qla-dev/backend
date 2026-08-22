@@ -42,7 +42,7 @@ class LoadScanController extends Controller
     public function scanText(Request $request, OpenRouterLoadScanner $scanner): JsonResponse
     {
         $validated = $request->validate([
-            'description' => ['required', 'string', 'min:2', 'max:4000'],
+            'description' => ['required', 'string', 'min:1', 'max:4000'],
             'current' => ['sometimes', 'nullable', 'array'],
         ], [
             'description.required' => 'Describe the load first.',
