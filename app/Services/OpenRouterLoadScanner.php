@@ -22,6 +22,8 @@ class OpenRouterLoadScanner
 
     private const PRICE_TERMS = ['fixed', 'negotiable'];
 
+    public function __construct(private readonly RelativeLoadDateResolver $relativeDates) {}
+
     public function scan(array $images, array $current = []): array
     {
         $userPrompt = 'Read a short title summarizing the load, the road/air/sea transport type, the cargo type (e.g. Pallets, Machinery, Electronics), the goods type/description, '
@@ -57,6 +59,8 @@ class OpenRouterLoadScanner
 
     public function scanText(string $description, array $current = []): array
     {
+        $serverDate = now()->toDateString();
+        $serverTimezone = (string) config('app.timezone', 'UTC');
         $userPrompt = 'The shipper described the load in their own words below. Extract a short title, the road/air/sea transport type, the cargo type '
             .'(e.g. Pallets, Machinery, Electronics), the goods type/description, the weight in kilograms, the pallet/unit count, '
             .'the required trailer body type if stated, the pickup city, country code, street address and date (plus a date-range end and time window if given), '
@@ -66,12 +70,15 @@ class OpenRouterLoadScanner
             .'Incoterm, deferred payment days, temperature range, ADR, tail-lift, urgency, contact name/phone/mobile/fax/email, '
             .'the booking or reference number, any other short notes that do not belong in a dedicated field, '
             .'and any distinct fact that should be tracked as its own separate custom item rather than folded into notes.'
+            ."\n\nAuthoritative server date: {$serverDate} ({$serverTimezone}). Resolve every relative date from this date."
             .$this->currentDraftContext($current)
             ."\n\nDescription:\n".$description;
 
         $content = [['type' => 'text', 'text' => $userPrompt]];
 
-        return $this->run($this->textSystemPrompt($current), $content, 'description');
+        $result = $this->run($this->textSystemPrompt($current), $content, 'description');
+
+        return $this->relativeDates->apply($description, $result, $current);
     }
 
     private function currentDraftContext(array $current): string
@@ -126,6 +133,7 @@ class OpenRouterLoadScanner
             .(($current !== []) ? 'unless a current draft is given below, in which case carry its existing values forward for anything this message does not address, and correctly apply incremental changes (add, increase, remove, decrease) using the current value as the base. ' : '')
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is mentioned, use it for whichever of the two it clearly refers to and leave the other empty. '
+            .'The user may give a raw date or a relative date. Resolve danas/today/heute as the server date, sutra/tomorrow/morgen as server date plus 1 day, prekosutra/day after tomorrow/übermorgen as server date plus 2 days, and "za N dana"/"in N days"/"in N Tagen" as server date plus N days. Never infer the year from model knowledge or training data. '
             .'Read the cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
             .'Read the pallet or unit count as a plain number when a quantity is mentioned (e.g. "24 paleta" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
