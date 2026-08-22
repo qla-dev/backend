@@ -57,9 +57,21 @@ class DispatchChatController extends Controller
             && ! $wasCanvasEnabled
             && ! $guidedAction
             && $this->asksToOpenLoadCanvas($latestUserMessage);
+        $titleRefinementTurn = $userMessages->count();
+        $conversationSubject = trim((string) $conversation->subject);
+        // The first message usually only selects a broad Lena mode. Keep the title open for the
+        // following three user prompts so concrete cargo, product, route, quantity or reference
+        // details can replace generic history labels without renaming established conversations.
         $shouldGenerateTitle = ! $load
-            && $userMessages->count() === 1
-            && in_array(trim((string) $conversation->subject), ['', 'AI Dispatch — General'], true);
+            && $titleRefinementTurn >= 1
+            && $titleRefinementTurn <= 4
+            && ($conversationSubject === '' || Str::startsWith($conversationSubject, 'AI Dispatch —'));
+        $shouldGenerateInitialTitle = $shouldGenerateTitle
+            && $titleRefinementTurn === 1
+            && in_array($conversationSubject, ['', 'AI Dispatch — General'], true);
+        $currentConversationTitle = Str::startsWith($conversationSubject, 'AI Dispatch —')
+            ? trim(Str::after($conversationSubject, 'AI Dispatch —'))
+            : $conversationSubject;
         $matchedGeneralLoad = $load ? null : $this->findVisibleLoadByBookingReference($latestUserMessage, $request->user());
 
         // General LenaAI chats are not permanently attached to a load. Keep the most recently
@@ -165,7 +177,7 @@ class DispatchChatController extends Controller
                         : 'No sufficiently relevant catalog candidate was found from the current wording. Use your HS expertise to provide the most likely six-digit code anyway, clearly state the assumptions and confidence, and ask only for the specific missing detail that could materially change that code. Never refuse.')
                 : '')
             .($shouldGenerateTitle
-                ? ' This is the first user message in a new general LenaAI chat. Start your reply with one line in the exact form [[CHAT_TITLE:title]], where title is a concise, meaningful 3 to 7 word chat title in the user\'s language based on their request. Do not use quotation marks, brackets, em dashes, or en dashes inside the title. The application saves this hidden title; never discuss it.'
+                ? ' This conversation is in its title refinement window, user turn '.$titleRefinementTurn.' of 4. Start your reply with one line in the exact form [[CHAT_TITLE:title]]. The current saved title is '.json_encode($currentConversationTitle ?: 'General', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).'. On the first turn, create a concise broad title for the selected mode or request. On turns 2 through 4, retain that broad intent as the beginning of the title, but improve it naturally when the latest user prompt reveals a concrete product, cargo description, quantity, route, booking reference, or other distinguishing fact. Examples: "HS code for goods tomatoes", "Dodavanje novog tereta 100 kg jabuka", "Ladung verfolgen FB-2041". If the latest prompt is only yes, no, continue, skip, or adds no meaningful identifying detail, repeat the current saved title exactly. Keep the title in the user\'s language, concise, and at most 10 words. Do not use quotation marks, brackets, em dashes, or en dashes inside it. The application saves this hidden title; never discuss it.'
                 : '')
             .($load
                 ? ' You are chatting about one specific load. Answer questions using ONLY the load record given below. It is re-fetched from the database right before every reply you give, so it is always the current, authoritative state, even for fields you or the user discussed earlier in this conversation. '
@@ -232,7 +244,7 @@ class DispatchChatController extends Controller
             $generatedTitle = trim((string) preg_replace('/\s+/u', ' ', str_replace(['—', '–'], '-', $titleMatch[1])), " \t\n\r\0\x0B\"'");
             $generatedTitle = Str::limit($generatedTitle, 70, '');
         }
-        if ($shouldGenerateTitle && blank($generatedTitle)) {
+        if ($shouldGenerateInitialTitle && blank($generatedTitle)) {
             $generatedTitle = $this->fallbackConversationTitle($latestUserMessage);
         }
 
