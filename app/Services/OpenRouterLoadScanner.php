@@ -22,7 +22,10 @@ class OpenRouterLoadScanner
 
     private const PRICE_TERMS = ['fixed', 'negotiable'];
 
-    public function __construct(private readonly RelativeLoadDateResolver $relativeDates) {}
+    public function __construct(
+        private readonly RelativeLoadDateResolver $relativeDates,
+        private readonly HsCodeSearchService $hsCodes,
+    ) {}
 
     public function scan(array $images, array $current = []): array
     {
@@ -54,7 +57,7 @@ class OpenRouterLoadScanner
                 ], $images),
         ];
 
-        return $this->run($this->documentSystemPrompt($current), $content, 'images');
+        return $this->enrichHsCodes($this->run($this->documentSystemPrompt($current), $content, 'images'));
     }
 
     public function scanText(string $description, array $current = []): array
@@ -78,7 +81,7 @@ class OpenRouterLoadScanner
 
         $result = $this->run($this->textSystemPrompt($current), $content, 'description');
 
-        return $this->relativeDates->apply($description, $result, $current);
+        return $this->enrichHsCodes($this->relativeDates->apply($description, $result, $current));
     }
 
     private function currentDraftContext(array $current): string
@@ -111,6 +114,7 @@ class OpenRouterLoadScanner
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is shown, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'Read the cargo weight in kilograms, converting from other units if the document states them explicitly (e.g. lbs, tons). '
+            .'For any identifiable goods, return a short hsSearchTerms phrase in English using the product, material, processing state, and intended use visible in the document. Preserve any explicitly printed six-digit HS codes in hsCodes. '
             .'Read the pallet or unit count as a plain number when the document states a quantity (e.g. "24 pallets" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
@@ -135,6 +139,7 @@ class OpenRouterLoadScanner
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is mentioned, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'The user may give a raw date or a relative date. Resolve danas/today/heute as the server date, sutra/tomorrow/morgen as server date plus 1 day, prekosutra/day after tomorrow/übermorgen as server date plus 2 days, and "za N dana"/"in N days"/"in N Tagen" as server date plus N days. Never infer the year from model knowledge or training data. '
             .'Read the cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
+            .'For any identifiable goods, return a short hsSearchTerms phrase in English using the product, material, processing state, and intended use stated by the user. Preserve any explicitly stated six-digit HS codes in hsCodes. '
             .'Read the pallet or unit count as a plain number when a quantity is mentioned (e.g. "24 paleta" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
@@ -287,6 +292,8 @@ class OpenRouterLoadScanner
             'transportType' => $transportType,
             'cargoType' => $this->stringValue($result['cargoType'] ?? ''),
             'goodsType' => $this->stringValue($result['goodsType'] ?? ''),
+            'hsSearchTerms' => $this->stringValue($result['hsSearchTerms'] ?? ''),
+            'hsCodes' => $this->hsCodeValues($result['hsCodes'] ?? null),
             'weightKg' => $this->numericValue($result['weightKg'] ?? 0),
             'pallets' => (int) $this->numericValue($result['pallets'] ?? 0),
             'bodyType' => $bodyType,
@@ -370,6 +377,50 @@ class OpenRouterLoadScanner
             ->all();
     }
 
+    private function hsCodeValues(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return collect($value)
+            ->filter(fn ($item) => is_array($item))
+            ->map(function (array $item): array {
+                $code = preg_replace('/\D+/', '', $this->stringValue($item['code'] ?? ''));
+
+                return [
+                    'code' => is_string($code) ? substr($code, 0, 6) : '',
+                    'description' => $this->stringValue($item['description'] ?? ''),
+                    'confidence' => max(0.0, min(1.0, $this->numericValue($item['confidence'] ?? 0.9))),
+                ];
+            })
+            ->filter(fn (array $item): bool => preg_match('/^\d{6}$/', $item['code']) === 1)
+            ->unique('code')
+            ->take(10)
+            ->values()
+            ->all();
+    }
+
+    private function enrichHsCodes(array $result): array
+    {
+        $query = trim((string) ($result['hsSearchTerms'] ?: $result['goodsType'] ?? ''));
+        $matches = $query === '' ? [] : $this->hsCodes->search($query, 5);
+        $catalogCodes = collect($matches)->map(fn (array $match): array => [
+            'code' => $match['code'],
+            'description' => $match['description'],
+            'confidence' => $match['confidence'],
+        ]);
+
+        $result['hsCodes'] = collect($result['hsCodes'] ?? [])
+            ->concat($catalogCodes)
+            ->unique('code')
+            ->take(5)
+            ->values()
+            ->all();
+
+        return $result;
+    }
+
     private function dateValue(mixed $value): string
     {
         $value = $this->stringValue($value);
@@ -406,13 +457,29 @@ class OpenRouterLoadScanner
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['isDocument', 'title', 'transportType', 'cargoType', 'goodsType', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupLatitude', 'pickupLongitude', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryLatitude', 'deliveryLongitude', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
+            'required' => ['isDocument', 'title', 'transportType', 'cargoType', 'goodsType', 'hsSearchTerms', 'hsCodes', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupLatitude', 'pickupLongitude', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryLatitude', 'deliveryLongitude', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
             'properties' => [
                 'isDocument' => ['type' => 'boolean', 'description' => 'True only when the image shows a freight/shipping document.'],
                 'title' => ['type' => 'string'],
                 'transportType' => ['type' => 'string', 'enum' => [...self::TRANSPORT_TYPES, ''], 'description' => 'road, air, or sea, or empty string if not stated.'],
                 'cargoType' => ['type' => 'string'],
                 'goodsType' => ['type' => 'string'],
+                'hsSearchTerms' => ['type' => 'string', 'description' => 'Short English catalog search phrase for the identifiable goods, including material, processing state, and intended use when known.'],
+                'hsCodes' => [
+                    'type' => 'array',
+                    'maxItems' => 10,
+                    'description' => 'Six-digit HS codes explicitly stated in the source. Leave empty when none is stated; the server searches the catalog after extraction.',
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'required' => ['code', 'description', 'confidence'],
+                        'properties' => [
+                            'code' => ['type' => 'string'],
+                            'description' => ['type' => 'string'],
+                            'confidence' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
+                        ],
+                    ],
+                ],
                 'weightKg' => ['type' => 'number'],
                 'pallets' => ['type' => 'number', 'description' => 'Pallet or unit count, 0 if not stated.'],
                 'bodyType' => ['type' => 'string', 'enum' => [...self::BODY_TYPES, ''], 'description' => 'Required trailer/body type, or empty string if not stated.'],

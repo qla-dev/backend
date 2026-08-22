@@ -10,6 +10,7 @@ use App\Models\Load;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\LenaLoadQuestionnaire;
+use App\Services\HsCodeSearchService;
 use App\Services\OpenRouterDispatchAssistant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +23,7 @@ class DispatchChatController extends Controller
 {
     use ScopesConversationAccess;
 
-    public function store(Request $request, OpenRouterDispatchAssistant $assistant, LenaLoadQuestionnaire $questionnaire): JsonResponse
+    public function store(Request $request, OpenRouterDispatchAssistant $assistant, LenaLoadQuestionnaire $questionnaire, HsCodeSearchService $hsCodeSearch): JsonResponse
     {
         $validated = $request->validate([
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
@@ -50,6 +51,7 @@ class DispatchChatController extends Controller
             ->values();
         $latestUserMessage = $userMessages->first()?->body;
         $guidedAction = $this->guidedAction($latestUserMessage);
+        $activeGuidedMode = $this->activeGuidedMode($userMessages);
         $wasCanvasEnabled = (bool) $conversation->canvas;
         $detectedLoadCreationRequest = ! $load
             && ! $wasCanvasEnabled
@@ -96,6 +98,14 @@ class DispatchChatController extends Controller
         ], true);
         $origin = $contextLoad?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $contextLoad?->stops->firstWhere('type', 'delivery')?->city;
+        $hsMode = $guidedAction === 'hs'
+            || $activeGuidedMode === 'hs'
+            || preg_match('/\b(?:hs\s*(?:code|kod|nummer)?|customs?\s+code|tariff\s+code|zolltarifnummer)\b/i', (string) $latestUserMessage) === 1;
+        $hsQuery = trim(implode(' ', array_filter([
+            $contextLoad?->goods_type,
+            $latestUserMessage,
+        ])));
+        $hsMatches = $hsMode && ! $guidedAction ? $hsCodeSearch->search($hsQuery, 8) : [];
 
         $statusLabels = [
             'posted' => 'posted and open for booking',
@@ -147,6 +157,12 @@ class DispatchChatController extends Controller
             .'Whenever you emit or cause the application to show a booking action, always write a complete, natural sentence first in the user\'s language explaining that the direct booking action is available below. The action must never appear without that preceding message.'
             .($guidedAction
                 ? ' The user selected the guided LenaAI action "'.$guidedAction.'". Follow it immediately, in the user\'s language. For add or start_add_yes, ask exactly whether they have a document or file to upload and end your reply with [[LENA_OPTIONS:upload_yes,upload_no]]. For start_add_no, acknowledge briefly and keep the builder off. For upload_yes, briefly tell them to attach the file now and say you will extract the available load data before asking only the remaining fields. For upload_no, begin with the server-supplied next incomplete questionnaire step, not a hard-coded pickup question. For continue_add_yes, resume by asking the same server-supplied next incomplete step; never skip it. For continue_add_no, acknowledge that load creation has been paused and that the collected draft remains available in the conversation. For tracking or booking, ask for the booking reference and then use the current database lookup. For hs, act as an experienced HS classification specialist: confidently ask for the product description, material, intended use, and country context, then provide the most likely HS code with a concise rationale. Never refuse to help or say that you cannot classify the product. If material details are missing or more than one code is plausible, state the assumptions, give the best-fit code first, optionally list close alternatives, and label the confidence level so uncertainty is not hidden. For free, invite the user to ask freely about Freightbook.ai features and workflows. Do not expose or explain the guided action marker.'
+                : '')
+            .($hsMode
+                ? ' HS classification mode is active. Freightbook.ai has a server-side HS 2022 catalog containing 5,612 six-digit classifications. '
+                    .($hsMatches !== []
+                        ? 'The catalog search returned these candidates: '.json_encode($hsMatches, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).'. Use these records as the primary source, select the best fit from them, and explain briefly why it fits. If several remain plausible, ask for the one missing product fact that best separates them.'
+                        : 'No sufficiently relevant catalog candidate was found from the current wording yet. Ask for a more specific product description, material or composition, processing state, intended use, and country context; once enough detail is present, provide your best classification rather than refusing.')
                 : '')
             .($shouldGenerateTitle
                 ? ' This is the first user message in a new general LenaAI chat. Start your reply with one line in the exact form [[CHAT_TITLE:title]], where title is a concise, meaningful 3 to 7 word chat title in the user\'s language based on their request. Do not use quotation marks, brackets, em dashes, or en dashes inside the title. The application saves this hidden title; never discuss it.'
@@ -325,6 +341,7 @@ class DispatchChatController extends Controller
             'Freight mode' => $load->freight_mode ?: $load->transport_type,
             'Cargo type' => $load->cargo_type,
             'Goods type' => $load->goods_type,
+            'HS codes' => $load->hs_codes ? json_encode($load->hs_codes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
             'Weight' => $load->weight_kg ? "{$load->weight_kg} kg" : null,
             'Quantity / measure' => $load->quantity_measure,
             'Volume' => $load->volume_m3 ? "{$load->volume_m3} m3" : null,
@@ -534,6 +551,18 @@ class DispatchChatController extends Controller
         return preg_match('/^\[\[LENA_ACTION:(add|tracking|booking|hs|free|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no)\]\]$/', trim($message), $match) === 1
             ? $match[1]
             : null;
+    }
+
+    private function activeGuidedMode(Collection $userMessages): ?string
+    {
+        foreach ($userMessages as $message) {
+            $action = $this->guidedAction($message->body);
+            if (in_array($action, ['add', 'tracking', 'booking', 'hs', 'free'], true)) {
+                return $action;
+            }
+        }
+
+        return null;
     }
 
     private function attachmentContext(Message $message): string

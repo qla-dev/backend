@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\EmailCampaignController;
 use App\Http\Controllers\Api\EmailCampaignRecipientController;
 use App\Http\Controllers\Api\EmailTemplateController;
 use App\Http\Controllers\Api\FleetAccessController;
+use App\Http\Controllers\Api\HsCodeController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\LoadInvoiceDocumentController;
@@ -94,6 +95,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
     Route::post('load-scans/text', [LoadScanController::class, 'scanText'])->middleware('throttle:10,1');
+    Route::get('hs-codes', [HsCodeController::class, 'index'])->middleware('throttle:60,1');
 
     Route::middleware('role:company,superadmin')->group(function (): void {
         Route::apiResources([

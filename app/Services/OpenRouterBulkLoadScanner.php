@@ -18,6 +18,8 @@ class OpenRouterBulkLoadScanner
 
     private const MAX_ROWS = 50;
 
+    public function __construct(private readonly HsCodeSearchService $hsCodes) {}
+
     public function scan(array $images): array
     {
         $userPrompt = 'Read every load row in this document. For each row, extract a short title, cargo type, goods type/description, weight in kilograms, '
@@ -65,6 +67,7 @@ class OpenRouterBulkLoadScanner
             .'Read pickup and delivery locations as city names with their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read pickup and delivery dates separately as YYYY-MM-DD when shown. '
             .'Read cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
+            .'For identifiable goods, return a short hsSearchTerms phrase in English with material, processing state, and intended use when known. '
             .'Read the pallet or unit count as a plain number when a quantity is stated (e.g. "24 pallets" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; '
             .'"hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or empty if not stated. '
@@ -82,6 +85,7 @@ class OpenRouterBulkLoadScanner
             .'Read pickup and delivery locations as city names with their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read pickup and delivery dates separately as YYYY-MM-DD when shown. '
             .'Read cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
+            .'For identifiable goods, return a short hsSearchTerms phrase in English with material, processing state, and intended use when known. '
             .'Read the pallet or unit count as a plain number when a quantity is stated (e.g. "24 pallets" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; '
             .'"hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or empty if not stated. '
@@ -134,6 +138,13 @@ class OpenRouterBulkLoadScanner
 
     private function requestPayload(string $systemPrompt, array $content): array
     {
+        $hsSearchTerms = $this->stringValue($row['hsSearchTerms'] ?? '') ?: $this->stringValue($row['goodsType'] ?? '');
+        $hsCodes = collect($this->hsCodes->search($hsSearchTerms, 5))->map(fn (array $match): array => [
+            'code' => $match['code'],
+            'description' => $match['description'],
+            'confidence' => $match['confidence'],
+        ])->all();
+
         return [
             'model' => config('services.openrouter.model'),
             'temperature' => 0,
@@ -221,6 +232,8 @@ class OpenRouterBulkLoadScanner
             'title' => $this->stringValue($row['title'] ?? '', 'New load'),
             'cargoType' => $this->stringValue($row['cargoType'] ?? ''),
             'goodsType' => $this->stringValue($row['goodsType'] ?? ''),
+            'hsSearchTerms' => $hsSearchTerms,
+            'hsCodes' => $hsCodes,
             'weightKg' => $this->numericValue($row['weightKg'] ?? 0),
             'pallets' => (int) $this->numericValue($row['pallets'] ?? 0),
             'bodyType' => $bodyType,
@@ -265,11 +278,12 @@ class OpenRouterBulkLoadScanner
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['title', 'cargoType', 'goodsType', 'weightKg', 'pallets', 'bodyType', 'pickupCity', 'pickupCountryCode', 'pickupDate', 'deliveryCity', 'deliveryCountryCode', 'deliveryDate', 'currency', 'budget', 'bookingReference', 'notes'],
+            'required' => ['title', 'cargoType', 'goodsType', 'hsSearchTerms', 'weightKg', 'pallets', 'bodyType', 'pickupCity', 'pickupCountryCode', 'pickupDate', 'deliveryCity', 'deliveryCountryCode', 'deliveryDate', 'currency', 'budget', 'bookingReference', 'notes'],
             'properties' => [
                 'title' => ['type' => 'string'],
                 'cargoType' => ['type' => 'string'],
                 'goodsType' => ['type' => 'string'],
+                'hsSearchTerms' => ['type' => 'string'],
                 'weightKg' => ['type' => 'number'],
                 'pallets' => ['type' => 'number'],
                 'bodyType' => ['type' => 'string', 'enum' => [...self::BODY_TYPES, '']],
