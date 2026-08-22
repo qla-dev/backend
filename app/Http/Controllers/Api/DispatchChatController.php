@@ -47,6 +47,12 @@ class DispatchChatController extends Controller
             ->sortByDesc('sent_at')
             ->values();
         $latestUserMessage = $userMessages->first()?->body;
+        $guidedAction = $this->guidedAction($latestUserMessage);
+        $wasCanvasEnabled = (bool) $conversation->canvas;
+        $detectedLoadCreationRequest = ! $load
+            && ! $wasCanvasEnabled
+            && ! $guidedAction
+            && $this->asksToOpenLoadCanvas($latestUserMessage);
         $shouldGenerateTitle = ! $load
             && $userMessages->count() === 1
             && in_array(trim((string) $conversation->subject), ['', 'AI Dispatch — General'], true);
@@ -55,7 +61,12 @@ class DispatchChatController extends Controller
         // General LenaAI chats are not permanently attached to a load. Keep the most recently
         // resolved booking reference as conversational context for follow-ups such as "show the
         // details again", while never falling back to an old load after a new invalid reference.
-        if (! $load && ! $matchedGeneralLoad && ! $this->mentionsBookingReference($latestUserMessage)) {
+        if (! $load
+            && ! $matchedGeneralLoad
+            && ! $this->mentionsBookingReference($latestUserMessage)
+            && ! $wasCanvasEnabled
+            && ! $detectedLoadCreationRequest
+            && ! in_array($guidedAction, ['add', 'start_add_yes'], true)) {
             foreach ($userMessages->skip(1) as $earlierUserMessage) {
                 $matchedGeneralLoad = $this->findVisibleLoadByBookingReference($earlierUserMessage->body, $request->user());
                 if ($matchedGeneralLoad) {
@@ -64,10 +75,10 @@ class DispatchChatController extends Controller
             }
         }
         $contextLoad = $load ?? $matchedGeneralLoad;
-        $requestedLoadCanvas = $this->asksToOpenLoadCanvas($latestUserMessage);
-        $canvasBlockedByExistingLoad = $requestedLoadCanvas && $contextLoad;
-        $canvasEnabled = (bool) $conversation->canvas;
-        if ($canvasBlockedByExistingLoad || $this->asksToCloseLoadCanvas($latestUserMessage)) {
+        $requestedLoadCanvas = in_array($guidedAction, ['add', 'start_add_yes'], true);
+        $canvasBlockedByExistingLoad = $requestedLoadCanvas && $load;
+        $canvasEnabled = $wasCanvasEnabled;
+        if ($canvasBlockedByExistingLoad || $guidedAction === 'continue_add_no') {
             $canvasEnabled = false;
         } elseif ($requestedLoadCanvas) {
             $canvasEnabled = true;
@@ -107,8 +118,11 @@ class DispatchChatController extends Controller
             .'Determine the language of the most recent user message and write your ENTIRE reply in that language. Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. If the latest message is only a reference number, continue in the language already used by the user in this conversation. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
             .'Bosnian freight terminology is strict: translate the logistics noun "load" as "teret". Never call a load "opterećenje" in Bosnian. Use the correct grammatical form of "teret" for the sentence. '
             .($canvasEnabled
-                ? ' The conversation load-post canvas is active. Help the user prepare a new load posting by collecting only facts they provide: pickup, delivery, dates, cargo, weight, equipment, price, currency, terms, and special requirements. Attached-file and message extraction results appear in the user message context and are authoritative for this draft; the canvas panel next to this chat already displays and updates those fields live as the conversation continues, including correctly adding to or changing a quantity the user already gave (e.g. "add 10 more pallets" builds on the existing count). Because the user can already see the fields update, do not restate field values back to them in prose. After each message, reply with only a short one-sentence confirmation of what changed (or, if nothing changed, a short answer to their question); do not repeat instructions or explanations you already gave earlier in this conversation. Mention opening edit mode only once, the first time the draft has enough information to look reasonably complete (title, cargo, weight, pickup, delivery); never repeat that suggestion again afterward. Never invent values.'
-                : ' The load-post canvas is currently off. When no existing load is in context, remind the user that the "Post a new load" option can open it. If the user asks to create, publish, post, or bulk-import a new load, explain that you opened the load-post canvas and help collect the required posting data.')
+                ? ' The conversation load-post canvas is active and remains active until the user selects the guided continue_add_no action. Help the user prepare a new load posting by collecting only facts they provide: pickup, delivery, dates, cargo, weight, equipment, price, currency, terms, and special requirements. Attached-file and message extraction results appear in the user message context and are authoritative for this draft; the canvas panel next to this chat already displays and updates those fields live as the conversation continues, including correctly adding to or changing a quantity the user already gave (e.g. "add 10 more pallets" builds on the existing count). Because the user can already see the fields update, do not restate field values back to them in prose. Ask only one missing load-post field at a time. If the latest user message changes or supplies draft data, briefly confirm it and ask the next missing field. If it instead asks about another LenaAI capability or about Freightbook.ai, answer that request without discarding or changing modes, then write exactly [[LENA_FOLLOWUP]] on its own line, followed by a localized equivalent of "Your load is still in the data collection phase. Would you like to continue?", followed by [[LENA_OPTIONS:continue_add_yes,continue_add_no]] on its own line. In Bosnian, that follow-up sentence must be exactly "Vaš teret je još uvijek u fazi prikupljanja podataka. Želite li nastaviti?" In German, use "Ihre Ladung befindet sich noch in der Datenerfassungsphase. Möchten Sie fortfahren?" When the draft has title, cargo, weight, pickup, and delivery, end the load-building reply with a new line containing exactly [[LOAD_READY_TO_POST]]. This creates the in-app ready-to-post card. Emit it only once, and never invent values.'
+                : ' The load-post canvas is currently off. Never turn it on merely because the user types a load-creation request. The explicit Add a new load action can open it.')
+            .($detectedLoadCreationRequest
+                ? ' The latest free-text message appears to request creation or posting of a load. Ask, in the user\'s language, whether they want to start creating the load, and end the reply with [[LENA_OPTIONS:start_add_yes,start_add_no]]. In Bosnian, ask exactly "Želite li da počnemo kreiranje tereta?" Do not say the builder or canvas is already open.'
+                : '')
             .($canvasBlockedByExistingLoad
                 ? ' The user asked to post a new load while an existing load is already in context. Do not open the new-load canvas and do not suggest creating a duplicate. Tell them plainly, in their language, that this load already exists and is already in status '.$statusPlain.'.'
                 : '')
@@ -118,6 +132,9 @@ class DispatchChatController extends Controller
             .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link. '
             .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks where the load is now or for its current or latest location, first answer naturally from the latest available record and then end the reply with a new line containing exactly [[LOAD_MAP]]. When the user asks specifically about pickup, destination, route endpoints, or addresses, first answer naturally and then end the reply with a new line containing exactly [[LOAD_LOCATION]]. When the user asks for the load status, first answer naturally and then end the reply with a new line containing exactly [[LOAD_STATUS]]. When the user asks for a broader route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts these hidden signals into live data cards; never mention the signals or write HTML yourself. '
             .'Whenever you emit or cause the application to show a booking action, always write a complete, natural sentence first in the user\'s language explaining that the direct booking action is available below. The action must never appear without that preceding message.'
+            .($guidedAction
+                ? ' The user selected the guided LenaAI action "'.$guidedAction.'". Follow it immediately, in the user\'s language. For add or start_add_yes, ask exactly whether they have a document or file to upload and end your reply with [[LENA_OPTIONS:upload_yes,upload_no]]. For start_add_no, acknowledge briefly and keep the builder off. For upload_yes, briefly tell them to attach the file now and say you will extract the available load data before asking only the remaining fields. For upload_no, start the manual new-load questionnaire with the pickup location, then continue one missing load-posting field at a time. For continue_add_yes, continue the existing draft by asking the next missing load-post field, using the attached extraction context to avoid repeating answered questions. For continue_add_no, acknowledge that load creation has been paused and that the collected draft remains available in the conversation. For tracking or booking, ask for the booking reference and then use the current database lookup. For hs, ask for the product description, material, intended use, and country context, and do not claim to generate an official customs classification. For free, invite the user to ask freely about Freightbook.ai features and workflows. Do not expose or explain the guided action marker.'
+                : '')
             .($shouldGenerateTitle
                 ? ' This is the first user message in a new general LenaAI chat. Start your reply with one line in the exact form [[CHAT_TITLE:title]], where title is a concise, meaningful 3 to 7 word chat title in the user\'s language based on their request. Do not use quotation marks, brackets, em dashes, or en dashes inside the title. The application saves this hidden title; never discuss it.'
                 : '')
@@ -146,7 +163,9 @@ class DispatchChatController extends Controller
                 'content' => trim((string) preg_replace(
                     '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
                     '',
-                    $message->body
+                    $this->guidedAction($message->body)
+                        ? '[User selected guided LenaAI action: '.$this->guidedAction($message->body).']'
+                        : $message->body
                 )).$this->attachmentContext($message),
             ])
             ->values()
@@ -156,6 +175,16 @@ class DispatchChatController extends Controller
             $reply = $assistant->reply($systemPrompt, $history);
         } catch (RuntimeException $exception) {
             return $this->unavailable($exception->getMessage());
+        }
+
+        $followUpReply = null;
+        if (str_contains($reply, '[[LENA_FOLLOWUP]]')) {
+            [$reply, $followUpReply] = array_pad(explode('[[LENA_FOLLOWUP]]', $reply, 2), 2, null);
+            $reply = trim($reply);
+            $followUpReply = trim((string) $followUpReply);
+            if (filled($followUpReply) && ! str_contains($followUpReply, '[[LENA_OPTIONS:')) {
+                $followUpReply .= "\n[[LENA_OPTIONS:continue_add_yes,continue_add_no]]";
+            }
         }
 
         $generatedTitle = null;
@@ -194,6 +223,12 @@ class DispatchChatController extends Controller
             $reply
         );
         $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
+        if (in_array($guidedAction, ['add', 'start_add_yes'], true) && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+            $reply .= "\n[[LENA_OPTIONS:upload_yes,upload_no]]";
+        }
+        if ($detectedLoadCreationRequest && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+            $reply .= "\n[[LENA_OPTIONS:start_add_yes,start_add_no]]";
+        }
         $hasTextReply = filled($reply);
         if ($hasTextReply && $attachedLoadDetails) {
             $reply .= "\n[[LOAD_DETAILS:{$contextLoad->id}]]";
@@ -219,6 +254,14 @@ class DispatchChatController extends Controller
             'body' => $reply,
             'sent_at' => now(),
         ]);
+        if (filled($followUpReply)) {
+            $message = Message::query()->create([
+                'conversation_id' => $conversation->id,
+                'sender_user_id' => $aiDispatcherId,
+                'body' => $followUpReply,
+                'sent_at' => now()->addMillisecond(),
+            ]);
+        }
         $conversationUpdate = ['last_message_at' => $message->sent_at];
         if (filled($generatedTitle)) {
             $conversationUpdate['subject'] = 'AI Dispatch — '.$generatedTitle;
@@ -451,11 +494,15 @@ class DispatchChatController extends Controller
         return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|bulk\s+import|novi\s+teret|nov\s+teret|objav\w*\s+teret|kreir\w*\s+teret|naprav\w*\s+teret|masovni\s+uvoz|neue\s+ladung|ladung\s+(?:erstellen|veroffentlichen)|massenimport|(open|enable|show|otvori|ukljuci|prikazi|offne|aktiviere)\w*\s+(?:the\s+)?(canvas|platno|nacrt))\b/i', $normalized) === 1;
     }
 
-    private function asksToCloseLoadCanvas(?string $message): bool
+    private function guidedAction(?string $message): ?string
     {
-        $normalized = Str::lower(Str::ascii((string) $message));
+        if (! is_string($message)) {
+            return null;
+        }
 
-        return preg_match('/\b(close|disable|turn\s+off|exit|hide|zatvori|iskljuci|ugasi|izadi|beenden|ausschalten)\b.*\b(canvas|platno|nacrt)\b/i', $normalized) === 1;
+        return preg_match('/^\[\[LENA_ACTION:(add|tracking|booking|hs|free|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no)\]\]$/', trim($message), $match) === 1
+            ? $match[1]
+            : null;
     }
 
     private function attachmentContext(Message $message): string
