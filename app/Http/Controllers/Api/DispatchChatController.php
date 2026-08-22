@@ -49,14 +49,23 @@ class DispatchChatController extends Controller
             ->where('sender_user_id', '!=', $aiDispatcherId)
             ->sortByDesc('sent_at')
             ->values();
-        $latestUserMessage = $userMessages->first()?->body;
+        $latestUserMessageModel = $userMessages->first();
+        $latestUserMessage = $latestUserMessageModel?->body;
         $guidedAction = $this->guidedAction($latestUserMessage);
         $activeGuidedMode = $this->activeGuidedMode($userMessages);
         $wasCanvasEnabled = (bool) $conversation->canvas;
+        // Auto-detect load-creation intent from an attached document (already scanned regardless
+        // of canvas state, see attachFile in useLenaAiChat.ts) or from cargo-shaped free text, not
+        // only from the narrow "new load"/"novi teret" phrasing asksToOpenLoadCanvas looks for.
+        // This must keep working even while a different guided mode (tracking, hs, ...) is active.
         $detectedLoadCreationRequest = ! $load
             && ! $wasCanvasEnabled
             && ! $guidedAction
-            && $this->asksToOpenLoadCanvas($latestUserMessage);
+            && (
+                $this->asksToOpenLoadCanvas($latestUserMessage)
+                || $this->mentionsCargoDetails($latestUserMessage)
+                || $this->messageHasCargoSignal($latestUserMessageModel)
+            );
         $titleRefinementTurn = $userMessages->count();
         $conversationSubject = trim((string) $conversation->subject);
         // The first message usually only selects a broad Lena mode. Keep the title open for the
@@ -103,6 +112,9 @@ class DispatchChatController extends Controller
             $conversation->update(['canvas' => $canvasEnabled]);
         }
         $loadDraft = $this->latestLoadDraft($conversation->messages);
+        // The scanner already flags isDocument=true whenever it recognized real freight/cargo
+        // content (document or free text), so reuse that instead of guessing from field presence.
+        $hasExistingLoadDraftData = ($loadDraft['isDocument'] ?? false) === true;
         $nextLoadStep = $canvasEnabled ? $questionnaire->nextStep($loadDraft, $conversation->messages, (int) $aiDispatcherId) : null;
         $loadWasAlreadyReady = $questionnaire->hasCompleteReadyMarker($conversation->messages);
         $questionnaireTurn = $canvasEnabled && ! in_array($guidedAction, [
@@ -168,7 +180,13 @@ class DispatchChatController extends Controller
             .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks where the load is now or for its current or latest location, first answer naturally from the latest available record and then end the reply with a new line containing exactly [[LOAD_MAP]]. When the user asks specifically about pickup, destination, route endpoints, or addresses, first answer naturally and then end the reply with a new line containing exactly [[LOAD_LOCATION]]. When the user asks for the load status, first answer naturally and then end the reply with a new line containing exactly [[LOAD_STATUS]]. When the user asks for a broader route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts these hidden signals into live data cards; never mention the signals or write HTML yourself. '
             .'Whenever you emit or cause the application to show a booking action, always write a complete, natural sentence first in the user\'s language explaining that the direct booking action is available below. The action must never appear without that preceding message.'
             .($guidedAction
-                ? ' The user selected the guided LenaAI action "'.$guidedAction.'". Follow it immediately, in the user\'s language. For add or start_add_yes, ask exactly whether they have a document or file to upload and end your reply with [[LENA_OPTIONS:upload_yes,upload_no]]. For start_add_no, acknowledge briefly and keep the builder off. For upload_yes, briefly tell them to attach the file now and say you will extract the available load data before asking only the remaining fields. For upload_no, begin with the server-supplied next incomplete questionnaire step, not a hard-coded pickup question. For continue_add_yes, resume by asking the same server-supplied next incomplete step; never skip it. For continue_add_no, acknowledge that load creation has been paused and that the collected draft remains available in the conversation. For tracking or booking, ask for the booking reference and then use the current database lookup. For hs, introduce yourself confidently as an experienced HS classification expert with direct access to Freightbook.ai\'s international HS database, updated for 2026, containing 5,612 six-digit codes. Then ask for the product description, material or composition, processing state, intended use, and country context, and explain that you will search the database and provide the most likely HS code with a concise rationale. Never refuse to help or say that you cannot classify the product. If material details are missing or more than one code is plausible, state the assumptions, give the best-fit code first, optionally list close alternatives, and label the confidence level so uncertainty is not hidden. For free, invite the user to ask freely about Freightbook.ai features and workflows. Do not expose or explain the guided action marker.'
+                ? ' The user selected the guided LenaAI action "'.$guidedAction.'". Follow it immediately, in the user\'s language. '
+                    .(in_array($guidedAction, ['add', 'start_add_yes'], true)
+                        ? ($hasExistingLoadDraftData
+                            ? 'For add or start_add_yes, a document or message was already provided earlier in this conversation and its load data was already extracted into the draft below; never ask whether they have a document to upload. Briefly announce that you are starting the load draft from what they already gave you, then continue directly with the next incomplete questionnaire step described below.'
+                            : 'For add or start_add_yes, ask exactly whether they have a document or file to upload and end your reply with [[LENA_OPTIONS:upload_yes,upload_no]].')
+                        : '')
+                    .' For start_add_no, acknowledge briefly and keep the builder off. For upload_yes, briefly tell them to attach the file now and say you will extract the available load data before asking only the remaining fields. For upload_no, begin with the server-supplied next incomplete questionnaire step, not a hard-coded pickup question. For continue_add_yes, resume by asking the same server-supplied next incomplete step; never skip it. For continue_add_no, acknowledge that load creation has been paused and that the collected draft remains available in the conversation. For tracking or booking, ask for the booking reference and then use the current database lookup. For hs, introduce yourself confidently as an experienced HS classification expert with direct access to Freightbook.ai\'s international HS database, updated for 2026, containing 5,612 six-digit codes. Then ask for the product description, material or composition, processing state, intended use, and country context, and explain that you will search the database and provide the most likely HS code with a concise rationale. Never refuse to help or say that you cannot classify the product. If material details are missing or more than one code is plausible, state the assumptions, give the best-fit code first, optionally list close alternatives, and label the confidence level so uncertainty is not hidden. For free, invite the user to ask freely about Freightbook.ai features and workflows. Do not expose or explain the guided action marker.'
                 : '')
             .($hsMode
                 ? ' HS classification mode is active. Freightbook.ai has a server-side international HS database, updated for 2026, containing 5,612 six-digit classifications. '
@@ -552,6 +570,43 @@ class DispatchChatController extends Controller
         $normalized = Str::lower(Str::ascii((string) $message));
 
         return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|bulk\s+import|novi\s+teret|nov\s+teret|objav\w*\s+teret|kreir\w*\s+teret|naprav\w*\s+teret|masovni\s+uvoz|neue\s+ladung|ladung\s+(?:erstellen|veroffentlichen)|massenimport|(open|enable|show|otvori|ukljuci|prikazi|offne|aktiviere)\w*\s+(?:the\s+)?(canvas|platno|nacrt))\b/i', $normalized) === 1;
+    }
+
+    // A shipper describing cargo in passing (e.g. "100kg jabuka") never says "new load" and would
+    // not match asksToOpenLoadCanvas, but a concrete weight or unit count is still a strong signal
+    // they mean a real shipment, even mid-way through an unrelated guided mode like tracking or hs.
+    private function mentionsCargoDetails(?string $message): bool
+    {
+        if (blank($message)) {
+            return false;
+        }
+
+        $normalized = Str::lower(Str::ascii($message));
+
+        $hasWeight = preg_match('/\b\d+[.,]?\d*\s*(kg|kilogram\w*|tona\w*|tone\w*|tons?|tonnen|lbs?|pounds?)\b/', $normalized) === 1;
+        $hasUnitCount = preg_match('/\b\d+\s*(palet\w*|paket\w*|kutij\w*|komad\w*|pieces?|pallets?|boxes?|units?)\b/', $normalized) === 1;
+
+        return $hasWeight || $hasUnitCount;
+    }
+
+    // The load scanner (OpenRouterLoadScanner) already flags isDocument=true whenever it
+    // recognized real freight/cargo content in an attached file or scanned message, regardless of
+    // whether the canvas was open when it ran (see attachFile in useLenaAiChat.ts). Reuse that
+    // verdict instead of re-guessing it from raw text.
+    private function messageHasCargoSignal(?Message $message): bool
+    {
+        if (! $message) {
+            return false;
+        }
+
+        foreach ($message->attachments ?? [] as $attachment) {
+            $loadScan = is_array($attachment) ? ($attachment['loadScan'] ?? null) : null;
+            if (is_array($loadScan) && ($loadScan['isDocument'] ?? false) === true) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function guidedAction(?string $message): ?string
