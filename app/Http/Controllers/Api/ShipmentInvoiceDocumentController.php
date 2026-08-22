@@ -17,6 +17,7 @@ class ShipmentInvoiceDocumentController extends Controller
 
         $shipment->load([
             'freightLoad.customer',
+            'freightLoad.consignee',
             'freightLoad.company',
             'freightLoad.stops',
         ]);
@@ -40,6 +41,8 @@ class ShipmentInvoiceDocumentController extends Controller
         $isProforma = $document === 'predracun';
         $origin = $load->stops->first();
         $destination = $load->stops->last();
+        $trackingNumber = (string) ($shipment->tracking_number ?: $load->public_id ?: $load->id);
+        $invoiceStatusLabels = ['draft' => 'Nacrt', 'sent' => 'Poslano', 'paid' => 'Plaćeno', 'overdue' => 'Kasni', 'cancelled' => 'Otkazano'];
 
         $items = $invoice?->items->map(fn ($item): array => [
             'description' => (string) $item->description,
@@ -69,13 +72,19 @@ class ShipmentInvoiceDocumentController extends Controller
                 'tax' => $tax,
                 'total' => $total,
                 'items' => $items,
+                'payment_reference' => (string) ($invoice?->number ?: 'SF-'.$shipment->tracking_number),
+                'status' => (string) ($invoice?->status ?: 'draft'),
+                'status_label' => $invoiceStatusLabels[$invoice?->status ?: 'draft'] ?? ucfirst((string) ($invoice?->status ?: 'draft')),
             ],
             'shipment' => $shipment,
+            'shipmentStatus' => (string) ($shipment->status ?: $load->status ?: '—'),
+            'trackingNumber' => $trackingNumber,
             'load' => $load,
             'seller' => $load->company,
-            'buyer' => $load->customer,
+            'buyer' => $load->consignee ?: $load->customer,
             'origin' => $origin,
             'destination' => $destination,
+            'notes' => (string) ($load->external_comments ?: $load->notes ?: ''),
         ]);
     }
 }

@@ -15,7 +15,7 @@ class LoadInvoiceDocumentController extends Controller
     {
         abort_unless(in_array($document, ['predracun', 'a4-faktura'], true), 404);
 
-        $load->load(['customer', 'company', 'stops', 'shipment']);
+        $load->load(['customer', 'consignee', 'company', 'stops', 'shipment']);
 
         $invoice = Invoice::query()
             ->with('items')
@@ -34,6 +34,7 @@ class LoadInvoiceDocumentController extends Controller
         $dueAt = $invoice?->due_at ?? Carbon::parse($issuedAt)->addDays((int) ($load->payment_due_days ?: 7));
         $origin = $load->stops->first();
         $destination = $load->stops->last();
+        $invoiceStatusLabels = ['draft' => 'Nacrt', 'sent' => 'Poslano', 'paid' => 'Plaćeno', 'overdue' => 'Kasni', 'cancelled' => 'Otkazano'];
 
         $items = $invoice?->items->map(fn ($item): array => [
             'description' => (string) $item->description,
@@ -64,15 +65,19 @@ class LoadInvoiceDocumentController extends Controller
                 'tax' => $tax,
                 'total' => $total,
                 'items' => $items,
+                'payment_reference' => (string) ($invoice?->number ?: 'SF-'.$trackingNumber),
+                'status' => (string) ($invoice?->status ?: 'draft'),
+                'status_label' => $invoiceStatusLabels[$invoice?->status ?: 'draft'] ?? ucfirst((string) ($invoice?->status ?: 'draft')),
             ],
             'shipment' => $shipment,
             'shipmentStatus' => (string) ($shipment?->status ?: $load->status ?: '—'),
             'trackingNumber' => $trackingNumber,
             'load' => $load,
             'seller' => $load->company,
-            'buyer' => $load->customer,
+            'buyer' => $load->consignee ?: $load->customer,
             'origin' => $origin,
             'destination' => $destination,
+            'notes' => (string) ($load->external_comments ?: $load->notes ?: ''),
         ]);
     }
 }
