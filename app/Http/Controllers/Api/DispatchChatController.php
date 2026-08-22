@@ -162,7 +162,7 @@ class DispatchChatController extends Controller
                 ? ' HS classification mode is active. Freightbook.ai has a server-side HS 2022 catalog containing 5,612 six-digit classifications. '
                     .($hsMatches !== []
                         ? 'The catalog search returned these candidates: '.json_encode($hsMatches, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).'. Use these records as the primary source, select the best fit from them, and explain briefly why it fits. If several remain plausible, ask for the one missing product fact that best separates them.'
-                        : 'No sufficiently relevant catalog candidate was found from the current wording yet. Ask for a more specific product description, material or composition, processing state, intended use, and country context; once enough detail is present, provide your best classification rather than refusing.')
+                        : 'No sufficiently relevant catalog candidate was found from the current wording. Use your HS expertise to provide the most likely six-digit code anyway, clearly state the assumptions and confidence, and ask only for the specific missing detail that could materially change that code. Never refuse.')
                 : '')
             .($shouldGenerateTitle
                 ? ' This is the first user message in a new general LenaAI chat. Start your reply with one line in the exact form [[CHAT_TITLE:title]], where title is a concise, meaningful 3 to 7 word chat title in the user\'s language based on their request. Do not use quotation marks, brackets, em dashes, or en dashes inside the title. The application saves this hidden title; never discuss it.'
