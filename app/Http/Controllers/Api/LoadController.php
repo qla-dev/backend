@@ -137,6 +137,7 @@ class LoadController extends CrudController
             'must_be_trackable' => ['sometimes', 'boolean'], 'is_urgent' => ['sometimes', 'boolean'], 'loading_methods' => ['nullable', 'array'],
             'toll_roads_included' => ['sometimes', 'boolean'], 'ferry_included' => ['sometimes', 'boolean'], 'cmr_required' => ['sometimes', 'boolean'],
             'pallet_exchange_required' => ['sometimes', 'boolean'], 'customs_required' => ['sometimes', 'boolean'],
+            'insurance_required' => ['sometimes', 'boolean'], 'certification_required' => ['sometimes', 'boolean'], 'inspection_services_required' => ['sometimes', 'boolean'],
             'vehicle_type' => ['nullable', 'string', 'max:100'], 'transport_mode' => ['nullable', 'string', 'max:120'], 'special_requirements' => ['nullable', 'array'], 'special_requirements.*' => ['string', 'max:255'], 'characteristics' => ['nullable', 'string', 'max:255'], 'delivery_proof' => ['nullable', 'string', 'max:30'],
             'body_types' => ['nullable', 'array'], 'contact' => ['nullable', 'array'], 'notes' => ['nullable', 'string'], 'internal_comments' => ['nullable', 'string'],
             'external_comments' => ['nullable', 'string'], 'published_at' => ['nullable', 'date'], 'completed_at' => ['nullable', 'date'],
