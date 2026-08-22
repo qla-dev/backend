@@ -29,7 +29,7 @@ class OpenRouterLoadScanner
         $userPrompt = 'Read a short title summarizing the load, the road/air/sea transport type, the cargo type (e.g. Pallets, Machinery, Electronics), the goods type/description, '
             .'the weight in kilograms, the pallet/unit count, the required trailer body type if stated, '
             .'dimensions and volume, required vehicle type, loading/unloading equipment, road or air handling characteristics, special requirements, transport mode, delivery proof requirement, whether tracking is required, '
-            .'the pickup city, country code, street address and date (plus a date-range end and time window if given), the delivery city, country code, street address and date (plus a date-range end and time window if given), '
+            .'the pickup city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), the delivery city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), '
             .'the currency, the agreed price or rate, whether the price is fixed or open to offers, the declared cargo value and its currency, '
             .'Incoterm, deferred payment days, temperature range, ADR, tail-lift, toll-road, ferry, CMR, pallet-exchange, customs and urgency requirements, contact name/phone/mobile/fax/email, '
             .'the booking or reference number, any other short notes that do not belong in a dedicated field, '
@@ -63,8 +63,8 @@ class OpenRouterLoadScanner
         $serverTimezone = (string) config('app.timezone', 'UTC');
         $userPrompt = 'The shipper described the load in their own words below. Extract a short title, the road/air/sea transport type, the cargo type '
             .'(e.g. Pallets, Machinery, Electronics), the goods type/description, the weight in kilograms, the pallet/unit count, '
-            .'the required trailer body type if stated, the pickup city, country code, street address and date (plus a date-range end and time window if given), '
-            .'the delivery city, country code, street address and date (plus a date-range end and time window if given), '
+            .'the required trailer body type if stated, the pickup city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), '
+            .'the delivery city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), '
             .'dimensions, volume, vehicle, loading/unloading equipment, road or air handling characteristics, special requirements, transport mode, delivery proof requirement, whether tracking is required, '
             .'the currency, agreed price or rate, whether the price is fixed or open to offers, the declared cargo value and its currency, '
             .'Incoterm, deferred payment days, temperature range, ADR, tail-lift, toll-road, ferry, CMR, pallet-exchange, customs, urgency, contact name/phone/mobile/fax/email, '
@@ -114,7 +114,7 @@ class OpenRouterLoadScanner
             .'Read the pallet or unit count as a plain number when the document states a quantity (e.g. "24 pallets" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
-            .'Read the street address separately from the city when one is given. If a pickup or delivery is a date range, put the start in the date field and the end in the matching "date to" field; read a stated time window into the matching "time from"/"time to" fields as HH:MM, 24-hour format. '
+            .'Read the street address separately from the city when one is given. Preserve explicit pickup or delivery latitude and longitude coordinates when supplied; otherwise return null for them. If a pickup or delivery is a date range, put the start in the date field and the end in the matching "date to" field; read a stated time window into the matching "time from"/"time to" fields as HH:MM, 24-hour format. '
             .'Read loading/unloading equipment only when explicitly stated, choosing exactly one of: Vehicle with ramp, Vehicle without ramp, Forklift: Yes, Forklift: No, Other loading/unloading equipment, Not specified - or an empty string if not stated. '
             .'Read road or air handling characteristics (e.g. ADR, CMR, GDP, TIR, Lift, Express for road; Non-DG, DG, TCG, MED, VAL for air) and any special requirements only when explicitly stated. Read the transport mode (e.g. "Airport to airport") and whether proof of delivery is required only for air/sea shipments when stated. Set requiresTracking to true only when live tracking is explicitly requested. '
             .'Read whether the price is fixed or open to negotiation/offers as priceTerms (fixed or negotiable) only when the document is explicit about it; otherwise leave it an empty string. Read a declared/insured cargo value and its currency separately from the freight price when stated. '
@@ -138,7 +138,7 @@ class OpenRouterLoadScanner
             .'Read the pallet or unit count as a plain number when a quantity is mentioned (e.g. "24 paleta" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
-            .'Read the street address separately from the city when one is given. If a pickup or delivery is a date range, put the start in the date field and the end in the matching "date to" field; read a stated time window into the matching "time from"/"time to" fields as HH:MM, 24-hour format. '
+            .'Read the street address separately from the city when one is given. Preserve explicit pickup or delivery latitude and longitude coordinates when supplied; otherwise return null for them. If a pickup or delivery is a date range, put the start in the date field and the end in the matching "date to" field; read a stated time window into the matching "time from"/"time to" fields as HH:MM, 24-hour format. '
             .'Read loading/unloading equipment only when explicitly stated, choosing exactly one of: Vehicle with ramp, Vehicle without ramp, Forklift: Yes, Forklift: No, Other loading/unloading equipment, Not specified - or an empty string if not stated. '
             .'Read road or air handling characteristics (e.g. ADR, CMR, GDP, TIR, Lift, Express for road; Non-DG, DG, TCG, MED, VAL for air) and any special requirements only when explicitly stated. Read the transport mode (e.g. "Airport to airport") and whether proof of delivery is required only for air/sea shipments when stated. Set requiresTracking to true only when live tracking is explicitly requested. '
             .'Read whether the price is fixed or open to negotiation/offers as priceTerms (fixed or negotiable) only when the message is explicit about it; otherwise leave it an empty string. Read a declared/insured cargo value and its currency separately from the freight price when stated. '
@@ -304,6 +304,8 @@ class OpenRouterLoadScanner
             'pickupCity' => $this->stringValue($result['pickupCity'] ?? ''),
             'pickupCountryCode' => strtoupper($this->stringValue($result['pickupCountryCode'] ?? '')),
             'pickupAddress' => $this->stringValue($result['pickupAddress'] ?? ''),
+            'pickupLatitude' => is_numeric($result['pickupLatitude'] ?? null) ? (float) $result['pickupLatitude'] : null,
+            'pickupLongitude' => is_numeric($result['pickupLongitude'] ?? null) ? (float) $result['pickupLongitude'] : null,
             'pickupDate' => $this->dateValue($result['pickupDate'] ?? ''),
             'pickupDateTo' => $this->dateValue($result['pickupDateTo'] ?? ''),
             'pickupTimeFrom' => $this->timeValue($result['pickupTimeFrom'] ?? ''),
@@ -311,6 +313,8 @@ class OpenRouterLoadScanner
             'deliveryCity' => $this->stringValue($result['deliveryCity'] ?? ''),
             'deliveryCountryCode' => strtoupper($this->stringValue($result['deliveryCountryCode'] ?? '')),
             'deliveryAddress' => $this->stringValue($result['deliveryAddress'] ?? ''),
+            'deliveryLatitude' => is_numeric($result['deliveryLatitude'] ?? null) ? (float) $result['deliveryLatitude'] : null,
+            'deliveryLongitude' => is_numeric($result['deliveryLongitude'] ?? null) ? (float) $result['deliveryLongitude'] : null,
             'deliveryDate' => $this->dateValue($result['deliveryDate'] ?? ''),
             'deliveryDateTo' => $this->dateValue($result['deliveryDateTo'] ?? ''),
             'deliveryTimeFrom' => $this->timeValue($result['deliveryTimeFrom'] ?? ''),
@@ -402,7 +406,7 @@ class OpenRouterLoadScanner
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['isDocument', 'title', 'transportType', 'cargoType', 'goodsType', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
+            'required' => ['isDocument', 'title', 'transportType', 'cargoType', 'goodsType', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupLatitude', 'pickupLongitude', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryLatitude', 'deliveryLongitude', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
             'properties' => [
                 'isDocument' => ['type' => 'boolean', 'description' => 'True only when the image shows a freight/shipping document.'],
                 'title' => ['type' => 'string'],
@@ -426,6 +430,8 @@ class OpenRouterLoadScanner
                 'pickupCity' => ['type' => 'string'],
                 'pickupCountryCode' => ['type' => 'string', 'description' => 'Two-letter ISO 3166-1 alpha-2 country code.'],
                 'pickupAddress' => ['type' => 'string', 'description' => 'Street address, separate from the city.'],
+                'pickupLatitude' => ['type' => ['number', 'null']],
+                'pickupLongitude' => ['type' => ['number', 'null']],
                 'pickupDate' => ['type' => 'string', 'description' => 'YYYY-MM-DD, or empty string if not stated.'],
                 'pickupDateTo' => ['type' => 'string', 'description' => 'YYYY-MM-DD end of a pickup date range, or empty string if not a range.'],
                 'pickupTimeFrom' => ['type' => 'string', 'description' => 'HH:MM 24-hour, or empty string if not stated.'],
@@ -433,6 +439,8 @@ class OpenRouterLoadScanner
                 'deliveryCity' => ['type' => 'string'],
                 'deliveryCountryCode' => ['type' => 'string', 'description' => 'Two-letter ISO 3166-1 alpha-2 country code.'],
                 'deliveryAddress' => ['type' => 'string', 'description' => 'Street address, separate from the city.'],
+                'deliveryLatitude' => ['type' => ['number', 'null']],
+                'deliveryLongitude' => ['type' => ['number', 'null']],
                 'deliveryDate' => ['type' => 'string', 'description' => 'YYYY-MM-DD, or empty string if not stated.'],
                 'deliveryDateTo' => ['type' => 'string', 'description' => 'YYYY-MM-DD end of a delivery date range, or empty string if not a range.'],
                 'deliveryTimeFrom' => ['type' => 'string', 'description' => 'HH:MM 24-hour, or empty string if not stated.'],
