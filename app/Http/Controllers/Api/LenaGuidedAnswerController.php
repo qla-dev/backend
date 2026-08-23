@@ -34,12 +34,15 @@ class LenaGuidedAnswerController extends Controller
     private const MULTI_VALUE_STEPS = ['specialRequirements', 'requirements'];
 
     // The steps applyAnswer() actually knows how to write into the draft (pill steps + the
-    // regex-masked numeric ones). Every other step is skip-only here.
+    // regex-masked numeric/date ones). Every other step is skip-only here.
     private const VALUE_CAPABLE_STEPS = [
         'transportType', 'bodyType', 'vehicleType', 'loadingEquipment', 'characteristics',
         'specialRequirements', 'transportMode', 'deliveryProof', 'priceTerms', 'terms',
         'requirements', 'contact', 'weight', 'pallets', 'dimensions', 'budget', 'declaredValue',
+        'pickupDate', 'deliveryDate',
     ];
+
+    private const DATE_STEPS = ['pickupDate', 'deliveryDate'];
 
     private const REQUIREMENT_FIELDS = [
         'ADR' => 'requiresAdr',
@@ -61,10 +64,10 @@ class LenaGuidedAnswerController extends Controller
         $validated = $request->validate([
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
             // Every LenaLoadQuestionnaire::STEPS key is accepted here, even the plain free-text
-            // ones with no value-setting logic below (title, goodsType, pickup, pickupDate,
-            // delivery, deliveryDate, notes, temperature) - those are only ever reachable through
-            // the universal "later" pill (see questionnaireSuggestions()' withLater([]) default),
-            // so they only ever arrive here with skip:true, guarded just below.
+            // ones with no value-setting logic below (title, goodsType, pickup, delivery, notes,
+            // temperature) - those are only ever reachable through the universal "later" pill (see
+            // questionnaireSuggestions()' withLater([]) default), so they only ever arrive here
+            // with skip:true, guarded just below.
             'step' => ['required', 'string', 'in:title,transportType,goodsType,weight,pallets,bodyType,dimensions,vehicleType,loadingEquipment,characteristics,specialRequirements,transportMode,deliveryProof,pickup,pickupDate,delivery,deliveryDate,budget,priceTerms,declaredValue,terms,temperature,requirements,contact,notes'],
             'value' => ['nullable', 'string'],
             'display_text' => ['required', 'string'],
@@ -76,6 +79,13 @@ class LenaGuidedAnswerController extends Controller
 
         if (! $skip && ! in_array($validated['step'], self::VALUE_CAPABLE_STEPS, true)) {
             return response()->json(['message' => 'This step can only be skipped here, not answered.', 'data' => null, 'meta' => [], 'errors' => []], 422);
+        }
+
+        // The frontend mask already constrains keystrokes to DD.MM.YYYY, but a structurally valid
+        // string can still name a calendar date that doesn't exist (e.g. 31.02.2026) - reject that
+        // here rather than silently confirming a value that was never actually saved.
+        if (! $skip && in_array($validated['step'], self::DATE_STEPS, true) && $this->parseGuidedDate((string) $validated['value']) === null) {
+            return response()->json(['message' => 'Please enter a valid date in DD.MM.YYYY format.', 'data' => null, 'meta' => [], 'errors' => []], 422);
         }
 
         $user = $request->user();
@@ -193,8 +203,33 @@ class LenaGuidedAnswerController extends Controller
             'pallets' => [...$draft, 'pallets' => (int) $value],
             'budget' => [...$draft, 'budget' => (float) $value],
             'declaredValue' => [...$draft, 'declaredValue' => (float) $value],
+            'pickupDate' => [...$draft, 'pickupDate' => $this->parseGuidedDate($value) ?? $draft['pickupDate'] ?? null],
+            'deliveryDate' => [...$draft, 'deliveryDate' => $this->parseGuidedDate($value) ?? $draft['deliveryDate'] ?? null],
             default => $draft,
         };
+    }
+
+    // "05.12.2026" (DD.MM.YYYY, matching the frontend mask) -> "2026-12-05" (the Y-m-d format
+    // every other date field in the draft already uses - see RelativeLoadDateResolver). Returns
+    // null for anything malformed, calendar-invalid (e.g. 31.02.2026), or outside a sane freight-
+    // planning window - the mask alone can't reject a structurally valid but nonsensical year like
+    // 2555, so that's bounded here instead. store() rejects a null result with a 422 before ever
+    // reaching here.
+    private function parseGuidedDate(string $value): ?string
+    {
+        if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', trim($value), $match) !== 1) {
+            return null;
+        }
+        [, $day, $month, $year] = $match;
+        if (! checkdate((int) $month, (int) $day, (int) $year)) {
+            return null;
+        }
+        $currentYear = (int) now()->format('Y');
+        if ((int) $year < $currentYear - 1 || (int) $year > $currentYear + 3) {
+            return null;
+        }
+
+        return sprintf('%04d-%02d-%02d', $year, $month, $day);
     }
 
     // "200x150x180" (length x width x height, meters) - each segment is optional so a partial

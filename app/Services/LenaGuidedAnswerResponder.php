@@ -120,6 +120,16 @@ class LenaGuidedAnswerResponder
             'de' => 'als Betrag, z. B. 850',
             'en' => 'as an amount, e.g. 850',
         ],
+        'pickupDate' => [
+            'bs' => 'u formatu DD.MM.GGGG, npr. 05.12.2026',
+            'de' => 'im Format TT.MM.JJJJ, z. B. 05.12.2026',
+            'en' => 'as DD.MM.YYYY, e.g. 05.12.2026',
+        ],
+        'deliveryDate' => [
+            'bs' => 'u formatu DD.MM.GGGG, npr. 07.12.2026',
+            'de' => 'im Format TT.MM.JJJJ, z. B. 07.12.2026',
+            'en' => 'as DD.MM.YYYY, e.g. 07.12.2026',
+        ],
     ];
 
     private function askStep(string $step, bool $hasOptions, string $lang): string
