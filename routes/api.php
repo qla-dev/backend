@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\LoadDraftController;
 use App\Http\Controllers\Api\LoadNoteController;
 use App\Http\Controllers\Api\LoadScanController;
 use App\Http\Controllers\Api\LoadStopController;
+use App\Http\Controllers\Api\MessageAttachmentController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\OfferController;
 use App\Http\Controllers\Api\RoleController;
@@ -97,6 +98,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
     Route::post('load-scans/text', [LoadScanController::class, 'scanText'])->middleware('throttle:10,1');
+    Route::post('message-attachments', [MessageAttachmentController::class, 'store'])->middleware('throttle:20,1');
+    Route::get('message-attachments/{conversation}/{filename}', [MessageAttachmentController::class, 'show'])
+        ->where('filename', '[a-f0-9\-]+\.[a-zA-Z0-9]+');
     Route::get('hs-codes', [HsCodeController::class, 'index'])->middleware('throttle:60,1');
 
     Route::middleware('role:company,superadmin')->group(function (): void {
