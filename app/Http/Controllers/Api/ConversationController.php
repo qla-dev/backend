@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\ScopesConversationAccess;
 use App\Http\Resources\EntityResource;
 use App\Models\Conversation;
+use App\Models\Message;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,9 +54,42 @@ class ConversationController extends CrudController
 
         $record = Conversation::query()->create($data);
         $record->participants()->attach($participantIds);
+
+        // A conversation created straight from a manually-started PostLoadModal draft (see
+        // PostLoadModal.tsx's saveDraft) has no prior chat history to greet the user with, unlike
+        // a LenaAI-originated draft which already backfills load_draft_id onto an existing,
+        // already-active conversation (DispatchChatController) rather than creating a new one.
+        if (! blank($data['load_draft_id'] ?? null)) {
+            $this->postDraftCreatedMessage($record, $request->user());
+        }
+
         $record->load($this->relations());
 
         return $this->success((new EntityResource($record))->resolve($request), 'Resource created successfully.', status: 201);
+    }
+
+    private function postDraftCreatedMessage(Conversation $conversation, ?User $user): void
+    {
+        $aiDispatcherId = User::query()->where('username', 'ai_dispatcher')->value('id');
+        if (! $aiDispatcherId) {
+            return;
+        }
+
+        $reference = $conversation->freightLoadDraft?->booking_reference;
+        $suffix = $reference ? ' '.$reference : '';
+        $bodies = [
+            'bs' => "Čestitamo, kreirali ste draft tereta{$suffix}! Možete nastaviti razgovor ovdje da ga dopunite, ili se vratiti kasnije da ga završite i objavite.",
+            'de' => "Herzlichen Glückwunsch, Sie haben einen Ladungsentwurf{$suffix} erstellt! Sie können hier weiterchatten, um ihn zu vervollständigen, oder später zurückkehren, um ihn fertigzustellen und zu veröffentlichen.",
+            'en' => "Congratulations, you created a load draft{$suffix}! You can keep chatting here to fill it in, or come back later to finish and post it.",
+        ];
+        $body = $bodies[$user?->language] ?? $bodies['en'];
+
+        Message::query()->create([
+            'conversation_id' => $conversation->id,
+            'sender_user_id' => $aiDispatcherId,
+            'body' => $body,
+            'sent_at' => now(),
+        ]);
     }
 
     public function show(Request $request, int $id): JsonResponse
