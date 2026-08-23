@@ -72,6 +72,20 @@ class DispatchChatController extends Controller
         // is still ambiguous and should keep asking permission first. Skip the "do you want to
         // start?" gate entirely for the document case and open the canvas immediately.
         $autoStartFromDocument = $detectedLoadCreationRequest && $this->messageHasCargoSignal($latestUserMessageModel);
+        // A second (or later) document dropped into an already in-progress draft must be treated as
+        // an update, not a restart: OpenRouterLoadScanner::mergeWithCurrent already preserves every
+        // field the new document doesn't address, so this only decides how the AI should announce
+        // it - a short "new info merged" line instead of re-explaining or re-confirming from scratch.
+        $latestMessageHasFileAttachment = $latestUserMessageModel && collect($latestUserMessageModel->attachments ?? [])
+            ->contains(fn ($attachment) => is_array($attachment)
+                && ($attachment['name'] ?? null) !== 'LenaAI conversation'
+                && is_array($attachment['loadScan'] ?? null));
+        $priorLoadDraft = $this->latestLoadDraft($conversation->messages->reject(
+            fn (Message $message) => $latestUserMessageModel && $message->is($latestUserMessageModel)
+        ));
+        $isMidDraftFileReupload = $wasCanvasEnabled
+            && $latestMessageHasFileAttachment
+            && ($priorLoadDraft['isDocument'] ?? false) === true;
         $titleRefinementTurn = $userMessages->count();
         $conversationSubject = trim((string) $conversation->subject);
         // The first message usually only selects a broad Lena mode. Keep the title open for the
@@ -187,6 +201,9 @@ class DispatchChatController extends Controller
                 : '')
             .($autoStartFromDocument
                 ? ' A document was just uploaded and its load data was already extracted into the draft below. Never ask whether they have a document to upload and never ask whether they want to start creating the load; that is already decided. Briefly announce, in the user\'s language, that you are starting the load draft from the document they provided, then continue directly with the next incomplete questionnaire step described below.'
+                : '')
+            .($isMidDraftFileReupload
+                ? ' A new document was just attached to a load draft that already had earlier answers collected. The server already merged the new document\'s data into the draft below without erasing anything from earlier turns. Do not re-explain, re-confirm, or restart any earlier step, and do not describe this as starting over. Say only one short sentence, in the user\'s language, stating that new information from the document was merged into the draft, then continue directly with the next incomplete questionnaire step described below. In Bosnian, that sentence must be exactly "Nove informacije o ovom teretu ažurirane iz dokumenta." In German, use "Neue Informationen zu dieser Ladung wurden aus dem Dokument aktualisiert."'
                 : '')
             .($canvasBlockedByExistingLoad
                 ? ' The user asked to post a new load while an existing load is already in context. Do not open the new-load canvas and do not suggest creating a duplicate. Tell them plainly, in their language, that this load already exists and is already in status '.$statusPlain.'.'

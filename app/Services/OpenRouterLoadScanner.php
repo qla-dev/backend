@@ -57,7 +57,9 @@ class OpenRouterLoadScanner
                 ], $images),
         ];
 
-        return $this->enrichHsCodes($this->run($this->documentSystemPrompt($current), $content, 'images'));
+        $result = $this->enrichHsCodes($this->run($this->documentSystemPrompt($current), $content, 'images'));
+
+        return $current === [] ? $result : $this->mergeWithCurrent($result, $current);
     }
 
     public function scanText(string $description, array $current = []): array
@@ -80,8 +82,9 @@ class OpenRouterLoadScanner
         $content = [['type' => 'text', 'text' => $userPrompt]];
 
         $result = $this->run($this->textSystemPrompt($current), $content, 'description');
+        $result = $this->enrichHsCodes($this->relativeDates->apply($description, $result, $current));
 
-        return $this->enrichHsCodes($this->relativeDates->apply($description, $result, $current));
+        return $current === [] ? $result : $this->mergeWithCurrent($result, $current);
     }
 
     private function currentDraftContext(array $current): string
@@ -104,6 +107,51 @@ class OpenRouterLoadScanner
             .'The customFields list works the same way: keep every existing entry from the current draft above and only append a new one or edit a matching one, never drop existing entries just because the new message does not mention them. '
             .'If the new message is not about the load at all (a question, a complaint, small talk, or anything with no new load information), '
             .'return the draft above completely unchanged and leave notes and customFields exactly as they already were; never place unrelated conversational text into notes or customFields.';
+    }
+
+    // Structured extraction naturally reports only what it saw in the latest input, defaulting
+    // everything else back to empty/0/false regardless of the "carry the current draft forward"
+    // instruction above - the prompt alone is not reliable enough to prevent data loss across turns.
+    // This deterministically restores any field the new result left empty/default when the existing
+    // draft already had a real value for it, so a second document (or a follow-up answer) can never
+    // silently wipe out earlier turns' answers.
+    private function mergeWithCurrent(array $result, array $current): array
+    {
+        // These describe THIS scan, not accumulated draft data, so they must always reflect
+        // what was actually just read - never backfilled from an earlier, unrelated scan.
+        $ownFields = ['isDocument', 'confidence', 'warnings'];
+
+        foreach ($current as $field => $value) {
+            if (! array_key_exists($field, $result) || in_array($field, $ownFields, true)) {
+                continue;
+            }
+
+            $resultIsEmpty = $field === 'title'
+                ? $this->isEmptyScanValue($result[$field]) || $result[$field] === 'New load'
+                : $this->isEmptyScanValue($result[$field]);
+
+            if ($resultIsEmpty && ! $this->isEmptyScanValue($value)) {
+                $result[$field] = $value;
+            }
+        }
+
+        if (is_array($current['customFields'] ?? null) && $current['customFields'] !== []) {
+            $existingLabels = collect($result['customFields'] ?? [])->pluck('label');
+            $result['customFields'] = collect($result['customFields'] ?? [])
+                ->concat(collect($current['customFields'])->reject(
+                    fn ($item) => is_array($item) && $existingLabels->contains($item['label'] ?? null)
+                ))
+                ->take(8)
+                ->values()
+                ->all();
+        }
+
+        return $result;
+    }
+
+    private function isEmptyScanValue(mixed $value): bool
+    {
+        return $value === '' || $value === 0 || $value === 0.0 || $value === false || $value === null || $value === [];
     }
 
     private function documentSystemPrompt(array $current = []): string
