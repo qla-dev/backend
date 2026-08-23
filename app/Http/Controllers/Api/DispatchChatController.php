@@ -67,6 +67,11 @@ class DispatchChatController extends Controller
                 || $this->mentionsCargoDetails($latestUserMessage)
                 || $this->messageHasCargoSignal($latestUserMessageModel)
             );
+        // A just-uploaded document already carries concrete, structured cargo data (the scanner
+        // itself flagged isDocument=true), unlike a bare text mention such as "100kg jabuka" which
+        // is still ambiguous and should keep asking permission first. Skip the "do you want to
+        // start?" gate entirely for the document case and open the canvas immediately.
+        $autoStartFromDocument = $detectedLoadCreationRequest && $this->messageHasCargoSignal($latestUserMessageModel);
         $titleRefinementTurn = $userMessages->count();
         $conversationSubject = trim((string) $conversation->subject);
         // The first message usually only selects a broad Lena mode. Keep the title open for the
@@ -101,7 +106,7 @@ class DispatchChatController extends Controller
             }
         }
         $contextLoad = $load ?? $matchedGeneralLoad;
-        $requestedLoadCanvas = in_array($guidedAction, ['add', 'start_add_yes'], true);
+        $requestedLoadCanvas = in_array($guidedAction, ['add', 'start_add_yes'], true) || $autoStartFromDocument;
         $canvasBlockedByExistingLoad = $requestedLoadCanvas && $load;
         $canvasEnabled = $wasCanvasEnabled;
         if ($canvasBlockedByExistingLoad || $guidedAction === 'continue_add_no') {
@@ -177,8 +182,11 @@ class DispatchChatController extends Controller
                 : ($canvasEnabled
                     ? ' Every questionnaire step is complete. Do not ask another load-field question. The application will show the ready-to-post card.'
                     : ''))
-            .($detectedLoadCreationRequest
+            .($detectedLoadCreationRequest && ! $autoStartFromDocument
                 ? ' The latest free-text message appears to request creation or posting of a load. Ask, in the user\'s language, whether they want to start creating the load, and end the reply with [[LENA_OPTIONS:start_add_yes,start_add_no]]. In Bosnian, ask exactly "Želite li da počnemo kreiranje tereta?" Do not say the builder or canvas is already open.'
+                : '')
+            .($autoStartFromDocument
+                ? ' A document was just uploaded and its load data was already extracted into the draft below. Never ask whether they have a document to upload and never ask whether they want to start creating the load; that is already decided. Briefly announce, in the user\'s language, that you are starting the load draft from the document they provided, then continue directly with the next incomplete questionnaire step described below.'
                 : '')
             .($canvasBlockedByExistingLoad
                 ? ' The user asked to post a new load while an existing load is already in context. Do not open the new-load canvas and do not suggest creating a duplicate. Tell them plainly, in their language, that this load already exists and is already in status '.$statusPlain.'.'
@@ -303,10 +311,10 @@ class DispatchChatController extends Controller
             $reply
         );
         $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
-        if (in_array($guidedAction, ['add', 'start_add_yes'], true) && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+        if (in_array($guidedAction, ['add', 'start_add_yes'], true) && ! $hasExistingLoadDraftData && ! str_contains($reply, '[[LENA_OPTIONS:')) {
             $reply .= "\n[[LENA_OPTIONS:upload_yes,upload_no]]";
         }
-        if ($detectedLoadCreationRequest && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+        if ($detectedLoadCreationRequest && ! $autoStartFromDocument && ! str_contains($reply, '[[LENA_OPTIONS:')) {
             $reply .= "\n[[LENA_OPTIONS:start_add_yes,start_add_no]]";
         }
         $hasTextReply = filled($reply);
