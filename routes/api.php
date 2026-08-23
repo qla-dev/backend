@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\LoadInvoiceDocumentController;
 use App\Http\Controllers\Api\LoadController;
 use App\Http\Controllers\Api\LoadDraftController;
+use App\Http\Controllers\Api\LenaGuidedAnswerController;
 use App\Http\Controllers\Api\LoadNoteController;
 use App\Http\Controllers\Api\LoadScanController;
 use App\Http\Controllers\Api\LoadStopController;
@@ -97,6 +98,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
+    Route::post('lena-guided-answer', [LenaGuidedAnswerController::class, 'store'])->middleware('throttle:30,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
     Route::post('load-scans/text', [LoadScanController::class, 'scanText'])->middleware('throttle:10,1');
     Route::post('message-attachments', [MessageAttachmentController::class, 'store'])->middleware('throttle:20,1');
