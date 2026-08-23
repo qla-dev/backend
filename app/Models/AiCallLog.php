@@ -14,6 +14,7 @@ class AiCallLog extends BaseModel
             'request_payload' => 'array',
             'response_payload' => 'array',
             'cost_usd' => 'decimal:6',
+            'temperature' => 'decimal:2',
         ];
     }
 

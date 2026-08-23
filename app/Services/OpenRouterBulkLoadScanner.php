@@ -103,6 +103,7 @@ class OpenRouterBulkLoadScanner
         $payload = $this->requestPayload($systemPrompt, $content);
         $startedAt = microtime(true);
         $lastResponseJson = null;
+        $lastHttpStatus = null;
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             try {
@@ -116,18 +117,19 @@ class OpenRouterBulkLoadScanner
                     ->post((string) config('services.openrouter.url'), $payload);
 
                 $lastResponseJson = $response->json();
+                $lastHttpStatus = $response->status();
                 $this->ensureSuccessful($response, $errorField);
                 $result = json_decode($this->outputText($lastResponseJson), true, 512, JSON_THROW_ON_ERROR);
                 if (! is_array($result)) {
                     throw new RuntimeException('The AI service returned an invalid scan result.');
                 }
 
-                $this->logCall($service, $payload, $lastResponseJson, $startedAt, true, null);
+                $this->logCall($service, $payload, $lastResponseJson, $lastHttpStatus, $attempt, $startedAt, true, null);
 
                 return $this->normalizeResult($result);
             } catch (ConnectionException|JsonException|RuntimeException|ValidationException $exception) {
                 if ($attempt === self::MAX_ATTEMPTS) {
-                    $this->logCall($service, $payload, $lastResponseJson, $startedAt, false, $exception->getMessage());
+                    $this->logCall($service, $payload, $lastResponseJson, $lastHttpStatus, $attempt, $startedAt, false, $exception->getMessage());
 
                     if ($exception instanceof ValidationException) {
                         throw $exception;
@@ -146,12 +148,16 @@ class OpenRouterBulkLoadScanner
         }
     }
 
-    private function logCall(string $service, array $payload, ?array $response, float $startedAt, bool $success, ?string $error): void
+    private function logCall(string $service, array $payload, ?array $response, ?int $httpStatus, int $attempt, float $startedAt, bool $success, ?string $error): void
     {
         $this->logger->record([
             'service' => $service,
             'conversation_id' => null,
             'model' => data_get($response, 'model', $payload['model']),
+            'provider' => data_get($response, 'provider'),
+            'generation_id' => data_get($response, 'id'),
+            'finish_reason' => data_get($response, 'choices.0.finish_reason'),
+            'temperature' => $payload['temperature'] ?? null,
             'has_attachment' => $service === 'bulk_scan',
             'is_success' => $success,
             'error_message' => $error,
@@ -160,8 +166,12 @@ class OpenRouterBulkLoadScanner
             'prompt_tokens' => data_get($response, 'usage.prompt_tokens'),
             'completion_tokens' => data_get($response, 'usage.completion_tokens'),
             'total_tokens' => data_get($response, 'usage.total_tokens'),
+            'cached_tokens' => data_get($response, 'usage.prompt_tokens_details.cached_tokens'),
+            'reasoning_tokens' => data_get($response, 'usage.completion_tokens_details.reasoning_tokens'),
             'cost_usd' => data_get($response, 'usage.cost'),
             'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            'http_status' => $httpStatus,
+            'attempt_count' => $attempt,
         ]);
     }
 
@@ -255,8 +265,8 @@ class OpenRouterBulkLoadScanner
             'title' => $this->stringValue($row['title'] ?? '', 'New load'),
             'cargoType' => $this->stringValue($row['cargoType'] ?? ''),
             'goodsType' => $this->stringValue($row['goodsType'] ?? ''),
-            'hsSearchTerms' => $hsSearchTerms,
-            'hsCodes' => $hsCodes,
+            'hsSearchTerms' => $this->stringValue($row['hsSearchTerms'] ?? ''),
+            'hsCodes' => [],
             'weightKg' => $this->numericValue($row['weightKg'] ?? 0),
             'pallets' => (int) $this->numericValue($row['pallets'] ?? 0),
             'bodyType' => $bodyType,

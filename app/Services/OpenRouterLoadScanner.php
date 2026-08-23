@@ -209,6 +209,7 @@ class OpenRouterLoadScanner
         $payload = $this->requestPayload($systemPrompt, $content);
         $startedAt = microtime(true);
         $lastResponseJson = null;
+        $lastHttpStatus = null;
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             try {
@@ -222,18 +223,19 @@ class OpenRouterLoadScanner
                     ->post((string) config('services.openrouter.url'), $payload);
 
                 $lastResponseJson = $response->json();
+                $lastHttpStatus = $response->status();
                 $this->ensureSuccessful($response, $errorField);
                 $result = json_decode($this->outputText($lastResponseJson), true, 512, JSON_THROW_ON_ERROR);
                 if (! is_array($result)) {
                     throw new RuntimeException('The AI service returned an invalid scan result.');
                 }
 
-                $this->logCall($service, $payload, $lastResponseJson, $conversationId, $hasAttachment, $startedAt, true, null);
+                $this->logCall($service, $payload, $lastResponseJson, $lastHttpStatus, $attempt, $conversationId, $hasAttachment, $startedAt, true, null);
 
                 return $this->normalizeResult($result);
             } catch (ConnectionException|JsonException|RuntimeException|ValidationException $exception) {
                 if ($attempt === self::MAX_ATTEMPTS) {
-                    $this->logCall($service, $payload, $lastResponseJson, $conversationId, $hasAttachment, $startedAt, false, $exception->getMessage());
+                    $this->logCall($service, $payload, $lastResponseJson, $lastHttpStatus, $attempt, $conversationId, $hasAttachment, $startedAt, false, $exception->getMessage());
 
                     if ($exception instanceof ValidationException) {
                         throw $exception;
@@ -252,12 +254,16 @@ class OpenRouterLoadScanner
         }
     }
 
-    private function logCall(string $service, array $payload, ?array $response, ?int $conversationId, bool $hasAttachment, float $startedAt, bool $success, ?string $error): void
+    private function logCall(string $service, array $payload, ?array $response, ?int $httpStatus, int $attempt, ?int $conversationId, bool $hasAttachment, float $startedAt, bool $success, ?string $error): void
     {
         $this->logger->record([
             'service' => $service,
             'conversation_id' => $conversationId,
             'model' => data_get($response, 'model', $payload['model']),
+            'provider' => data_get($response, 'provider'),
+            'generation_id' => data_get($response, 'id'),
+            'finish_reason' => data_get($response, 'choices.0.finish_reason'),
+            'temperature' => $payload['temperature'] ?? null,
             'has_attachment' => $hasAttachment,
             'is_success' => $success,
             'error_message' => $error,
@@ -266,8 +272,12 @@ class OpenRouterLoadScanner
             'prompt_tokens' => data_get($response, 'usage.prompt_tokens'),
             'completion_tokens' => data_get($response, 'usage.completion_tokens'),
             'total_tokens' => data_get($response, 'usage.total_tokens'),
+            'cached_tokens' => data_get($response, 'usage.prompt_tokens_details.cached_tokens'),
+            'reasoning_tokens' => data_get($response, 'usage.completion_tokens_details.reasoning_tokens'),
             'cost_usd' => data_get($response, 'usage.cost'),
             'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            'http_status' => $httpStatus,
+            'attempt_count' => $attempt,
         ]);
     }
 
