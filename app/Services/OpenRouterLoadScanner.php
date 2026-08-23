@@ -63,12 +63,30 @@ class OpenRouterLoadScanner
         return $current === [] ? $result : $this->mergeWithCurrent($result, $current);
     }
 
-    public function scanText(string $description, array $current = [], ?int $conversationId = null): array
+    // The exact field(s) each questionnaire step (see LenaLoadQuestionnaire::STEPS) writes to,
+    // used only to tell the scanner unambiguously which field a bare, context-free answer like
+    // "50" belongs to - see the pendingStep instruction in textSystemPrompt().
+    private const STEP_FIELD_HINTS = [
+        'title' => 'title',
+        'goodsType' => 'goodsType (and cargoType if a broader category is also stated)',
+        'weight' => 'weightKg (a plain number of kilograms - never pallets)',
+        'pallets' => 'pallets (a plain count of pallets/units - never weightKg)',
+        'dimensions' => 'lengthM, widthM, heightM (meters) and/or volumeM3',
+        'pickup' => 'pickupCity, pickupCountryCode, pickupAddress',
+        'pickupDate' => 'pickupDate (and pickupTimeFrom/pickupTimeTo if a time window is given)',
+        'delivery' => 'deliveryCity, deliveryCountryCode, deliveryAddress',
+        'deliveryDate' => 'deliveryDate (and deliveryTimeFrom/deliveryTimeTo if a time window is given)',
+        'budget' => 'budget (a plain price amount) and currency',
+        'declaredValue' => 'declaredValue (a plain amount) and declaredValueCurrency',
+        'temperature' => 'temperatureMin and/or temperatureMax (degrees Celsius)',
+        'notes' => 'notes',
+    ];
+
+    public function scanText(string $description, array $current = [], ?int $conversationId = null, ?string $pendingStep = null): array
     {
         $serverDate = now()->toDateString();
         $serverTimezone = (string) config('app.timezone', 'UTC');
-        $userPrompt = 'The shipper described the load in their own words below. Extract a short title, the road/air/sea transport type, the cargo type '
-            .'(e.g. Pallets, Machinery, Electronics), the goods type/description, the weight in kilograms, the pallet/unit count, '
+        $userPrompt = 'The shipper described the load in their own words below. Extract a short title, the road/air/sea transport type, the cargo type, the goods type/description, the weight in kilograms, the pallet/unit count, '
             .'the required trailer body type if stated, the pickup city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), '
             .'the delivery city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), '
             .'dimensions, volume, vehicle, loading/unloading equipment, road or air handling characteristics, special requirements, transport mode, delivery proof requirement, whether tracking is required, '
@@ -78,6 +96,10 @@ class OpenRouterLoadScanner
             .'and any distinct fact that should be tracked as its own separate custom item rather than folded into notes.'
             ."\n\nAuthoritative server date: {$serverDate} ({$serverTimezone}). Resolve every relative date from this date."
             .$this->currentDraftContext($current)
+            .($pendingStep && isset(self::STEP_FIELD_HINTS[$pendingStep])
+                ? "\n\nThe shipper's message below is specifically their answer to one single already-asked question, about exactly this field: ".self::STEP_FIELD_HINTS[$pendingStep].'. '
+                    .'If the message is a bare number or short value with no other identifying context, it belongs exclusively to that field - never guess it into a different field, and never leave that field empty when the message clearly answers it. Do not let this focus change or clear any other field the current draft above already has.'
+                : '')
             ."\n\nDescription:\n".$description;
 
         $content = [['type' => 'text', 'text' => $userPrompt]];

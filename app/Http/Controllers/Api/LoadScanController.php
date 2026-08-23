@@ -46,6 +46,7 @@ class LoadScanController extends Controller
             'description' => ['required', 'string', 'min:1', 'max:4000'],
             'current' => ['sometimes', 'nullable', 'array'],
             'conversation_id' => ['sometimes', 'nullable', 'integer', 'exists:conversations,id'],
+            'pending_step' => ['sometimes', 'nullable', 'string', 'max:40'],
         ], [
             'description.required' => 'Describe the load first.',
             'description.min' => 'Add a bit more detail about the load.',
@@ -60,7 +61,7 @@ class LoadScanController extends Controller
             ], 503);
         }
 
-        $result = $scanner->scanText($validated['description'], $validated['current'] ?? [], $validated['conversation_id'] ?? null);
+        $result = $scanner->scanText($validated['description'], $validated['current'] ?? [], $validated['conversation_id'] ?? null, $validated['pending_step'] ?? null);
 
         return response()->json(['message' => 'Description parsed.', 'data' => $result, 'meta' => [], 'errors' => []]);
     }
