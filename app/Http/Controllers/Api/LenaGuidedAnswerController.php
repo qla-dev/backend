@@ -137,7 +137,7 @@ class LenaGuidedAnswerController extends Controller
             'model' => 'freightbook/lena-1.0-alpha',
             'has_attachment' => false,
             'is_success' => true,
-            'request_payload' => ['step' => $validated['step'], 'value' => $skip ? null : $validated['value'], 'skip' => $skip, 'lang' => $lang],
+            'request_payload' => ['step' => $validated['step'], 'value' => $skip ? null : $validated['value'], 'display_text' => $validated['display_text'], 'skip' => $skip, 'lang' => $lang],
             'response_payload' => ['reply' => $replyText],
             'prompt_tokens' => 0,
             'completion_tokens' => 0,
