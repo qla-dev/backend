@@ -19,10 +19,11 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $roleLabels = ['superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'guest' => 'Guest', 'system' => 'AI Assistant'];
-        $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => $name === 'superadmin' ? ['*'] : [], 'is_active' => ! in_array($name, ['guest', 'system'], true)])]);
+        $roleLabels = ['master' => 'Master', 'superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'guest' => 'Guest', 'system' => 'AI Assistant'];
+        $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => in_array($name, Role::PROTECTED_NAMES, true) ? ['*'] : [], 'is_active' => ! in_array($name, ['guest', 'system'], true)])]);
 
         $accounts = [
+            'master_demo' => ['role' => 'master', 'name' => 'Master Admin'],
             'superadmin_demo' => ['role' => 'superadmin', 'name' => 'John Doe'],
             'customer_demo' => ['role' => 'user', 'name' => 'Demo Customer'],
             'driver_demo' => ['role' => 'driver', 'name' => 'Demo Driver'],

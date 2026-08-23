@@ -25,9 +25,10 @@ class OpenRouterLoadScanner
     public function __construct(
         private readonly RelativeLoadDateResolver $relativeDates,
         private readonly HsCodeSearchService $hsCodes,
+        private readonly AiCallLogger $logger,
     ) {}
 
-    public function scan(array $images, array $current = []): array
+    public function scan(array $images, array $current = [], ?int $conversationId = null): array
     {
         $userPrompt = 'Read a short title summarizing the load, the road/air/sea transport type, the cargo type (e.g. Pallets, Machinery, Electronics), the goods type/description, '
             .'the weight in kilograms, the pallet/unit count, the required trailer body type if stated, '
@@ -57,12 +58,12 @@ class OpenRouterLoadScanner
                 ], $images),
         ];
 
-        $result = $this->enrichHsCodes($this->run($this->documentSystemPrompt($current), $content, 'images'));
+        $result = $this->enrichHsCodes($this->run($this->documentSystemPrompt($current), $content, 'images', 'load_scan', $conversationId, true));
 
         return $current === [] ? $result : $this->mergeWithCurrent($result, $current);
     }
 
-    public function scanText(string $description, array $current = []): array
+    public function scanText(string $description, array $current = [], ?int $conversationId = null): array
     {
         $serverDate = now()->toDateString();
         $serverTimezone = (string) config('app.timezone', 'UTC');
@@ -81,7 +82,7 @@ class OpenRouterLoadScanner
 
         $content = [['type' => 'text', 'text' => $userPrompt]];
 
-        $result = $this->run($this->textSystemPrompt($current), $content, 'description');
+        $result = $this->run($this->textSystemPrompt($current), $content, 'description', 'load_scan_text', $conversationId, false);
         $result = $this->enrichHsCodes($this->relativeDates->apply($description, $result, $current));
 
         return $current === [] ? $result : $this->mergeWithCurrent($result, $current);
@@ -203,9 +204,11 @@ class OpenRouterLoadScanner
             .'Return only the fields requested in the JSON schema.';
     }
 
-    private function run(string $systemPrompt, array $content, string $errorField): array
+    private function run(string $systemPrompt, array $content, string $errorField, string $service, ?int $conversationId, bool $hasAttachment): array
     {
         $payload = $this->requestPayload($systemPrompt, $content);
+        $startedAt = microtime(true);
+        $lastResponseJson = null;
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             try {
@@ -218,15 +221,20 @@ class OpenRouterLoadScanner
                     ])
                     ->post((string) config('services.openrouter.url'), $payload);
 
+                $lastResponseJson = $response->json();
                 $this->ensureSuccessful($response, $errorField);
-                $result = json_decode($this->outputText($response->json()), true, 512, JSON_THROW_ON_ERROR);
+                $result = json_decode($this->outputText($lastResponseJson), true, 512, JSON_THROW_ON_ERROR);
                 if (! is_array($result)) {
                     throw new RuntimeException('The AI service returned an invalid scan result.');
                 }
 
+                $this->logCall($service, $payload, $lastResponseJson, $conversationId, $hasAttachment, $startedAt, true, null);
+
                 return $this->normalizeResult($result);
             } catch (ConnectionException|JsonException|RuntimeException|ValidationException $exception) {
                 if ($attempt === self::MAX_ATTEMPTS) {
+                    $this->logCall($service, $payload, $lastResponseJson, $conversationId, $hasAttachment, $startedAt, false, $exception->getMessage());
+
                     if ($exception instanceof ValidationException) {
                         throw $exception;
                     }
@@ -244,12 +252,32 @@ class OpenRouterLoadScanner
         }
     }
 
+    private function logCall(string $service, array $payload, ?array $response, ?int $conversationId, bool $hasAttachment, float $startedAt, bool $success, ?string $error): void
+    {
+        $this->logger->record([
+            'service' => $service,
+            'conversation_id' => $conversationId,
+            'model' => data_get($response, 'model', $payload['model']),
+            'has_attachment' => $hasAttachment,
+            'is_success' => $success,
+            'error_message' => $error,
+            'request_payload' => AiCallLogger::redactBase64($payload),
+            'response_payload' => $response,
+            'prompt_tokens' => data_get($response, 'usage.prompt_tokens'),
+            'completion_tokens' => data_get($response, 'usage.completion_tokens'),
+            'total_tokens' => data_get($response, 'usage.total_tokens'),
+            'cost_usd' => data_get($response, 'usage.cost'),
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ]);
+    }
+
     private function requestPayload(string $systemPrompt, array $content): array
     {
         return [
             'model' => config('services.openrouter.model'),
             'temperature' => 0,
             'provider' => ['require_parameters' => true],
+            'usage' => ['include' => true],
             'response_format' => [
                 'type' => 'json_schema',
                 'json_schema' => [

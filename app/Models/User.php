@@ -58,6 +58,11 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
 
+    public function isSuperAdminOrMaster(): bool
+    {
+        return in_array($this->role?->name, Role::PROTECTED_NAMES, true);
+    }
+
     public function companies(): BelongsToMany
     {
         return $this->belongsToMany(Company::class)->withPivot(['company_role', 'status', 'invited_by_user_id', 'joined_at'])->withTimestamps();

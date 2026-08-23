@@ -90,7 +90,7 @@ class LoadController extends CrudController
         // The freight marketplace (status=posted) is a shared pool every role browses to find
         // or offer work — only restrict visibility once a load has moved past that public
         // listing stage into an actual booking/relationship.
-        if (! $user || $role === 'superadmin' || $status === 'posted') {
+        if (! $user || $user->isSuperAdminOrMaster() || $status === 'posted') {
             return;
         }
 
@@ -167,7 +167,7 @@ class LoadController extends CrudController
         if ($request->user()?->role?->name === 'user') {
             $data['customer_user_id'] = $request->user()->id;
         }
-        if ($request->user()?->role?->name === 'superadmin') {
+        if ($request->user()?->isSuperAdminOrMaster()) {
             $demoCompanyId = Company::query()
                 ->where('slug', 'smartfreight-logistics-hub')
                 ->value('id');
@@ -201,7 +201,7 @@ class LoadController extends CrudController
         $load = DB::transaction(function () use ($request, $id, $data, $hasStops, $stops) {
             $load = Load::query()->findOrFail($id);
             if (array_key_exists('status', $data) && $data['status'] !== $load->status) {
-                abort_unless($request->user()?->role?->name === 'superadmin', 403, 'Only a superadmin can change a load status.');
+                abort_unless($request->user()?->isSuperAdminOrMaster(), 403, 'Only a superadmin can change a load status.');
             }
             $load->update($data);
             if ($hasStops) {
@@ -257,8 +257,8 @@ class LoadController extends CrudController
                 $companyId = $data['company_id'] ?? $myCompanyIds->first();
                 abort_unless($myCompanyIds->contains($companyId), 403, 'You can only book for your own company.');
                 $driverUserId = $this->resolveCompanyDriver($companyId, $data['driver_user_id'] ?? null);
-            } elseif ($role === 'superadmin') {
-                // Superadmin can dedicate the load to any company and/or any driver, or neither.
+            } elseif ($user->isSuperAdminOrMaster()) {
+                // Superadmin/master can dedicate the load to any company and/or any driver, or neither.
                 $companyId = $data['company_id'] ?? null;
                 $driverUserId = $companyId
                     ? $this->resolveCompanyDriver($companyId, $data['driver_user_id'] ?? null)

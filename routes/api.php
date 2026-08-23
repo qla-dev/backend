@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AiCallLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BulkLoadScanController;
 use App\Http\Controllers\Api\CompanyController;
@@ -65,15 +66,15 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('load-scans/bulk', [BulkLoadScanController::class, 'store'])->middleware('throttle:5,1');
     Route::post('load-scans/bulk/text', [BulkLoadScanController::class, 'scanText'])->middleware('throttle:5,1');
 
-    // Posting a load (creating it) is a customer action; superadmin keeps its usual override.
-    Route::middleware('role:user,superadmin')->group(function (): void {
+    // Posting a load (creating it) is a customer action; superadmin (and master) keeps its usual override.
+    Route::middleware('role:user,superadmin,master')->group(function (): void {
         Route::post('loads', [LoadController::class, 'store']);
         Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
     });
 
     // Instant-booking a posted, non-negotiable load. Drivers book for themselves; companies book
-    // for their company (optionally assigning a driver right away); superadmin can assign either.
-    Route::middleware('role:driver,company,superadmin')->group(function (): void {
+    // for their company (optionally assigning a driver right away); superadmin/master can assign either.
+    Route::middleware('role:driver,company,superadmin,master')->group(function (): void {
         Route::post('loads/{load}/book', [LoadController::class, 'book']);
     });
 
@@ -103,7 +104,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->where('filename', '[a-f0-9\-]+\.[a-zA-Z0-9]+');
     Route::get('hs-codes', [HsCodeController::class, 'index'])->middleware('throttle:60,1');
 
-    Route::middleware('role:company,superadmin')->group(function (): void {
+    Route::middleware('role:company,superadmin,master')->group(function (): void {
         Route::apiResources([
             'company-memberships' => CompanyMembershipController::class,
             'company-invitations' => CompanyInvitationController::class,
@@ -111,14 +112,14 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ]);
     });
 
-    Route::middleware('role:finance,company,superadmin')->group(function (): void {
+    Route::middleware('role:finance,company,superadmin,master')->group(function (): void {
         Route::apiResources([
             'invoices' => InvoiceController::class,
             'invoice-items' => InvoiceItemController::class,
         ]);
     });
 
-    Route::middleware('role:superadmin')->group(function (): void {
+    Route::middleware('role:superadmin,master')->group(function (): void {
         Route::patch('loads/{load}/status', [LoadController::class, 'updateStatus']);
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
@@ -135,5 +136,11 @@ Route::middleware('auth:sanctum')->group(function (): void {
             'email-campaigns' => EmailCampaignController::class,
             'email-campaign-recipients' => EmailCampaignRecipientController::class,
         ]);
+    });
+
+    // AI Stats is master-exclusive - superadmin does not get this screen (see plan: "above
+    // superadmin, has all same permissions + view of new screen").
+    Route::middleware('role:master')->group(function (): void {
+        Route::apiResource('ai-call-logs', AiCallLogController::class)->only(['index', 'show']);
     });
 });

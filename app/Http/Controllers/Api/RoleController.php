@@ -9,7 +9,7 @@ class RoleController extends CrudController
 {
     public function options(): JsonResponse
     {
-        $roles = Role::query()->where('is_active', true)->where('name', '!=', 'superadmin')
+        $roles = Role::query()->where('is_active', true)->whereNotIn('name', Role::PROTECTED_NAMES)
             ->orderBy('label')->get(['id', 'name', 'label']);
 
         return response()->json(['message' => 'Roles retrieved.', 'data' => $roles, 'meta' => [], 'errors' => []]);

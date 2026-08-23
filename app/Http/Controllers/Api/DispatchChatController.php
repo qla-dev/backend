@@ -277,7 +277,7 @@ class DispatchChatController extends Controller
             ->all();
 
         try {
-            $reply = $assistant->reply($systemPrompt, $history);
+            $reply = $assistant->reply($systemPrompt, $history, $conversation->id, $latestMessageHasFileAttachment);
         } catch (RuntimeException $exception) {
             return $this->unavailable($exception->getMessage());
         }
@@ -488,7 +488,7 @@ class DispatchChatController extends Controller
     private function scopeLoadsVisibleToUser(Builder $query, ?User $user): void
     {
         $role = $user?->role?->name;
-        if ($role === 'superadmin') {
+        if ($user?->isSuperAdminOrMaster()) {
             return;
         }
 

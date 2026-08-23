@@ -18,7 +18,10 @@ class OpenRouterBulkLoadScanner
 
     private const MAX_ROWS = 50;
 
-    public function __construct(private readonly HsCodeSearchService $hsCodes) {}
+    public function __construct(
+        private readonly HsCodeSearchService $hsCodes,
+        private readonly AiCallLogger $logger,
+    ) {}
 
     public function scan(array $images): array
     {
@@ -44,7 +47,7 @@ class OpenRouterBulkLoadScanner
                 ], $images),
         ];
 
-        return $this->run($this->documentSystemPrompt(), $content, 'images');
+        return $this->run($this->documentSystemPrompt(), $content, 'images', 'bulk_scan');
     }
 
     public function scanText(string $text): array
@@ -56,7 +59,7 @@ class OpenRouterBulkLoadScanner
 
         $content = [['type' => 'text', 'text' => $userPrompt]];
 
-        return $this->run($this->textSystemPrompt(), $content, 'text');
+        return $this->run($this->textSystemPrompt(), $content, 'text', 'bulk_scan_text');
     }
 
     private function documentSystemPrompt(): string
@@ -95,9 +98,11 @@ class OpenRouterBulkLoadScanner
             .'Return only the fields requested in the JSON schema.';
     }
 
-    private function run(string $systemPrompt, array $content, string $errorField): array
+    private function run(string $systemPrompt, array $content, string $errorField, string $service): array
     {
         $payload = $this->requestPayload($systemPrompt, $content);
+        $startedAt = microtime(true);
+        $lastResponseJson = null;
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             try {
@@ -110,15 +115,20 @@ class OpenRouterBulkLoadScanner
                     ])
                     ->post((string) config('services.openrouter.url'), $payload);
 
+                $lastResponseJson = $response->json();
                 $this->ensureSuccessful($response, $errorField);
-                $result = json_decode($this->outputText($response->json()), true, 512, JSON_THROW_ON_ERROR);
+                $result = json_decode($this->outputText($lastResponseJson), true, 512, JSON_THROW_ON_ERROR);
                 if (! is_array($result)) {
                     throw new RuntimeException('The AI service returned an invalid scan result.');
                 }
 
+                $this->logCall($service, $payload, $lastResponseJson, $startedAt, true, null);
+
                 return $this->normalizeResult($result);
             } catch (ConnectionException|JsonException|RuntimeException|ValidationException $exception) {
                 if ($attempt === self::MAX_ATTEMPTS) {
+                    $this->logCall($service, $payload, $lastResponseJson, $startedAt, false, $exception->getMessage());
+
                     if ($exception instanceof ValidationException) {
                         throw $exception;
                     }
@@ -136,19 +146,32 @@ class OpenRouterBulkLoadScanner
         }
     }
 
+    private function logCall(string $service, array $payload, ?array $response, float $startedAt, bool $success, ?string $error): void
+    {
+        $this->logger->record([
+            'service' => $service,
+            'conversation_id' => null,
+            'model' => data_get($response, 'model', $payload['model']),
+            'has_attachment' => $service === 'bulk_scan',
+            'is_success' => $success,
+            'error_message' => $error,
+            'request_payload' => AiCallLogger::redactBase64($payload),
+            'response_payload' => $response,
+            'prompt_tokens' => data_get($response, 'usage.prompt_tokens'),
+            'completion_tokens' => data_get($response, 'usage.completion_tokens'),
+            'total_tokens' => data_get($response, 'usage.total_tokens'),
+            'cost_usd' => data_get($response, 'usage.cost'),
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ]);
+    }
+
     private function requestPayload(string $systemPrompt, array $content): array
     {
-        $hsSearchTerms = $this->stringValue($row['hsSearchTerms'] ?? '') ?: $this->stringValue($row['goodsType'] ?? '');
-        $hsCodes = collect($this->hsCodes->search($hsSearchTerms, 5))->map(fn (array $match): array => [
-            'code' => $match['code'],
-            'description' => $match['description'],
-            'confidence' => $match['confidence'],
-        ])->all();
-
         return [
             'model' => config('services.openrouter.model'),
             'temperature' => 0,
             'provider' => ['require_parameters' => true],
+            'usage' => ['include' => true],
             'response_format' => [
                 'type' => 'json_schema',
                 'json_schema' => [
