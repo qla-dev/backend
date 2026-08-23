@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\LoadInvoiceDocumentController;
 use App\Http\Controllers\Api\LoadController;
+use App\Http\Controllers\Api\LoadDraftController;
 use App\Http\Controllers\Api\LoadNoteController;
 use App\Http\Controllers\Api\LoadScanController;
 use App\Http\Controllers\Api\LoadStopController;
@@ -85,6 +86,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'route-stops' => RouteStopController::class,
         'tracking-events' => TrackingEventController::class,
         'load-notes' => LoadNoteController::class,
+        'load-drafts' => LoadDraftController::class,
         'documents' => DocumentController::class,
         'conversations' => ConversationController::class,
         'messages' => MessageController::class,

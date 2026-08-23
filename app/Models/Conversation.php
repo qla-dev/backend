@@ -23,6 +23,11 @@ class Conversation extends BaseModel
         return $this->belongsTo(Load::class, 'load_id');
     }
 
+    public function freightLoadDraft(): BelongsTo
+    {
+        return $this->belongsTo(LoadDraft::class, 'load_draft_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');

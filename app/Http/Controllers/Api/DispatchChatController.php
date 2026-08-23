@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\EntityResource;
 use App\Models\Conversation;
 use App\Models\Load;
+use App\Models\LoadDraft;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\LenaLoadQuestionnaire;
@@ -109,7 +110,16 @@ class DispatchChatController extends Controller
             $canvasEnabled = true;
         }
         if ($canvasEnabled !== (bool) $conversation->canvas) {
-            $conversation->update(['canvas' => $canvasEnabled]);
+            $conversationUpdate = ['canvas' => $canvasEnabled];
+            // The moment cargo/load-creation intent turns canvas on, give the conversation a real,
+            // addressable draft row instead of only the ephemeral loadScan sitting in message
+            // attachments — the frontend can then explicitly save/resume/discard it (see
+            // PostLoadModal's "Spasi draft" / "Započni ponovo"). Left empty here; it only gets its
+            // fields populated when the frontend explicitly saves.
+            if ($canvasEnabled && ! $conversation->load_draft_id) {
+                $conversationUpdate['load_draft_id'] = LoadDraft::query()->create()->id;
+            }
+            $conversation->update($conversationUpdate);
         }
         $loadDraft = $this->latestLoadDraft($conversation->messages);
         // The scanner already flags isDocument=true whenever it recognized real freight/cargo

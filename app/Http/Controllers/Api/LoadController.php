@@ -127,6 +127,11 @@ class LoadController extends CrudController
             'cargo_type' => [$p, 'string', 'max:100'], 'goods_type' => ['nullable', 'string', 'max:100'],
             'hs_codes' => ['nullable', 'array', 'max:20'], 'hs_codes.*.code' => ['required', 'string', 'regex:/^\d{6}$/'],
             'hs_codes.*.description' => ['nullable', 'string', 'max:1000'], 'hs_codes.*.confidence' => ['nullable', 'numeric', 'between:0,1'],
+            // Laravel's validate() rebuilds arrays strictly from the rule paths defined here, so the
+            // chapter/heading context used to pick a category icon on the frontend must be listed
+            // explicitly or it is silently dropped even though the frontend sends it.
+            'hs_codes.*.chapterCode' => ['nullable', 'string', 'max:10'], 'hs_codes.*.chapterName' => ['nullable', 'string', 'max:255'],
+            'hs_codes.*.headingCode' => ['nullable', 'string', 'max:10'], 'hs_codes.*.headingName' => ['nullable', 'string', 'max:255'],
             'weight_kg' => [$p, 'numeric', 'min:0.01'],
             'length_m' => ['nullable', 'numeric', 'min:0'], 'width_m' => ['nullable', 'numeric', 'min:0'], 'height_m' => ['nullable', 'numeric', 'min:0'],
             'volume_m3' => ['nullable', 'numeric', 'min:0'], 'pallets' => ['nullable', 'integer', 'min:0'], 'quantity_measure' => ['nullable', 'string', 'max:255'],
