@@ -117,4 +117,17 @@ class ConversationController extends CrudController
 
         return $this->success((new EntityResource($record))->resolve($request), 'Resource updated successfully.');
     }
+
+    // The base CrudController::destroy() has no participant scoping at all, unlike show()/update()
+    // above - overridden here so a user can only delete a conversation they created or take part
+    // in. This is a soft delete (Conversation uses SoftDeletes): messages and any ai_call_logs
+    // audit rows are left completely untouched, since neither cascade fires on a plain UPDATE.
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $query = Conversation::query();
+        $this->scopeConversationToParticipant($query, $request->user()?->id);
+        $query->findOrFail($id)->delete();
+
+        return $this->success(null, 'Resource deleted successfully.');
+    }
 }

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\AiCallLog;
+use App\Models\Conversation;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AiCallLogController extends CrudController
@@ -54,5 +56,17 @@ class AiCallLogController extends CrudController
         if ($conversationId !== null && $conversationId !== '') {
             $query->where('conversation_id', (int) $conversationId);
         }
+    }
+
+    // Master-only cleanup tool, separate from the normal (soft) conversation delete: permanently
+    // removes both the ai_call_logs audit rows AND the conversation itself (which, unlike a plain
+    // soft-delete, force-deletes for real and lets the DB cascade the conversation's messages too)
+    // - for deliberately purging test/junk conversations out of AI Stats, not an everyday action.
+    public function purgeConversation(int $conversation): JsonResponse
+    {
+        AiCallLog::query()->where('conversation_id', $conversation)->delete();
+        Conversation::withTrashed()->whereKey($conversation)->first()?->forceDelete();
+
+        return $this->success(null, 'Conversation and its AI call logs were permanently deleted.');
     }
 }

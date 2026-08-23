@@ -96,7 +96,7 @@ abstract class CrudController extends Controller
         return $this->success((new EntityResource($record))->resolve($request), 'Resource updated successfully.');
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
         $model = $this->modelClass();
         $model::query()->findOrFail($id)->delete();

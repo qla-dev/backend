@@ -5,9 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Conversation extends BaseModel
 {
+    use SoftDeletes;
+
     protected function casts(): array
     {
         return ['canvas' => 'boolean', 'last_message_at' => 'datetime'];

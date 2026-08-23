@@ -144,5 +144,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // superadmin, has all same permissions + view of new screen").
     Route::middleware('role:master')->group(function (): void {
         Route::apiResource('ai-call-logs', AiCallLogController::class)->only(['index', 'show']);
+        Route::delete('ai-call-logs/conversation/{conversation}', [AiCallLogController::class, 'purgeConversation']);
     });
 });
