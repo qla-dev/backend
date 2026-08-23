@@ -13,6 +13,7 @@ use App\Services\LenaGuidedAnswerResponder;
 use App\Services\LenaLoadQuestionnaire;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 // Handles questionnaire steps the user answered by clicking one of the offered pills (a fixed,
 // already-known value, or "choose later") instead of typing free text. Because the value is
@@ -92,7 +93,12 @@ class LenaGuidedAnswerController extends Controller
 
         $messagesForStep = $conversation->messages->push($userMessage);
         $nextStep = $questionnaire->nextStep($draft, $messagesForStep, (int) $aiDispatcherId);
-        $replyText = $responder->respond($validated['step'], $lang, $skip ? null : $validated['display_text'], $nextStep);
+        // "Current user" resolves to the actual account name in the draft (see applyAnswer) - the
+        // confirmation sentence should reflect that same resolved value, not the literal pill label.
+        $confirmedValue = $validated['step'] === 'contact' && $validated['value'] === 'Current user'
+            ? ($draft['contactName'] ?? $validated['display_text'])
+            : $validated['display_text'];
+        $replyText = $responder->respond($validated['step'], $lang, $skip ? null : $confirmedValue, $nextStep);
 
         $assistantMessage = Message::query()->create([
             'conversation_id' => $conversation->id,
@@ -160,7 +166,7 @@ class LenaGuidedAnswerController extends Controller
         };
     }
 
-    private function latestLoadDraft(\Illuminate\Support\Collection $messages): array
+    private function latestLoadDraft(Collection $messages): array
     {
         foreach ($messages->sortByDesc('sent_at') as $message) {
             foreach (array_reverse($message->attachments ?? []) as $attachment) {

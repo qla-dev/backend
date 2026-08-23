@@ -81,9 +81,13 @@ class LenaGuidedAnswerResponder
             };
         }
 
-        // A pill label like "Zračni" reads more naturally lower-cased mid-sentence than as the
-        // capitalized button text it was shown as.
-        $value = mb_strtolower(mb_substr($answeredValue, 0, 1)).mb_substr($answeredValue, 1);
+        // Only transportType and priceTerms show a translated, grammatically lower-case adjective
+        // as their pill label (e.g. "Zračni", "Fiksna cijena") - lower-casing it here matches how
+        // it reads mid-sentence. Every other step's value is either an English catalog term
+        // (Curtain, ADR, Cargo Van) or a real name (contact), both of which must keep their casing.
+        $value = in_array($step, ['transportType', 'priceTerms'], true)
+            ? mb_strtolower(mb_substr($answeredValue, 0, 1)).mb_substr($answeredValue, 1)
+            : $answeredValue;
 
         return match ($lang) {
             'bs' => "{$prefix}! Spasila sam {$label} kao {$value}.",
@@ -91,6 +95,32 @@ class LenaGuidedAnswerResponder
             default => "{$prefix}! I saved {$label} as {$value}.",
         };
     }
+
+    // Free-text steps with a specific expected shape (a unit, or a multi-part format like
+    // length x width x height) get a concrete format hint and a real example appended to the
+    // question, so the user never has to guess how LenaAI wants the value typed.
+    private const FORMAT_HINTS = [
+        'dimensions' => [
+            'bs' => 'u formatu dužina x širina x visina, npr. 2x1.5x1.8',
+            'de' => 'im Format Länge x Breite x Höhe, z. B. 2x1.5x1.8',
+            'en' => 'as length x width x height, e.g. 2x1.5x1.8',
+        ],
+        'weight' => [
+            'bs' => 'u kilogramima, npr. 1200',
+            'de' => 'in Kilogramm, z. B. 1200',
+            'en' => 'in kilograms, e.g. 1200',
+        ],
+        'pallets' => [
+            'bs' => 'kao broj, npr. 24',
+            'de' => 'als Zahl, z. B. 24',
+            'en' => 'as a number, e.g. 24',
+        ],
+        'budget' => [
+            'bs' => 'kao iznos, npr. 850',
+            'de' => 'als Betrag, z. B. 850',
+            'en' => 'as an amount, e.g. 850',
+        ],
+    ];
 
     private function askStep(string $step, bool $hasOptions, string $lang): string
     {
@@ -104,10 +134,12 @@ class LenaGuidedAnswerResponder
             };
         }
 
+        $hint = self::FORMAT_HINTS[$step][$lang] ?? self::FORMAT_HINTS[$step]['en'] ?? null;
+
         return match ($lang) {
-            'bs' => "Molimo, unesite {$label}.",
-            'de' => "Bitte geben Sie {$label} ein.",
-            default => "Please enter {$label}.",
+            'bs' => $hint ? "Molimo, unesite {$label} {$hint}." : "Molimo, unesite {$label}.",
+            'de' => $hint ? "Bitte geben Sie {$label} {$hint} ein." : "Bitte geben Sie {$label} ein.",
+            default => $hint ? "Please enter {$label} {$hint}." : "Please enter {$label}.",
         };
     }
 

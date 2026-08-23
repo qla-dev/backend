@@ -195,7 +195,10 @@ class DispatchChatController extends Controller
                 ? ' The next incomplete questionnaire step is "'.$nextLoadStep['key'].'": ask for '.$nextLoadStep['description'].'. '
                     .($nextLoadStep['hasOptions']
                         ? 'The application already shows the valid choices for this step as buttons directly below your message, so do not list, name, or restate those specific option values yourself in the question - that is redundant and less intuitive than just pointing at the buttons. Phrase it generically instead, in the style of "Odaberite tip transporta od ponuđenih opcija." (adapt the field name and grammar to this step, and translate naturally into the user\'s language). '
-                        : 'This step is answered by typing a value, not by buttons, so ask for it directly and name the expected unit or format when there is one (e.g. kilograms, a date), in the style of "Unesite težinu tereta u kg." (adapt the field and unit to this step, and translate naturally into the user\'s language). ')
+                        : 'This step is answered by typing a value, not by buttons, so ask for it directly and name the expected unit or format when there is one (e.g. kilograms, a date), in the style of "Unesite težinu tereta u kg." (adapt the field and unit to this step, and translate naturally into the user\'s language). '
+                            .($nextLoadStep['key'] === 'dimensions'
+                                ? 'Explicitly give the expected format and a concrete numeric example, in the style of "Unesite dimenzije tereta u formatu dužina x širina x visina, npr. 2x1.5x1.8." (translate naturally, keep the "npr./z.B./e.g." example). '
+                                : ''))
                     .'After the question, end the reply with exactly [[LENA_STEP:'.$nextLoadStep['key'].']] on its own line. Do not ask any later step yet and do not emit LOAD_READY_TO_POST.'
                 : ($canvasEnabled
                     ? ' Every questionnaire step is complete. Do not ask another load-field question. The application will show the ready-to-post card.'

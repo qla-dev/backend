@@ -37,6 +37,11 @@ class AiCallLogController extends CrudController
             $query->where('service', $service);
         }
 
+        $model = trim((string) $request->query('model', ''));
+        if ($model !== '') {
+            $query->where('model', $model);
+        }
+
         if ($request->query('has_attachment') !== null) {
             $query->where('has_attachment', $request->boolean('has_attachment'));
         }
