@@ -140,10 +140,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ]);
     });
 
-    // AI Stats is master-exclusive - superadmin does not get this screen (see plan: "above
-    // superadmin, has all same permissions + view of new screen").
-    Route::middleware('role:master')->group(function (): void {
+    // AI Stats is viewable by superadmin too, but permanently purging a conversation stays
+    // master-exclusive.
+    Route::middleware('role:master,superadmin')->group(function (): void {
         Route::apiResource('ai-call-logs', AiCallLogController::class)->only(['index', 'show']);
+    });
+    Route::middleware('role:master')->group(function (): void {
         Route::delete('ai-call-logs/conversation/{conversation}', [AiCallLogController::class, 'purgeConversation']);
     });
 });

@@ -142,7 +142,10 @@ class LenaGuidedAnswerController extends Controller
             'prompt_tokens' => 0,
             'completion_tokens' => 0,
             'total_tokens' => 0,
-            'cost_usd' => 0,
+            // A flat notional rate, not a real OpenRouter charge (there is none - see the class
+            // docblock) - keeps this service showing a non-zero cost in AI Stats' totals instead
+            // of looking like a free-for-everyone loophole.
+            'cost_usd' => 0.01,
             'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             'http_status' => 200,
         ]);
