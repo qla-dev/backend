@@ -15,20 +15,31 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
-// Handles questionnaire steps the user answered by clicking one of the offered pills (a fixed,
-// already-known value, or "choose later") instead of typing free text. Because the value is
-// already known and valid, this never calls OpenRouter: the draft field is set deterministically,
-// a human-sounding confirmation is built from LenaGuidedAnswerResponder, and a $0 audit row is
-// still written to ai_call_logs so AI Stats keeps a complete record of every questionnaire turn.
-// Free-text answers (anything typed instead of clicked) still go through DispatchChatController
-// + the OpenRouterLoadScanner AI pipeline as before, since those need real normalization.
+// Handles questionnaire steps the user answered with an already-unambiguous value - either a
+// clicked pill (a fixed, already-known value, or "choose later"), or free text typed through one
+// of the chat input's regex-constrained fields (see lenaStepInputMask.ts: weight/pallets are
+// digits-only, dimensions is a strict LxWxH digit/x pattern, budget/declaredValue are decimal-only
+// - so by the time it reaches here there is nothing left for an AI to normalize). Because the
+// value is already known and valid, this never calls OpenRouter: the draft field is set
+// deterministically, a human-sounding confirmation is built from LenaGuidedAnswerResponder, and a
+// $0 audit row is still written to ai_call_logs so AI Stats keeps a complete record of every turn.
+// Every other free-text step (title, goodsType, pickup/delivery, notes, ...) still goes through
+// DispatchChatController + the OpenRouterLoadScanner AI pipeline, since those genuinely need real
+// language understanding to normalize.
 class LenaGuidedAnswerController extends Controller
 {
     use ScopesConversationAccess;
 
-    // Only steps the frontend renders as real selectable pills (see questionnaireSuggestions() in
-    // useLenaEmbeddedMessages.tsx) are handled here; everything else must go through the AI path.
+    // Multi-select pill steps only - a comma-joined list of chosen labels, not a single value.
     private const MULTI_VALUE_STEPS = ['specialRequirements', 'requirements'];
+
+    // The steps applyAnswer() actually knows how to write into the draft (pill steps + the
+    // regex-masked numeric ones). Every other step is skip-only here.
+    private const VALUE_CAPABLE_STEPS = [
+        'transportType', 'bodyType', 'vehicleType', 'loadingEquipment', 'characteristics',
+        'specialRequirements', 'transportMode', 'deliveryProof', 'priceTerms', 'terms',
+        'requirements', 'contact', 'weight', 'pallets', 'dimensions', 'budget', 'declaredValue',
+    ];
 
     private const REQUIREMENT_FIELDS = [
         'ADR' => 'requiresAdr',
@@ -49,7 +60,12 @@ class LenaGuidedAnswerController extends Controller
     {
         $validated = $request->validate([
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
-            'step' => ['required', 'string', 'in:transportType,bodyType,vehicleType,loadingEquipment,characteristics,specialRequirements,transportMode,deliveryProof,priceTerms,terms,requirements,contact'],
+            // Every LenaLoadQuestionnaire::STEPS key is accepted here, even the plain free-text
+            // ones with no value-setting logic below (title, goodsType, pickup, pickupDate,
+            // delivery, deliveryDate, notes, temperature) - those are only ever reachable through
+            // the universal "later" pill (see questionnaireSuggestions()' withLater([]) default),
+            // so they only ever arrive here with skip:true, guarded just below.
+            'step' => ['required', 'string', 'in:title,transportType,goodsType,weight,pallets,bodyType,dimensions,vehicleType,loadingEquipment,characteristics,specialRequirements,transportMode,deliveryProof,pickup,pickupDate,delivery,deliveryDate,budget,priceTerms,declaredValue,terms,temperature,requirements,contact,notes'],
             'value' => ['nullable', 'string'],
             'display_text' => ['required', 'string'],
             'skip' => ['required', 'boolean'],
@@ -57,6 +73,10 @@ class LenaGuidedAnswerController extends Controller
         ]);
         $lang = $validated['lang'] ?? 'en';
         $skip = $validated['skip'];
+
+        if (! $skip && ! in_array($validated['step'], self::VALUE_CAPABLE_STEPS, true)) {
+            return response()->json(['message' => 'This step can only be skipped here, not answered.', 'data' => null, 'meta' => [], 'errors' => []], 422);
+        }
 
         $user = $request->user();
         if (! $this->userIsConversationParticipant($validated['conversation_id'], $user?->id)) {
@@ -151,6 +171,10 @@ class LenaGuidedAnswerController extends Controller
             return $draft;
         }
 
+        if ($step === 'dimensions') {
+            return $this->applyDimensions($draft, $value);
+        }
+
         return match ($step) {
             'transportType' => [...$draft, 'transportType' => $value],
             'bodyType' => [...$draft, 'bodyType' => $value],
@@ -162,8 +186,29 @@ class LenaGuidedAnswerController extends Controller
             'priceTerms' => [...$draft, 'priceTerms' => $value],
             'terms' => [...$draft, 'incoterm' => $value],
             'contact' => [...$draft, 'contactName' => $value === 'Current user' ? ($user?->name ?? $value) : $value],
+            'weight' => [...$draft, 'weightKg' => (float) $value],
+            'pallets' => [...$draft, 'pallets' => (int) $value],
+            'budget' => [...$draft, 'budget' => (float) $value],
+            'declaredValue' => [...$draft, 'declaredValue' => (float) $value],
             default => $draft,
         };
+    }
+
+    // "200x150x180" (length x width x height, meters) - each segment is optional so a partial
+    // answer (e.g. just "200") still sets whatever it can, matching how the AI-driven path already
+    // treats any single positive dimension as enough to satisfy this step.
+    private function applyDimensions(array $draft, string $value): array
+    {
+        $segments = array_map('trim', explode('x', strtolower($value)));
+        $fields = ['lengthM', 'widthM', 'heightM'];
+
+        foreach ($fields as $index => $field) {
+            if (isset($segments[$index]) && is_numeric($segments[$index])) {
+                $draft[$field] = (float) $segments[$index];
+            }
+        }
+
+        return $draft;
     }
 
     private function latestLoadDraft(Collection $messages): array

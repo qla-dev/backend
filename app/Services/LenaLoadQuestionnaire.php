@@ -132,7 +132,11 @@ class LenaLoadQuestionnaire
             'priceTerms' => in_array($draft['priceTerms'] ?? '', ['fixed', 'negotiable'], true),
             'declaredValue' => $positive('declaredValue'),
             'terms' => $filled('incoterm') || $positive('paymentDueDays'),
-            'temperature' => ($draft['temperatureMin'] ?? null) !== null || ($draft['temperatureMax'] ?? null) !== null,
+            // Both ends of the range are required, not just one - a range half-answered with only
+            // a minimum must keep this step pending rather than letting the server's own next-step
+            // marker silently jump ahead while a reply is still mid-way through asking for the
+            // maximum (the user can still explicitly skip the rest via [[LENA_SKIP:temperature]]).
+            'temperature' => ($draft['temperatureMin'] ?? null) !== null && ($draft['temperatureMax'] ?? null) !== null,
             'requirements' => $true('requiresAdr') || $true('requiresTailLift') || $true('tollRoadsIncluded') || $true('ferryIncluded') || $true('cmrRequired') || $true('palletExchangeRequired') || $true('customsRequired') || $true('insuranceRequired') || $true('certificationRequired') || $true('inspectionServicesRequired') || $true('isUrgent') || $true('requiresTracking'),
             'contact' => $filled('contactName') || $filled('contactPhone') || $filled('contactMobile') || $filled('contactFax') || $filled('contactEmail'),
             'notes' => $filled('notes') || $filled('bookingReference') || ! empty($draft['customFields']),
