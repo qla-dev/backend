@@ -162,7 +162,7 @@ class OpenRouterLoadScanner
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is shown, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'Read the cargo weight in kilograms, converting from other units if the document states them explicitly (e.g. lbs, tons). '
-            .'For any identifiable goods, return a short hsSearchTerms phrase in English using the product, material, processing state, and intended use visible in the document. Preserve any explicitly printed six-digit HS codes in hsCodes. '
+            .'For any identifiable goods, return hsSearchTerms as a short English catalog search phrase (product, material, processing state, intended use) for each distinct product visible in the document, separated by semicolons when there is more than one; try to identify every distinct product, not just the main or first one, so each can get its own HS code immediately, without waiting for a later message. A single phrase is fine when only one product is shown. Preserve any explicitly printed six-digit HS codes in hsCodes. '
             .'Read the pallet or unit count as a plain number when the document states a quantity (e.g. "24 pallets" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
@@ -187,7 +187,7 @@ class OpenRouterLoadScanner
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is mentioned, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'The user may give a raw date or a relative date. Resolve danas/today/heute as the server date, sutra/tomorrow/morgen as server date plus 1 day, prekosutra/day after tomorrow/übermorgen as server date plus 2 days, and "za N dana"/"in N days"/"in N Tagen" as server date plus N days. Never infer the year from model knowledge or training data. '
             .'Read the cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
-            .'For any identifiable goods, return a short hsSearchTerms phrase in English using the product, material, processing state, and intended use stated by the user. Preserve any explicitly stated six-digit HS codes in hsCodes. '
+            .'For any identifiable goods, return hsSearchTerms as a short English catalog search phrase (product, material, processing state, intended use) for each distinct product stated by the user, separated by semicolons when there is more than one; try to identify every distinct product, not just the main or first one. A single phrase is fine when only one product is mentioned. Preserve any explicitly stated six-digit HS codes in hsCodes. '
             .'Read the pallet or unit count as a plain number when a quantity is mentioned (e.g. "24 paleta" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
@@ -449,20 +449,32 @@ class OpenRouterLoadScanner
             ->all();
     }
 
+    // Runs one catalog search per distinct product the extraction found (hsSearchTerms lists them
+    // semicolon-separated, see documentSystemPrompt/textSystemPrompt) so a document or message that
+    // mentions several different goods gets a matching code for each of them immediately, at scan
+    // time, rather than only the single dominant product - the caller no longer needs a follow-up
+    // text turn (or the separate "hs" guided chat mode) just to surface the rest.
     private function enrichHsCodes(array $result): array
     {
-        $query = trim((string) ($result['hsSearchTerms'] ?: $result['goodsType'] ?? ''));
-        $matches = $query === '' ? [] : $this->hsCodes->search($query, 5);
-        $catalogCodes = collect($matches)->map(fn (array $match): array => [
-            'code' => $match['code'],
-            'description' => $match['description'],
-            'confidence' => $match['confidence'],
-        ]);
+        $rawTerms = trim((string) ($result['hsSearchTerms'] ?: $result['goodsType'] ?? ''));
+        $terms = collect(preg_split('/[;\n]+/', $rawTerms))
+            ->map(fn ($term) => trim((string) $term))
+            ->filter(fn ($term) => $term !== '')
+            ->unique()
+            ->take(5);
+
+        $catalogCodes = $terms
+            ->flatMap(fn ($term) => $this->hsCodes->search($term, 3))
+            ->map(fn (array $match): array => [
+                'code' => $match['code'],
+                'description' => $match['description'],
+                'confidence' => $match['confidence'],
+            ]);
 
         $result['hsCodes'] = collect($result['hsCodes'] ?? [])
             ->concat($catalogCodes)
             ->unique('code')
-            ->take(5)
+            ->take(10)
             ->values()
             ->all();
 
@@ -512,7 +524,7 @@ class OpenRouterLoadScanner
                 'transportType' => ['type' => 'string', 'enum' => [...self::TRANSPORT_TYPES, ''], 'description' => 'road, air, or sea, or empty string if not stated.'],
                 'cargoType' => ['type' => 'string'],
                 'goodsType' => ['type' => 'string'],
-                'hsSearchTerms' => ['type' => 'string', 'description' => 'Short English catalog search phrase for the identifiable goods, including material, processing state, and intended use when known.'],
+                'hsSearchTerms' => ['type' => 'string', 'description' => 'One short English catalog search phrase (material, processing state, intended use when known) per distinct product; separate multiple products with semicolons so each gets its own HS code lookup.'],
                 'hsCodes' => [
                     'type' => 'array',
                     'maxItems' => 10,

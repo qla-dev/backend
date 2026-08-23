@@ -7,44 +7,50 @@ use Illuminate\Support\Collection;
 
 class LenaLoadQuestionnaire
 {
+    // 'options' marks steps the frontend renders with real selectable-choice buttons (see
+    // questionnaireSuggestions() in useLenaEmbeddedMessages.tsx) rather than just a free-text
+    // input - DispatchChatController uses this to stop the AI restating those option values in
+    // its own question text (redundant with the buttons already shown) and to phrase free-input
+    // steps as a direct "enter this value" ask instead. Descriptions here were trimmed to match:
+    // they used to spell out the exact option words, which is what caused the restating.
     private const STEPS = [
-        'title' => 'a short load title',
-        'transportType' => 'the transport type: road, air, or sea',
-        'goodsType' => 'the goods or cargo type',
-        'weight' => 'the cargo weight in kilograms',
-        'pallets' => 'the pallet or unit count, including zero or none',
-        'bodyType' => 'the trailer or body type, or whether none is required',
-        'dimensions' => 'the dimensions or volume, or whether they are unknown/not needed',
-        'vehicleType' => 'the required vehicle type, or whether there is no preference',
-        'loadingEquipment' => 'loading or unloading equipment requirements, or none',
-        'characteristics' => 'transport characteristics such as ADR, CMR, GDP, TIR, Lift, Express, or none',
-        'specialRequirements' => 'one or more special requirements or notes, or none; explicitly mention that multiple options may be selected',
-        'transportMode' => 'the air/sea transport mode, or none',
-        'deliveryProof' => 'the proof-of-delivery requirement, or none',
-        'pickup' => 'the pickup city, country, and address if available',
-        'pickupDate' => 'the pickup date or date/time window',
-        'delivery' => 'the delivery city, country, and address if available',
-        'deliveryDate' => 'the delivery date or date/time window',
-        'budget' => 'the freight price and currency',
-        'priceTerms' => 'whether the price is fixed or open to offers',
-        'declaredValue' => 'the declared cargo value and currency, or none',
-        'terms' => 'Incoterm and deferred-payment terms, or none',
-        'temperature' => 'temperature-control requirements, or none',
-        'requirements' => 'ADR, tail lift, insurance, certification, inspection, urgency, and tracking requirements, or none',
-        'contact' => 'the contact name and available phone or email details, or none',
-        'notes' => 'any final notes, booking reference, or custom items, or none',
+        'title' => ['description' => 'a short load title', 'options' => false],
+        'transportType' => ['description' => 'the transport type', 'options' => true],
+        'goodsType' => ['description' => 'the goods or cargo type', 'options' => false],
+        'weight' => ['description' => 'the cargo weight in kilograms', 'options' => false],
+        'pallets' => ['description' => 'the pallet or unit count, including zero or none', 'options' => false],
+        'bodyType' => ['description' => 'the trailer or body type, or whether none is required', 'options' => true],
+        'dimensions' => ['description' => 'the dimensions or volume, or whether they are unknown/not needed', 'options' => false],
+        'vehicleType' => ['description' => 'the required vehicle type, or whether there is no preference', 'options' => true],
+        'loadingEquipment' => ['description' => 'loading or unloading equipment requirements, or none', 'options' => true],
+        'characteristics' => ['description' => 'transport characteristics, or none', 'options' => true],
+        'specialRequirements' => ['description' => 'one or more special requirements or notes, or none; explicitly mention that multiple options may be selected', 'options' => true],
+        'transportMode' => ['description' => 'the air/sea transport mode, or none', 'options' => true],
+        'deliveryProof' => ['description' => 'the proof-of-delivery requirement, or none', 'options' => true],
+        'pickup' => ['description' => 'the pickup city, country, and address if available', 'options' => false],
+        'pickupDate' => ['description' => 'the pickup date or date/time window', 'options' => false],
+        'delivery' => ['description' => 'the delivery city, country, and address if available', 'options' => false],
+        'deliveryDate' => ['description' => 'the delivery date or date/time window', 'options' => false],
+        'budget' => ['description' => 'the freight price and currency', 'options' => false],
+        'priceTerms' => ['description' => 'the pricing terms', 'options' => true],
+        'declaredValue' => ['description' => 'the declared cargo value and currency, or none', 'options' => false],
+        'terms' => ['description' => 'Incoterm and deferred-payment terms, or none', 'options' => true],
+        'temperature' => ['description' => 'temperature-control requirements, or none', 'options' => false],
+        'requirements' => ['description' => 'special handling and service requirements, or none', 'options' => true],
+        'contact' => ['description' => 'the contact name and available phone or email details, or none', 'options' => true],
+        'notes' => ['description' => 'any final notes, booking reference, or custom items, or none', 'options' => false],
     ];
 
     public function nextStep(array $draft, Collection $messages, int $aiDispatcherId): ?array
     {
         $answeredWithoutValue = $this->negativeAnswersByStep($messages, $aiDispatcherId);
 
-        foreach (self::STEPS as $key => $description) {
+        foreach (self::STEPS as $key => $meta) {
             if ($this->isSkipped($key, $draft) || $this->hasValue($key, $draft) || isset($answeredWithoutValue[$key])) {
                 continue;
             }
 
-            return ['key' => $key, 'description' => $description];
+            return ['key' => $key, 'description' => $meta['description'], 'hasOptions' => $meta['options']];
         }
 
         return null;
