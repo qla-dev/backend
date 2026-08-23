@@ -85,13 +85,22 @@
       <header>
         <div>
           <div class="brand">
-            <svg class="brand-mark" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect width="64" height="64" rx="16" fill="#2563EB"/>
-              <path d="M15 17.5A6.5 6.5 0 0 1 21.5 11H43a10 10 0 0 1 10 10v25.5a2 2 0 0 1-3.15 1.64A12.6 12.6 0 0 0 42 45.5H21.5A6.5 6.5 0 0 1 15 39V17.5Z" fill="#fff" fill-opacity=".16" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
-              <path d="M24 25h15M24 32h10" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-              <path d="M34 36h13l4 5v7H34V36Z" fill="#fff"/>
-              <circle cx="38" cy="49" r="4" fill="#2563EB" stroke="#fff" stroke-width="2"/>
-              <circle cx="48" cy="49" r="4" fill="#2563EB" stroke="#fff" stroke-width="2"/>
+            <svg class="brand-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="freightbook-mark-gradient" x1="3" y1="20" x2="21" y2="4" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#FACC15"/>
+                  <stop offset="0.28" stop-color="#22C55E"/>
+                  <stop offset="0.56" stop-color="#3B82F6"/>
+                  <stop offset="0.82" stop-color="#EF4444"/>
+                  <stop offset="1" stop-color="#F97316"/>
+                </linearGradient>
+                <radialGradient id="freightbook-mark-glow" cx="12" cy="11" r="8.5" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>
+                  <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <path d="M12 1.75C13.35 6.65 17.35 10.65 22.25 12C17.35 13.35 13.35 17.35 12 22.25C10.65 17.35 6.65 13.35 1.75 12C6.65 10.65 10.65 6.65 12 1.75Z" fill="url(#freightbook-mark-gradient)"/>
+              <path d="M12 1.75C13.35 6.65 17.35 10.65 22.25 12C17.35 13.35 13.35 17.35 12 22.25C10.65 17.35 6.65 13.35 1.75 12C6.65 10.65 10.65 6.65 12 1.75Z" fill="url(#freightbook-mark-glow)"/>
             </svg>
             <div class="brand-name">Freightbook<em>.ai</em></div>
           </div>
