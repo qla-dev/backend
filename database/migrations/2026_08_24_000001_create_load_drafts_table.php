@@ -55,7 +55,9 @@ return new class extends Migration
             $table->decimal('declared_value', 14, 2)->nullable();
             $table->char('shipment_value_currency', 3)->nullable();
             $table->decimal('budget', 14, 2)->nullable();
-            $table->boolean('is_negotiable')->default(true);
+            // A draft must preserve "not answered yet". The final load may choose a business
+            // default, but the LenaAI canvas must not present a database default as detected data.
+            $table->boolean('is_negotiable')->nullable();
             $table->char('currency', 3)->default('EUR');
             $table->string('payment_terms')->nullable();
             $table->unsignedSmallInteger('payment_due_days')->nullable();
@@ -72,7 +74,7 @@ return new class extends Migration
             $table->string('delivery_proof', 30)->nullable();
             $table->boolean('toll_roads_included')->default(false);
             $table->boolean('ferry_included')->default(false);
-            $table->boolean('cmr_required')->default(true);
+            $table->boolean('cmr_required')->nullable();
             $table->boolean('pallet_exchange_required')->default(false);
             $table->boolean('customs_required')->default(false);
             $table->boolean('insurance_required')->default(false);

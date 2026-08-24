@@ -102,7 +102,10 @@ class LoadController extends CrudController
         }
 
         if ($role === 'driver') {
-            $query->where('assigned_driver_user_id', $user->id);
+            $query->where(function (Builder $scope) use ($user): void {
+                $scope->where('customer_user_id', $user->id)
+                    ->orWhere('assigned_driver_user_id', $user->id);
+            });
 
             return;
         }
@@ -166,7 +169,7 @@ class LoadController extends CrudController
         $data = $request->validate($this->rules());
         $stops = $data['stops'] ?? [];
         unset($data['stops']);
-        if ($request->user()?->role?->name === 'user') {
+        if (in_array($request->user()?->role?->name, ['user', 'driver'], true)) {
             $data['customer_user_id'] = $request->user()->id;
         }
         if ($request->user()?->isSuperAdminOrMaster()) {
@@ -312,7 +315,7 @@ class LoadController extends CrudController
                 )->validate();
                 $stops = $data['stops'] ?? [];
                 unset($data['stops']);
-                if ($request->user()?->role?->name === 'user') {
+                if (in_array($request->user()?->role?->name, ['user', 'driver'], true)) {
                     $data['customer_user_id'] = $request->user()->id;
                 }
                 $data['customer_user_id'] = $data['customer_user_id'] ?? $request->user()->id;

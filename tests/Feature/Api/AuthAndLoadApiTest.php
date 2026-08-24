@@ -306,14 +306,27 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertNotContains('sent', collect($response->json('data'))->pluck('status')->all());
     }
 
-    public function test_only_customers_and_superadmin_can_book_a_load(): void
+    public function test_driver_and_superadmin_can_create_a_load_but_company_cannot(): void
     {
         $bookingPayload = [
-            'title' => 'Attempted booking', 'cargo_type' => 'FTL', 'weight_kg' => 1000,
+            'title' => 'Driver posted load', 'cargo_type' => 'FTL', 'transport_type' => 'road', 'weight_kg' => 1000,
         ];
 
+        $driver = User::query()->where('username', 'driver_demo')->firstOrFail();
         $driverToken = $this->postJson('/api/auth/login', ['login' => 'driver_demo', 'password' => 'demo12345'])->json('data.token');
-        $this->withToken($driverToken)->postJson('/api/loads', $bookingPayload)->assertForbidden();
+        $driverLoad = $this->withToken($driverToken)->postJson('/api/loads', $bookingPayload)
+            ->assertCreated()
+            ->assertJsonPath('data.customer_user_id', $driver->id);
+
+        $this->assertDatabaseHas('loads', [
+            'id' => $driverLoad->json('data.id'),
+            'customer_user_id' => $driver->id,
+        ]);
+
+        $this->withToken($driverToken)
+            ->getJson('/api/loads?status=pending&limit=100')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $driverLoad->json('data.id')]);
 
         $this->flushHeaders();
         $this->app['auth']->forgetGuards();

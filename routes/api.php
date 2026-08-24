@@ -75,8 +75,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('load-scans/bulk', [BulkLoadScanController::class, 'store'])->middleware('throttle:5,1');
     Route::post('load-scans/bulk/text', [BulkLoadScanController::class, 'scanText'])->middleware('throttle:5,1');
 
-    // Posting a load (creating it) is a customer action; superadmin (and master) keeps its usual override.
-    Route::middleware('role:user,superadmin,master')->group(function (): void {
+    // Customers and independent drivers can post loads; superadmin/master keep their usual override.
+    Route::middleware('role:user,driver,superadmin,master')->group(function (): void {
         Route::post('loads', [LoadController::class, 'store']);
         Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
     });
