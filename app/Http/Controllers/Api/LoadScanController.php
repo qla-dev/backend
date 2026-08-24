@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\CustomerMatcher;
 use App\Services\OpenRouterLoadScanner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class LoadScanController extends Controller
 {
-    public function store(Request $request, OpenRouterLoadScanner $scanner): JsonResponse
+    public function store(Request $request, OpenRouterLoadScanner $scanner, CustomerMatcher $customers): JsonResponse
     {
         $validated = $request->validate([
             'images' => ['required', 'array', 'min:1', 'max:5'],
@@ -36,11 +37,17 @@ class LoadScanController extends Controller
         }
 
         $result = $scanner->scan($validated['images'], $validated['current'] ?? [], $validated['conversation_id'] ?? null);
+        $result['consignee'] = $customers->match([
+            'name' => $result['consigneeName'] ?? '',
+            'tax_number' => $result['consigneeTaxNumber'] ?? '',
+            'city' => $result['consigneeCity'] ?? '',
+            'country_code' => $result['consigneeCountryCode'] ?? '',
+        ]);
 
         return response()->json(['message' => 'Document scanned.', 'data' => $result, 'meta' => [], 'errors' => []]);
     }
 
-    public function scanText(Request $request, OpenRouterLoadScanner $scanner): JsonResponse
+    public function scanText(Request $request, OpenRouterLoadScanner $scanner, CustomerMatcher $customers): JsonResponse
     {
         $validated = $request->validate([
             'description' => ['required', 'string', 'min:1', 'max:4000'],
@@ -62,6 +69,12 @@ class LoadScanController extends Controller
         }
 
         $result = $scanner->scanText($validated['description'], $validated['current'] ?? [], $validated['conversation_id'] ?? null, $validated['pending_step'] ?? null);
+        $result['consignee'] = $customers->match([
+            'name' => $result['consigneeName'] ?? '',
+            'tax_number' => $result['consigneeTaxNumber'] ?? '',
+            'city' => $result['consigneeCity'] ?? '',
+            'country_code' => $result['consigneeCountryCode'] ?? '',
+        ]);
 
         return response()->json(['message' => 'Description parsed.', 'data' => $result, 'meta' => [], 'errors' => []]);
     }
