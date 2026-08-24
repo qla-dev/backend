@@ -25,4 +25,24 @@ class HsCodeController extends Controller
             'errors' => [],
         ]);
     }
+
+    // Batch-resolves a set of already-known codes back to their full catalog entry (description,
+    // category names) in one request - used when opening an existing load for editing, since only
+    // the bare codes are persisted on the load itself.
+    public function bulk(Request $request, HsCodeSearchService $search): JsonResponse
+    {
+        $validated = $request->validate([
+            'codes' => ['required', 'array', 'min:1', 'max:100'],
+            'codes.*' => ['string'],
+        ]);
+
+        $results = $search->resolveByCodes($validated['codes']);
+
+        return response()->json([
+            'message' => 'HS codes retrieved.',
+            'data' => $results,
+            'meta' => ['total' => count($results), 'version' => 'HS 2022'],
+            'errors' => [],
+        ]);
+    }
 }

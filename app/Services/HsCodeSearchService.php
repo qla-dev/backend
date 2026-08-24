@@ -78,6 +78,32 @@ class HsCodeSearchService
             ->all();
     }
 
+    // Exact-code batch lookup (as opposed to search(), which does fuzzy/prefix matching against a
+    // single free-text query) - used to re-resolve the full catalog entry (description, category
+    // names) for a set of codes a load already carries, since only the bare codes are persisted.
+    public function resolveByCodes(array $codes): array
+    {
+        if (! Schema::hasTable('hs_code_catalog')) {
+            return [];
+        }
+
+        $normalized = collect($codes)
+            ->map(fn ($code): string => (string) preg_replace('/\D+/', '', (string) $code))
+            ->filter(fn (string $code): bool => strlen($code) >= 4)
+            ->unique()
+            ->values();
+
+        if ($normalized->isEmpty()) {
+            return [];
+        }
+
+        return HsCode::query()
+            ->whereIn('hs_code', $normalized)
+            ->get()
+            ->map(fn (HsCode $item): array => $this->result($item, 1.0))
+            ->all();
+    }
+
     private function result(HsCode $item, float $confidence): array
     {
         return [

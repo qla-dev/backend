@@ -111,6 +111,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('message-attachments/{conversation}/{filename}', [MessageAttachmentController::class, 'show'])
         ->where('filename', '[a-f0-9\-]+\.[a-zA-Z0-9]+');
     Route::get('hs-codes', [HsCodeController::class, 'index'])->middleware('throttle:60,1');
+    Route::post('hs-codes/bulk', [HsCodeController::class, 'bulk'])->middleware('throttle:60,1');
 
     // Pricing is visible to every role - only managing the catalog/assignments is admin-only below.
     Route::get('subscription-packages', [SubscriptionPackageController::class, 'index']);
