@@ -17,7 +17,7 @@ class SubscriptionPackageSeeder extends Seeder
         // can use; anything else lists exactly which roles see it in the app today (see the
         // navItems/header wiring in frontend/src/App.tsx).
         $features = [
-            ['key' => 'freight_exchange', 'title' => 'Freight Exchange (Berza tereta)', 'description' => 'Browse and post loads on the open freight marketplace to match cargo with available capacity in real time.', 'icon' => 'Boxes', 'roles' => ['driver', 'company', 'superadmin', 'master']],
+            ['key' => 'freight_exchange', 'title' => 'Freight Exchange', 'description' => 'Browse and post loads on the open freight marketplace to match cargo with available capacity in real time.', 'icon' => 'Boxes', 'roles' => ['driver', 'company', 'superadmin', 'master']],
             ['key' => 'load_tracking', 'title' => 'Tracking My Loads', 'description' => 'Track every one of your shipments in real time, from pickup all the way to proof of delivery.', 'icon' => 'Package', 'roles' => ['user', 'driver', 'company', 'superadmin', 'master']],
             ['key' => 'live_map', 'title' => 'Live GPS Map', 'description' => 'See your fleet and active shipments moving on a live map at all times.', 'icon' => 'Map', 'roles' => ['user', 'driver', 'company', 'superadmin', 'master']],
             ['key' => 'fleet_management', 'title' => 'Fleet Management', 'description' => 'Register vehicles, assign drivers, and manage your entire fleet from one workspace.', 'icon' => 'Truck', 'roles' => ['driver', 'company', 'superadmin', 'master']],

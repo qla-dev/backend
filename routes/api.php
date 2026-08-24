@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\ShipmentController;
 use App\Http\Controllers\Api\ShipmentInvoiceDocumentController;
 use App\Http\Controllers\Api\SubscriptionPackageController;
 use App\Http\Controllers\Api\TrackingEventController;
+use App\Http\Controllers\Api\UsageController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserSubscriptionController;
 use App\Http\Controllers\Api\VehicleController;
@@ -113,6 +114,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('subscription-packages/{id}', [SubscriptionPackageController::class, 'show']);
     Route::get('my-subscription', [UserSubscriptionController::class, 'me']);
     Route::post('my-subscription', [UserSubscriptionController::class, 'selectMine']);
+    Route::get('my-usage', [UsageController::class, 'mine']);
 
     Route::middleware('role:company,superadmin,master')->group(function (): void {
         Route::apiResources([
