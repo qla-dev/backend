@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Services\BookingReferenceGenerator;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -39,9 +38,6 @@ class Load extends BaseModel
         static::creating(function (Load $load): void {
             $load->status_change ??= [$load->status => now()->toIso8601String()];
 
-            if (blank($load->booking_reference)) {
-                $load->booking_reference = app(BookingReferenceGenerator::class)->generate($load->transport_type);
-            }
         });
 
         static::updating(function (Load $load): void {

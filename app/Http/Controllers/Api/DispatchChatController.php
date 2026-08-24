@@ -10,8 +10,8 @@ use App\Models\Load;
 use App\Models\LoadDraft;
 use App\Models\Message;
 use App\Models\User;
-use App\Services\LenaLoadQuestionnaire;
 use App\Services\HsCodeSearchService;
+use App\Services\LenaLoadQuestionnaire;
 use App\Services\OpenRouterDispatchAssistant;
 use App\Services\OpenRouterLoadScanner;
 use Illuminate\Database\Eloquent\Builder;
@@ -104,7 +104,12 @@ class DispatchChatController extends Controller
         $currentConversationTitle = Str::startsWith($conversationSubject, 'AI Dispatch —')
             ? trim(Str::after($conversationSubject, 'AI Dispatch —'))
             : $conversationSubject;
-        $matchedGeneralLoad = $load ? null : $this->findVisibleLoadByBookingReference($latestUserMessage, $request->user());
+        $trackingMode = $guidedAction === 'tracking' || $activeGuidedMode === 'tracking';
+        $matchedGeneralLoad = $load
+            ? null
+            : ($trackingMode
+                ? $this->findVisibleLoadByTrackingNumber($latestUserMessage, $request->user())
+                : $this->findVisibleLoadByBookingReference($latestUserMessage, $request->user()));
 
         // General LenaAI chats are not permanently attached to a load. Keep the most recently
         // resolved booking reference as conversational context for follow-ups such as "show the
@@ -116,7 +121,9 @@ class DispatchChatController extends Controller
             && ! $detectedLoadCreationRequest
             && ! in_array($guidedAction, ['add', 'start_add_yes'], true)) {
             foreach ($userMessages->skip(1) as $earlierUserMessage) {
-                $matchedGeneralLoad = $this->findVisibleLoadByBookingReference($earlierUserMessage->body, $request->user());
+                $matchedGeneralLoad = $trackingMode
+                    ? $this->findVisibleLoadByTrackingNumber($earlierUserMessage->body, $request->user())
+                    : $this->findVisibleLoadByBookingReference($earlierUserMessage->body, $request->user());
                 if ($matchedGeneralLoad) {
                     break;
                 }
@@ -294,7 +301,7 @@ class DispatchChatController extends Controller
                             ? 'For add or start_add_yes, a document or message was already provided earlier in this conversation and its load data was already extracted into the draft below; never ask whether they have a document to upload. Briefly announce that you are starting the load draft from what they already gave you, then continue directly with the next incomplete questionnaire step described below.'
                             : 'For add or start_add_yes, ask exactly whether they have a document or file to upload and end your reply with [[LENA_OPTIONS:upload_yes,upload_no]].')
                         : '')
-                    .' For start_add_no, acknowledge briefly and keep the builder off. For upload_yes, briefly tell them to attach the file now and say you will extract the available load data before asking only the remaining fields. For upload_no, begin with the server-supplied next incomplete questionnaire step, not a hard-coded pickup question. For continue_add_yes, resume by asking the same server-supplied next incomplete step; never skip it. For continue_add_no, acknowledge that load creation has been paused and that the collected draft remains available in the conversation. For tracking or booking, ask for the booking reference and then use the current database lookup. For hs, introduce yourself confidently as an experienced HS classification expert with direct access to Freightbook.ai\'s international HS database, updated for 2026, containing 5,612 six-digit codes. Then ask for the product description, material or composition, processing state, intended use, and country context, and explain that you will search the database and provide the most likely HS code with a concise rationale. Never refuse to help or say that you cannot classify the product. If material details are missing or more than one code is plausible, state the assumptions, give the best-fit code first, optionally list close alternatives, and label the confidence level so uncertainty is not hidden. For free, invite the user to ask freely about Freightbook.ai features and workflows. Do not expose or explain the guided action marker.'
+                    .' For start_add_no, acknowledge briefly and keep the builder off. For upload_yes, briefly tell them to attach the file now and say you will extract the available load data before asking only the remaining fields. For upload_no, begin with the server-supplied next incomplete questionnaire step, not a hard-coded pickup question. For continue_add_yes, resume by asking the same server-supplied next incomplete step; never skip it. For continue_add_no, acknowledge that load creation has been paused and that the collected draft remains available in the conversation. For tracking, ask for the shipment tracking number and never call it a booking reference. In Bosnian ask exactly: "Molim vas, unesite tracking broj tereta koji želite pratiti." Then use the shipment tracking-number database lookup. For booking, ask for the booking reference and use the booking-reference database lookup. For hs, introduce yourself confidently as an experienced HS classification expert with direct access to Freightbook.ai\'s international HS database, updated for 2026, containing 5,612 six-digit codes. Then ask for the product description, material or composition, processing state, intended use, and country context, and explain that you will search the database and provide the most likely HS code with a concise rationale. Never refuse to help or say that you cannot classify the product. If material details are missing or more than one code is plausible, state the assumptions, give the best-fit code first, optionally list close alternatives, and label the confidence level so uncertainty is not hidden. For free, invite the user to ask freely about Freightbook.ai features and workflows. Do not expose or explain the guided action marker.'
                 : '')
             .($hsMode
                 ? ' HS classification mode is active. Freightbook.ai has a server-side international HS database, updated for 2026, containing 5,612 six-digit classifications. '
@@ -315,12 +322,14 @@ class DispatchChatController extends Controller
                         : ' This load is currently '.$statusPlain.'. It is NOT open for new booking. If the user asks why they cannot book it, or asks to book/take/reserve it, never suggest contacting another team, hub, or outside channel (no such channel exists). Just tell them plainly, in one short sentence, that it is already '.$statusPlain.'.'
                             .($isLoadOwner ? ' Important: the person you are chatting with is already the driver or company assigned to this exact load, so make that clear in your answer. They are not being blocked from booking a load that belongs to someone else, they already have this one; there is nothing further for them to book.' : ''))
                 : ($matchedGeneralLoad
-                    ? ' This is a general LenaAI conversation, and the database search found the load whose booking reference the user supplied. Use only the current authoritative load record below when discussing it. '
+                    ? ' This is a general LenaAI conversation, and the database search found the load whose '.($trackingMode ? 'shipment tracking number' : 'booking reference').' the user supplied. Use only the current authoritative load record below when discussing it. '
                         .'Load record: '.$this->loadFacts($matchedGeneralLoad, $origin, $destination).'. '
                         .($this->isOpenForDirectBooking($matchedGeneralLoad)
                             ? ' This load is currently posted and open for direct booking. Only if the latest user message clearly asks to book, take, or reserve it, explain that booking is available below and end the reply with a new line containing exactly [[OFFER_BOOKING]]. For every other question, including details, price, status, route, and location questions, do not emit OFFER_BOOKING and do not offer a reservation action.'
                             : ' This load is currently '.$statusPlain.' and is not open for a new booking. State that plainly and do not emit any OFFER_BOOKING signal.')
-                    : ' You are not currently scoped to a specific load. You can help search the actual load database by booking reference; the application performs that lookup from the reference in the user\'s latest message. If the user wants to find, book, take, or reserve a load but has not supplied its booking reference, ask for the booking reference first. Do not send them to browse the marketplace instead. If the conversation indicates they just supplied a reference and no matching visible load was found, clearly say that no load was found for that reference and ask them to check it. '
+                    : ($trackingMode
+                        ? ' You are in shipment tracking mode and are not yet scoped to a specific load. Search the actual shipment database only by tracking number from the user\'s latest message. If no tracking number has been supplied, ask for the tracking number, never a booking reference. If no visible shipment matches it, clearly say that no shipment was found for that tracking number and ask them to check it. '
+                        : ' You are not currently scoped to a specific load. You can help search the actual load database by booking reference; the application performs that lookup from the reference in the user\'s latest message. If the user wants to find, book, take, or reserve a load but has not supplied its booking reference, ask for the booking reference first. Do not send them to browse the marketplace instead. If the conversation indicates they just supplied a reference and no matching visible load was found, clearly say that no load was found for that reference and ask them to check it. ')
                         .'The app also has a freight marketplace for browsing available loads, a section for tracking the user\'s own loads with shipment details, a live map, return-route suggestions, invoices and reports, a Messages inbox, fleet management for companies, and analytics. Answer questions about how the platform works and freight logistics generally. If earlier turns described you as limited to one load, ignore that limitation in this general conversation.'));
 
         $history = $conversation->messages
@@ -336,8 +345,8 @@ class DispatchChatController extends Controller
                 return [
                     'role' => $message->sender_user_id === $aiDispatcherId ? 'assistant' : 'user',
                     'content' => trim((string) preg_replace(
-                    '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
-                    '',
+                        '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
+                        '',
                         $content
                     )).$this->attachmentContext($message),
                 ];
@@ -477,6 +486,7 @@ class DispatchChatController extends Controller
         return collect([
             'Title' => $load->title,
             'Status' => $load->status,
+            'Tracking number' => $shipment?->tracking_number,
             'Booking reference' => $load->booking_reference,
             'Department' => $load->department,
             'Subdepartment' => $load->subdepartment,
@@ -551,6 +561,43 @@ class DispatchChatController extends Controller
                 );
             })
             ->sortByDesc(fn (Load $candidate) => strlen($this->normalizeReference((string) $candidate->booking_reference)))
+            ->first();
+
+        return $match
+            ? Load::query()->with(['stops', 'consignee', 'company', 'shipment.events'])->find($match->id)
+            : null;
+    }
+
+    private function findVisibleLoadByTrackingNumber(?string $message, ?User $user): ?Load
+    {
+        if (blank($message)) {
+            return null;
+        }
+
+        $normalizedMessage = $this->normalizeReference($message);
+        if (strlen($normalizedMessage) < 3) {
+            return null;
+        }
+
+        $query = Load::query()
+            ->with('shipment:id,load_id,tracking_number')
+            ->whereHas('shipment', fn (Builder $shipment): Builder => $shipment
+                ->whereNotNull('tracking_number')
+                ->where('tracking_number', '!=', ''));
+
+        $this->scopeLoadsVisibleToUser($query, $user);
+
+        $match = $query
+            ->get(['id'])
+            ->filter(function (Load $candidate) use ($normalizedMessage): bool {
+                $trackingNumber = $this->normalizeReference((string) $candidate->shipment?->tracking_number);
+
+                return strlen($trackingNumber) >= 3 && (
+                    $normalizedMessage === $trackingNumber
+                    || (strlen($trackingNumber) >= 5 && str_contains($normalizedMessage, $trackingNumber))
+                );
+            })
+            ->sortByDesc(fn (Load $candidate) => strlen($this->normalizeReference((string) $candidate->shipment?->tracking_number)))
             ->first();
 
         return $match

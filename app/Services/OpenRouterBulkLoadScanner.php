@@ -328,7 +328,7 @@ class OpenRouterBulkLoadScanner
                 'deliveryDate' => ['type' => 'string'],
                 'currency' => ['type' => 'string'],
                 'budget' => ['type' => 'number'],
-                'bookingReference' => ['type' => 'string'],
+                'bookingReference' => ['type' => 'string', 'description' => 'External order, booking, invoice or customer reference printed on the source. Never a generated Freightbook FB-* tracking number.'],
                 'notes' => ['type' => 'string'],
             ],
         ];

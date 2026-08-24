@@ -194,6 +194,7 @@ class OpenRouterLoadScanner
             .'Read loading/unloading equipment only when explicitly stated, choosing exactly one of: Vehicle with ramp, Vehicle without ramp, Forklift: Yes, Forklift: No, Other loading/unloading equipment, Not specified - or an empty string if not stated. '
             .'Read road or air handling characteristics (e.g. ADR, CMR, GDP, TIR, Lift, Express for road; Non-DG, DG, TCG, MED, VAL for air) and any special requirements only when explicitly stated. Read the transport mode (e.g. "Airport to airport") and whether proof of delivery is required only for air/sea shipments when stated. Set requiresTracking to true only when live tracking is explicitly requested. '
             .'Read whether the price is fixed or open to negotiation/offers as priceTerms (fixed or negotiable) only when the document is explicit about it; otherwise leave it an empty string. Read a declared/insured cargo value and its currency separately from the freight price when stated. '
+            .'Put the external order, booking or invoice reference printed on the source (for example 26-020-000991) in bookingReference. Never generate an FB-* value there; Freightbook shipment tracking numbers are assigned separately by the server. '
             .'Extract dimensions in meters, volume in cubic meters, vehicle type, Incoterm, deferred payment days, temperature range in Celsius, ADR/tail-lift/toll-road/ferry/CMR/pallet-exchange/customs/urgency flags, insurance, certification, inspection-service requirements, and contact details only when explicitly present. '
             .'Read the currency from the symbol or code printed on the document and return its ISO 4217 code. '
             .'Put leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
@@ -740,7 +741,7 @@ class OpenRouterLoadScanner
                 'contactMobile' => ['type' => 'string'],
                 'contactFax' => ['type' => 'string'],
                 'contactEmail' => ['type' => 'string'],
-                'bookingReference' => ['type' => 'string'],
+                'bookingReference' => ['type' => 'string', 'description' => 'External order, booking, invoice or customer reference printed on the source. Never a generated Freightbook FB-* tracking number.'],
                 'notes' => ['type' => 'string'],
                 'customFields' => [
                     'type' => 'array',
