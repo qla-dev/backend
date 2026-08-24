@@ -8,6 +8,40 @@ use Illuminate\Support\Str;
 
 class CustomerMatcher
 {
+    public function matchConsignee(array $scan): ?array
+    {
+        $dedicated = [
+            'name' => $scan['consigneeName'] ?? '',
+            'tax_number' => $scan['consigneeTaxNumber'] ?? '',
+            'city' => $scan['consigneeCity'] ?? '',
+            'country_code' => $scan['consigneeCountryCode'] ?? '',
+        ];
+        $allCandidates = collect([$scan['receiver'] ?? null])
+            ->concat($scan['customerCandidates'] ?? [])
+            ->push($scan['sender'] ?? null)
+            ->filter(fn ($candidate): bool => is_array($candidate))
+            ->values();
+        $preferred = collect([$dedicated])
+            ->concat($allCandidates->filter(fn (array $candidate): bool => $this->isReceiverRole((string) ($candidate['role'] ?? ''))))
+            ->map(fn (array $candidate): array => $this->customerIdentity($candidate))
+            ->unique(fn (array $identity): string => json_encode($identity))
+            ->values()
+            ->all();
+
+        $preferredMatch = $this->matchAny($preferred);
+        if ($preferredMatch) {
+            return $preferredMatch;
+        }
+
+        return $this->matchAny(
+            $allCandidates
+                ->reject(fn (array $candidate): bool => $this->isReceiverRole((string) ($candidate['role'] ?? '')))
+                ->map(fn (array $candidate): array => $this->customerIdentity($candidate))
+                ->values()
+                ->all()
+        );
+    }
+
     public function matchAny(array $identities): ?array
     {
         // Mirror deklarant.ba: VAT/tax ID is authoritative and must be attempted for every party
@@ -49,24 +83,50 @@ class CustomerMatcher
         }
 
         $nameTerms = $this->nameTerms($name, $city);
-        $query = Customer::query()->with('user');
-        $query->where(function (Builder $customerQuery) use ($taxNumber, $nameTerms): void {
-            if ($taxNumber !== '') {
-                $customerQuery->where('tax_number', $taxNumber)
-                    ->orWhere('vat_number', $taxNumber);
-            }
+        $literalTerms = $this->symbolicNameTerms($name);
+        $priorityMatches = collect();
+        if ($taxNumber !== '') {
+            $priorityMatches = $priorityMatches->concat(
+                Customer::query()
+                    ->with('user')
+                    ->where(fn (Builder $query): Builder => $query
+                        ->where('tax_number', $taxNumber)
+                        ->orWhere('vat_number', $taxNumber))
+                    ->limit(10)
+                    ->get()
+            );
+        }
+        if ($literalTerms !== []) {
+            $priorityMatches = $priorityMatches->concat(
+                Customer::query()
+                    ->with('user')
+                    ->where(function (Builder $query) use ($literalTerms): void {
+                        foreach ($literalTerms as $term) {
+                            $query->orWhere('name', 'like', "%{$term}%")
+                                ->orWhere('company_name', 'like', "%{$term}%");
+                        }
+                    })
+                    ->limit(50)
+                    ->get()
+            );
+        }
 
-            foreach ($nameTerms as $term) {
-                $customerQuery->orWhere('name', 'like', "%{$term}%")
-                    ->orWhere('company_name', 'like', "%{$term}%");
-            }
-        });
-
-        $matches = $query
+        $broadMatches = Customer::query()
+            ->with('user')
+            ->where(function (Builder $query) use ($nameTerms): void {
+                foreach ($nameTerms as $term) {
+                    $query->orWhere('name', 'like', "%{$term}%")
+                        ->orWhere('company_name', 'like', "%{$term}%");
+                }
+            })
             ->orderByRaw('source_sort_order IS NULL')
             ->orderBy('source_sort_order')
             ->limit(50)
-            ->get()
+            ->get();
+
+        $matches = $priorityMatches
+            ->concat($broadMatches)
+            ->unique('id')
             ->map(fn (Customer $customer): array => [
                 'customer' => $customer,
                 'score' => $this->score($customer, $name, $taxNumber, $city, $countryCode),
@@ -154,6 +214,39 @@ class CustomerMatcher
         }
 
         return trim(preg_replace('/[^a-z0-9]+/', ' ', $value) ?? $value);
+    }
+
+    private function symbolicNameTerms(string $name): array
+    {
+        $name = Str::lower(Str::ascii(trim($name)));
+        preg_match_all('/(?<![a-z0-9])[a-z0-9]{1,3}\s*&\s*[a-z0-9]{1,3}(?![a-z0-9])/i', $name, $matches);
+
+        return collect($matches[0] ?? [])
+            ->flatMap(function (string $term): array {
+                $compact = preg_replace('/\s+/', '', $term) ?? $term;
+                $spaced = preg_replace('/\s*&\s*/', ' & ', $term) ?? $term;
+
+                return [$compact, $spaced];
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function customerIdentity(array $candidate): array
+    {
+        return [
+            'name' => $candidate['name'] ?? '',
+            'tax_number' => $candidate['taxNumber'] ?? $candidate['tax_number'] ?? '',
+            'city' => $candidate['city'] ?? '',
+            'country_code' => $candidate['countryCode'] ?? $candidate['country_code'] ?? '',
+        ];
+    }
+
+    private function isReceiverRole(string $role): bool
+    {
+        return preg_match('/buyer|receiver|consignee|customer|importer|delivery|ship\s*to|bill\s*to|kupac|primalac|empf[aä]nger/i', $role) === 1;
     }
 
     private function taxNumber(string $value): string

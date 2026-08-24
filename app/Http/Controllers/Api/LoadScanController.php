@@ -37,7 +37,7 @@ class LoadScanController extends Controller
         }
 
         $result = $scanner->scan($validated['images'], $validated['current'] ?? [], $validated['conversation_id'] ?? null);
-        $result['consignee'] = $customers->matchAny($this->customerCandidates($result));
+        $result['consignee'] = $customers->matchConsignee($result);
 
         return response()->json(['message' => 'Document scanned.', 'data' => $result, 'meta' => [], 'errors' => []]);
     }
@@ -64,32 +64,8 @@ class LoadScanController extends Controller
         }
 
         $result = $scanner->scanText($validated['description'], $validated['current'] ?? [], $validated['conversation_id'] ?? null, $validated['pending_step'] ?? null);
-        $result['consignee'] = $customers->matchAny($this->customerCandidates($result));
+        $result['consignee'] = $customers->matchConsignee($result);
 
         return response()->json(['message' => 'Description parsed.', 'data' => $result, 'meta' => [], 'errors' => []]);
-    }
-
-    private function customerCandidates(array $result): array
-    {
-        $candidates = collect([$result['sender'] ?? null, $result['receiver'] ?? null])
-            ->concat($result['customerCandidates'] ?? [])
-            ->filter(fn ($candidate): bool => is_array($candidate))
-            ->map(fn (array $candidate): array => [
-                'name' => $candidate['name'] ?? '',
-                'tax_number' => $candidate['taxNumber'] ?? '',
-                'city' => $candidate['city'] ?? '',
-                'country_code' => $candidate['countryCode'] ?? '',
-            ])
-            ->values()
-            ->all();
-
-        $candidates[] = [
-            'name' => $result['consigneeName'] ?? '',
-            'tax_number' => $result['consigneeTaxNumber'] ?? '',
-            'city' => $result['consigneeCity'] ?? '',
-            'country_code' => $result['consigneeCountryCode'] ?? '',
-        ];
-
-        return $candidates;
     }
 }
