@@ -675,8 +675,10 @@ class DispatchChatController extends Controller
         // Bosnian users routinely code-switch and say the English word "load" with a Bosnian
         // creation verb ("hocu da objavim load", "napravi load", "hajmo napravit load", "trebam
         // napravit load") just as often as the fully-Bosnian "objavi teret" - both noun forms are
-        // accepted after every verb root so either phrasing is detected.
-        return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|bulk\s+import|novi?\s+(?:teret|load)|(?:objav|kreir|naprav|posalj)\w*\s+(?:novi?\s+)?(?:teret|load)|masovni\s+uvoz|neue\s+ladung|ladung\s+(?:erstellen|veroffentlichen)|massenimport|(open|enable|show|otvori|ukljuci|prikazi|offne|aktiviere)\w*\s+(?:the\s+)?(canvas|platno|nacrt))\b/i', $normalized) === 1;
+        // accepted after every verb root so either phrasing is detected. English and German get the
+        // same verb-first coverage ("make a load", "mach eine Ladung"), not just their more formal
+        // "create/publish" phrasing, so casual requests are caught in all three languages alike.
+        return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|make\s+(?:a\s+)?load|bulk\s+import|novi?\s+(?:teret|load)|(?:objav|kreir|naprav|posalj)\w*\s+(?:novi?\s+)?(?:teret|load)|masovni\s+uvoz|neue\s+ladung|(?:mach|erstell|veroffentlich)\w*\s+(?:eine\s+)?(?:neue\s+)?ladung|massenimport|(open|enable|show|otvori|ukljuci|prikazi|offne|aktiviere)\w*\s+(?:the\s+)?(canvas|platno|nacrt))\b/i', $normalized) === 1;
     }
 
     // A shipper describing cargo in passing (e.g. "100kg jabuka") never says "new load" and would
