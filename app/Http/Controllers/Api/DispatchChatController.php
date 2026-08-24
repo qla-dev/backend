@@ -678,7 +678,7 @@ class DispatchChatController extends Controller
         // accepted after every verb root so either phrasing is detected. English and German get the
         // same verb-first coverage ("make a load", "mach eine Ladung"), not just their more formal
         // "create/publish" phrasing, so casual requests are caught in all three languages alike.
-        return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|make\s+(?:a\s+)?load|bulk\s+import|novi?\s+(?:teret|load)|(?:objav|kreir|naprav|posalj)\w*\s+(?:novi?\s+)?(?:teret|load)|masovni\s+uvoz|neue\s+ladung|(?:mach|erstell|veroffentlich)\w*\s+(?:eine\s+)?(?:neue\s+)?ladung|massenimport|(open|enable|show|otvori|ukljuci|prikazi|offne|aktiviere)\w*\s+(?:the\s+)?(canvas|platno|nacrt))\b/i', $normalized) === 1;
+        return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|make\s+(?:a\s+)?load|bulk\s+import|novi?\s+(?:teret|load)|(?:objav|kreir|naprav|posalj)\w*\s+(?:novi?\s+)?(?:teret|load)|masovni\s+uvoz|neue\s+ladung|(?:mach|erstell|veroffentlich)\w*\s+(?:eine\s+)?(?:neue\s+)?ladung|(?:eine\s+)?(?:neue\s+)?ladung\s+(?:erstellen|veroffentlichen|machen)|massenimport|(open|enable|show|otvori|ukljuci|prikazi|offne|aktiviere)\w*\s+(?:the\s+)?(canvas|platno|nacrt))\b/i', $normalized) === 1;
     }
 
     // A shipper describing cargo in passing (e.g. "100kg jabuka") never says "new load" and would
