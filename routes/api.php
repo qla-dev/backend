@@ -50,6 +50,9 @@ Route::get('role-options', [RoleController::class, 'options']);
 // Public landing-page preview. This returns only safe summary fields for currently posted loads.
 Route::get('public-loads', [LoadController::class, 'publicIndex']);
 
+// Public landing-page pricing table - same active packages the in-app Pricing screen shows.
+Route::get('public-subscription-packages', [SubscriptionPackageController::class, 'index']);
+
 Route::prefix('auth')->group(function (): void {
     Route::post('login', [AuthController::class, 'login']);
     Route::post('register', [AuthController::class, 'register']);
