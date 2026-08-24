@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
 class LoadDraft extends BaseModel
 {
     protected function casts(): array
@@ -16,5 +18,10 @@ class LoadDraft extends BaseModel
             'etd_at' => 'datetime', 'atd_at' => 'datetime',
             'pickup_date' => 'date', 'pickup_date_to' => 'date', 'delivery_date' => 'date', 'delivery_date_to' => 'date',
         ];
+    }
+
+    public function consignee(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'consignee_customer_id');
     }
 }

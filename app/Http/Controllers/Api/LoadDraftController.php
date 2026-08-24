@@ -11,6 +11,11 @@ class LoadDraftController extends CrudController
         return LoadDraft::class;
     }
 
+    protected function relations(): array
+    {
+        return ['consignee'];
+    }
+
     // A draft is never required to be complete, so every field is nullable regardless of whether
     // this is a create or an update — the caller only ever sends the fields it wants to set, and
     // CrudController's update()/store() already pass that straight through to Model::update()/

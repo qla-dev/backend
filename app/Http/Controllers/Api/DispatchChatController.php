@@ -12,6 +12,7 @@ use App\Models\Message;
 use App\Models\User;
 use App\Services\HsCodeSearchService;
 use App\Services\LenaLoadQuestionnaire;
+use App\Services\LoadDraftScanMapper;
 use App\Services\OpenRouterDispatchAssistant;
 use App\Services\OpenRouterLoadScanner;
 use Illuminate\Database\Eloquent\Builder;
@@ -46,7 +47,7 @@ class DispatchChatController extends Controller
             return $this->unavailable('AI dispatcher is not configured.');
         }
 
-        $conversation = Conversation::query()->with(['messages', 'freightLoad.stops', 'freightLoad.consignee', 'freightLoad.company', 'freightLoad.shipment.events'])->findOrFail($validated['conversation_id']);
+        $conversation = Conversation::query()->with(['messages', 'freightLoad.stops', 'freightLoad.consignee', 'freightLoad.company', 'freightLoad.shipment.events', 'freightLoadDraft.consignee'])->findOrFail($validated['conversation_id']);
 
         $load = $conversation->freightLoad;
         $userMessages = $conversation->messages
@@ -181,6 +182,9 @@ class DispatchChatController extends Controller
             }
         }
         $loadDraft = $this->latestLoadDraft($conversation->messages);
+        if ($loadDraft === [] && $conversation->freightLoadDraft) {
+            $loadDraft = app(LoadDraftScanMapper::class)->toScan($conversation->freightLoadDraft);
+        }
         // The scanner already flags isDocument=true whenever it recognized real freight/cargo
         // content (document or free text), so reuse that instead of guessing from field presence.
         $hasExistingLoadDraftData = ($loadDraft['isDocument'] ?? false) === true;

@@ -22,7 +22,7 @@ class ConversationController extends CrudController
 
     protected function relations(): array
     {
-        return ['company', 'freightLoad.consignee', 'freightLoad.stops', 'creator', 'participants.role', 'messages.sender'];
+        return ['company', 'freightLoad.consignee', 'freightLoad.stops', 'freightLoadDraft.consignee', 'creator', 'participants.role', 'messages.sender'];
     }
 
     protected function searchColumns(): array
@@ -61,6 +61,10 @@ class ConversationController extends CrudController
         $participantIds = collect($data['participant_ids'] ?? [])->push($data['created_by_user_id'])->unique()->values();
         unset($data['participant_ids']);
 
+        if (! blank($data['load_draft_id'] ?? null)) {
+            $data['canvas'] = true;
+        }
+
         $record = Conversation::query()->create($data);
         $record->participants()->attach($participantIds);
 
@@ -84,12 +88,10 @@ class ConversationController extends CrudController
             return;
         }
 
-        $reference = $conversation->freightLoadDraft?->booking_reference;
-        $suffix = $reference ? ' '.$reference : '';
         $bodies = [
-            'bs' => "Čestitamo, kreirali ste draft tereta{$suffix}! Možete nastaviti razgovor ovdje da ga dopunite, ili se vratiti kasnije da ga završite i objavite.",
-            'de' => "Herzlichen Glückwunsch, Sie haben einen Ladungsentwurf{$suffix} erstellt! Sie können hier weiterchatten, um ihn zu vervollständigen, oder später zurückkehren, um ihn fertigzustellen und zu veröffentlichen.",
-            'en' => "Congratulations, you created a load draft{$suffix}! You can keep chatting here to fill it in, or come back later to finish and post it.",
+            'bs' => "Čestitamo, kreirali ste draft tereta! Sačuvani podaci su učitani u Draft Panel. Želite li sada nastaviti vođeno popunjavanje?\n\n[[LENA_OPTIONS:continue_add_yes,continue_add_no]]",
+            'de' => "Ihr Ladungsentwurf wurde erstellt. Die gespeicherten Daten wurden in den Entwurfsbereich geladen. Möchten Sie jetzt mit der geführten Eingabe fortfahren?\n\n[[LENA_OPTIONS:continue_add_yes,continue_add_no]]",
+            'en' => "Your load draft was created. Its saved data is loaded in the Draft panel. Would you like to continue the guided form now?\n\n[[LENA_OPTIONS:continue_add_yes,continue_add_no]]",
         ];
         $body = $bodies[$user?->language] ?? $bodies['en'];
 
