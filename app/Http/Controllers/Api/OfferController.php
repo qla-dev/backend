@@ -30,7 +30,7 @@ class OfferController extends CrudController
 
         return [
             'load_id' => [$p, 'integer', 'exists:loads,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'], 'driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'amount' => [$p, 'numeric', 'min:0'], 'currency' => ['sometimes', 'string', 'size:3'], 'status' => ['sometimes', 'string', 'max:50'], 'valid_until' => [$p, 'date'], 'message' => ['nullable', 'string'],
-            'price_basis' => [$p, 'string', 'in:fixed_total,per_km,per_ton,per_pallet'],
+            'price_basis' => [$p, 'string', 'in:fixed_total,best_bid,per_km,per_ton,per_pallet'],
             'vat' => [$p, 'string', 'in:included,excluded'],
             'payment_terms' => [$p, 'string', 'max:30'],
             'included_charges' => ['nullable', 'array'],
@@ -60,10 +60,11 @@ class OfferController extends CrudController
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());
+        $this->validateBestBidPaymentTerms($data['price_basis'], $data['payment_terms']);
 
         $offer = DB::transaction(function () use ($data) {
             $load = Load::query()->lockForUpdate()->findOrFail($data['load_id']);
-            $this->validateBidFloor($load, (float) $data['amount']);
+            $this->validateBidFloor($load, (float) $data['amount'], $data['price_basis'] === 'best_bid');
 
             return Offer::query()->create($data);
         });
@@ -78,10 +79,15 @@ class OfferController extends CrudController
 
         $offer = DB::transaction(function () use ($id, $data) {
             $offer = Offer::query()->lockForUpdate()->findOrFail($id);
+            $this->validateBestBidPaymentTerms(
+                $data['price_basis'] ?? $offer->price_basis,
+                $data['payment_terms'] ?? $offer->payment_terms,
+            );
             $load = Load::query()->lockForUpdate()->findOrFail($data['load_id'] ?? $offer->load_id);
 
             if (array_key_exists('amount', $data)) {
-                $this->validateBidFloor($load, (float) $data['amount']);
+                $priceBasis = $data['price_basis'] ?? $offer->price_basis;
+                $this->validateBidFloor($load, (float) $data['amount'], $priceBasis === 'best_bid');
             }
 
             $offer->update($data);
@@ -120,7 +126,7 @@ class OfferController extends CrudController
         return $this->success((new EntityResource($offer))->resolve($request), 'Offer approved and driver assigned.');
     }
 
-    private function validateBidFloor(Load $load, float $amount): void
+    private function validateBidFloor(Load $load, float $amount, bool $allowBelowFloor = false): void
     {
         if (! $load->is_negotiable || $load->status !== 'posted') {
             throw ValidationException::withMessages(['amount' => 'This load is not accepting offers.']);
@@ -132,9 +138,18 @@ class OfferController extends CrudController
             ->max('amount');
         $minimum = $highestOffer !== null ? (float) $highestOffer : (float) ($load->budget ?? 0);
 
-        if ($amount < $minimum) {
+        if (! $allowBelowFloor && $amount < $minimum) {
             throw ValidationException::withMessages([
                 'amount' => "The offer must be at least {$load->currency} ".number_format($minimum, 2, '.', ''),
+            ]);
+        }
+    }
+
+    private function validateBestBidPaymentTerms(string $priceBasis, ?string $paymentTerms): void
+    {
+        if ($priceBasis === 'best_bid' && $paymentTerms !== 'immediate') {
+            throw ValidationException::withMessages([
+                'payment_terms' => 'Best bid requires immediate payment.',
             ]);
         }
     }
