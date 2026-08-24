@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\LenaLoadQuestionnaire;
 use App\Services\HsCodeSearchService;
 use App\Services\OpenRouterDispatchAssistant;
+use App\Services\OpenRouterLoadScanner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ class DispatchChatController extends Controller
 {
     use ScopesConversationAccess;
 
-    public function store(Request $request, OpenRouterDispatchAssistant $assistant, LenaLoadQuestionnaire $questionnaire, HsCodeSearchService $hsCodeSearch): JsonResponse
+    public function store(Request $request, OpenRouterDispatchAssistant $assistant, LenaLoadQuestionnaire $questionnaire, HsCodeSearchService $hsCodeSearch, OpenRouterLoadScanner $loadScanner): JsonResponse
     {
         $validated = $request->validate([
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
@@ -142,6 +143,36 @@ class DispatchChatController extends Controller
         if ($canvasEnabled && ! $conversation->load_draft_id) {
             $conversation->update(['load_draft_id' => LoadDraft::query()->create()->id]);
         }
+        // The canvas just turned on from a confirmation (start_add_yes/add), not from a document
+        // upload - the user may already have described cargo in plain text before confirming (e.g.
+        // "100kg jabuka"), which was never scanned because scanning only ever ran while the canvas
+        // was already on. Retroactively scan everything they said earlier in this conversation so
+        // the questionnaire opens with that data already filled instead of re-asking for it.
+        if ($canvasEnabled && ! $wasCanvasEnabled && $requestedLoadCanvas && ! $autoStartFromDocument && $latestUserMessageModel) {
+            $priorContextText = $userMessages
+                ->reject(fn (Message $message) => $message->is($latestUserMessageModel))
+                ->sortBy('sent_at')
+                ->map(fn (Message $message) => $this->guidedAction($message->body) ? null : $message->body)
+                ->filter(fn (?string $body) => filled($body) && preg_match('/\[\[LENA_SKIP:/', $body) !== 1)
+                ->implode("\n");
+
+            if (filled(trim($priorContextText))) {
+                try {
+                    $retroScan = $loadScanner->scanText($priorContextText, [], $conversation->id);
+                } catch (\Throwable $exception) {
+                    $retroScan = null;
+                }
+
+                if (is_array($retroScan) && ($retroScan['isDocument'] ?? false) === true) {
+                    $latestUserMessageModel->update([
+                        'attachments' => [
+                            ...($latestUserMessageModel->attachments ?? []),
+                            ['name' => 'LenaAI conversation', 'type' => 'text/plain', 'loadScan' => $retroScan],
+                        ],
+                    ]);
+                }
+            }
+        }
         $loadDraft = $this->latestLoadDraft($conversation->messages);
         // The scanner already flags isDocument=true whenever it recognized real freight/cargo
         // content (document or free text), so reuse that instead of guessing from field presence.
@@ -161,6 +192,17 @@ class DispatchChatController extends Controller
             $latestUserMessage,
         ])));
         $hsMatches = $hsMode && ! $guidedAction ? $hsCodeSearch->search($hsQuery, 8) : [];
+        // No mode has been picked or detected yet (no canvas, no load in context, no active guided
+        // mode, nothing that already looks like a load-creation or HS request) - a plain greeting
+        // or small talk here should not just get a freeform reply, it should nudge the user toward
+        // the same standard options the "New chat" welcome message already offers.
+        $hasNoEstablishedMode = ! $canvasEnabled
+            && ! $load
+            && ! $matchedGeneralLoad
+            && ! $activeGuidedMode
+            && ! $guidedAction
+            && ! $detectedLoadCreationRequest
+            && ! $hsMode;
 
         $statusLabels = [
             'posted' => 'posted and open for booking',
@@ -226,6 +268,9 @@ class DispatchChatController extends Controller
                 : '')
             .($canvasBlockedByExistingLoad
                 ? ' The user asked to post a new load while an existing load is already in context. Do not open the new-load canvas and do not suggest creating a duplicate. Tell them plainly, in their language, that this load already exists and is already in status '.$statusPlain.'.'
+                : '')
+            .($hasNoEstablishedMode
+                ? ' No mode has been chosen yet in this conversation (no load-post canvas, no specific load, no tracking, HS, or free-chat mode). Reply briefly and naturally to whatever the user just said (a greeting, small talk, or an unclear request), in their language, then end the reply with a new line containing exactly [[LENA_OPTIONS:add,tracking,booking,hs,free]] so the standard mode buttons are offered, the same set shown when starting a brand new chat. Do not describe or list those options in your own words; the application renders them as clickable buttons from the marker alone.'
                 : '')
             .'Never discuss whether you have GPS access and never answer a location question with a generic GPS limitation. For questions about where a load is now, use the latest shipment coordinates or tracking event in the authoritative load record. If no current coordinate exists, state the latest known route point or pickup location without presenting it as a live position. '
             .'If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
@@ -352,6 +397,9 @@ class DispatchChatController extends Controller
         }
         if ($detectedLoadCreationRequest && ! $autoStartFromDocument && ! str_contains($reply, '[[LENA_OPTIONS:')) {
             $reply .= "\n[[LENA_OPTIONS:start_add_yes,start_add_no]]";
+        }
+        if ($hasNoEstablishedMode && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+            $reply .= "\n[[LENA_OPTIONS:add,tracking,booking,hs,free]]";
         }
         $hasTextReply = filled($reply);
         if ($hasTextReply && $attachedLoadDetails) {
@@ -624,7 +672,11 @@ class DispatchChatController extends Controller
     {
         $normalized = Str::lower(Str::ascii((string) $message));
 
-        return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|bulk\s+import|novi\s+teret|nov\s+teret|objav\w*\s+teret|kreir\w*\s+teret|naprav\w*\s+teret|masovni\s+uvoz|neue\s+ladung|ladung\s+(?:erstellen|veroffentlichen)|massenimport|(open|enable|show|otvori|ukljuci|prikazi|offne|aktiviere)\w*\s+(?:the\s+)?(canvas|platno|nacrt))\b/i', $normalized) === 1;
+        // Bosnian users routinely code-switch and say the English word "load" with a Bosnian
+        // creation verb ("hocu da objavim load", "napravi load", "hajmo napravit load", "trebam
+        // napravit load") just as often as the fully-Bosnian "objavi teret" - both noun forms are
+        // accepted after every verb root so either phrasing is detected.
+        return preg_match('/\b(new\s+load|post\s+(?:a\s+)?load|publish\s+(?:a\s+)?load|create\s+(?:a\s+)?load|bulk\s+import|novi?\s+(?:teret|load)|(?:objav|kreir|naprav|posalj)\w*\s+(?:novi?\s+)?(?:teret|load)|masovni\s+uvoz|neue\s+ladung|ladung\s+(?:erstellen|veroffentlichen)|massenimport|(open|enable|show|otvori|ukljuci|prikazi|offne|aktiviere)\w*\s+(?:the\s+)?(canvas|platno|nacrt))\b/i', $normalized) === 1;
     }
 
     // A shipper describing cargo in passing (e.g. "100kg jabuka") never says "new load" and would
