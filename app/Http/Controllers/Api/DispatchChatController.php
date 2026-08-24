@@ -179,9 +179,18 @@ class DispatchChatController extends Controller
         $hasExistingLoadDraftData = ($loadDraft['isDocument'] ?? false) === true;
         $nextLoadStep = $canvasEnabled ? $questionnaire->nextStep($loadDraft, $conversation->messages, (int) $aiDispatcherId) : null;
         $loadWasAlreadyReady = $questionnaire->hasCompleteReadyMarker($conversation->messages);
-        $questionnaireTurn = $canvasEnabled && ! in_array($guidedAction, [
-            'add', 'start_add_yes', 'upload_yes', 'tracking', 'booking', 'hs', 'free', 'continue_add_no',
-        ], true);
+        // Switching from free chat into load creation is already a questionnaire turn when the
+        // conversation was retro-scanned into a draft. In that path the next question is asked
+        // immediately, so it must also carry its LENA_STEP marker or the frontend cannot render
+        // the matching option buttons. A genuinely empty new load still pauses at upload_yes/no.
+        $startsLoadWithExistingDraft = $hasExistingLoadDraftData
+            && in_array($guidedAction, ['add', 'start_add_yes'], true);
+        $questionnaireTurn = $canvasEnabled && (
+            $startsLoadWithExistingDraft
+            || ! in_array($guidedAction, [
+                'add', 'start_add_yes', 'upload_yes', 'tracking', 'booking', 'hs', 'free', 'continue_add_no',
+            ], true)
+        );
         $origin = $contextLoad?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $contextLoad?->stops->firstWhere('type', 'delivery')?->city;
         $hsMode = $guidedAction === 'hs'
