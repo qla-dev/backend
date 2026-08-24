@@ -33,8 +33,10 @@ use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\RouteStopController;
 use App\Http\Controllers\Api\ShipmentController;
 use App\Http\Controllers\Api\ShipmentInvoiceDocumentController;
+use App\Http\Controllers\Api\SubscriptionPackageController;
 use App\Http\Controllers\Api\TrackingEventController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\UserSubscriptionController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleLocationController;
 use Illuminate\Support\Facades\Route;
@@ -106,6 +108,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->where('filename', '[a-f0-9\-]+\.[a-zA-Z0-9]+');
     Route::get('hs-codes', [HsCodeController::class, 'index'])->middleware('throttle:60,1');
 
+    // Pricing is visible to every role - only managing the catalog/assignments is admin-only below.
+    Route::get('subscription-packages', [SubscriptionPackageController::class, 'index']);
+    Route::get('subscription-packages/{id}', [SubscriptionPackageController::class, 'show']);
+    Route::get('my-subscription', [UserSubscriptionController::class, 'me']);
+    Route::post('my-subscription', [UserSubscriptionController::class, 'selectMine']);
+
     Route::middleware('role:company,superadmin,master')->group(function (): void {
         Route::apiResources([
             'company-memberships' => CompanyMembershipController::class,
@@ -129,6 +137,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('users/customer', [CustomerController::class, 'store']);
         Route::post('users/driver', [DriverController::class, 'store']);
         Route::post('drivers', [DriverController::class, 'store'])->name('drivers.store');
+        Route::post('subscription-packages', [SubscriptionPackageController::class, 'store']);
+        Route::put('subscription-packages/{id}', [SubscriptionPackageController::class, 'update']);
+        Route::delete('subscription-packages/{id}', [SubscriptionPackageController::class, 'destroy']);
+        Route::get('user-subscriptions', [UserSubscriptionController::class, 'index']);
+        Route::post('user-subscriptions/{user}', [UserSubscriptionController::class, 'store']);
+        Route::delete('user-subscriptions/{userSubscription}', [UserSubscriptionController::class, 'destroy']);
         Route::apiResources([
             'roles' => RoleController::class,
             'users' => UserController::class,

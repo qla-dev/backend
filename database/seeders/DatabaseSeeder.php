@@ -8,7 +8,9 @@ use App\Models\Driver;
 use App\Models\Load;
 use App\Models\Role;
 use App\Models\Shipment;
+use App\Models\SubscriptionPackage;
 use App\Models\User;
+use App\Models\UserSubscription;
 use App\Models\Vehicle;
 use Illuminate\Database\Seeder;
 
@@ -70,5 +72,14 @@ class DatabaseSeeder extends Seeder
         $load->stops()->createMany([['type' => 'pickup', 'position' => 1, 'city' => 'Sarajevo', 'country_code' => 'BA', 'window_starts_at' => now()], ['type' => 'delivery', 'position' => 2, 'city' => 'Vienna', 'country_code' => 'AT', 'window_starts_at' => now()->addDay()]]);
         $shipment = Shipment::query()->updateOrCreate(['load_id' => $load->id], ['tracking_number' => 'SWP-DEMO-001', 'carrier' => $company->name, 'estimated_delivery_at' => now()->addDay()]);
         $shipment->events()->firstOrCreate(['title' => 'Departed Sarajevo Hub'], ['status' => 'in_transit', 'location' => 'Sarajevo, BA', 'occurred_at' => now(), 'created_by_user_id' => $users['driver_demo']->id]);
+
+        $this->call(SubscriptionPackageSeeder::class);
+        $proPackage = SubscriptionPackage::query()->where('slug', 'pro')->first();
+        if ($proPackage) {
+            UserSubscription::query()->updateOrCreate(['user_id' => $users['customer_demo']->id], [
+                'subscription_package_id' => $proPackage->id, 'active' => true,
+                'started_at' => now(), 'expires_at' => now()->addMonth(), 'remaining_tokens' => $proPackage->lena_ai_tokens,
+            ]);
+        }
     }
 }
