@@ -9,12 +9,14 @@
   $buyerTaxNumber = $buyer?->tax_number ?: null;
   $buyerVatNumber = $buyer?->vat_number ?: null;
   $buyerEmail = $buyer?->billing_email ?: $buyer?->email ?: null;
-  $trackingNumber = $trackingNumber ?? $shipment?->tracking_number ?? $load->public_id ?? $load->id;
-  $shipmentStatus = $shipmentStatus ?? $shipment?->status ?? $load->status ?? '—';
+  $paymentMode = $paymentMode ?? false;
+  $paymentDetails = $paymentDetails ?? null;
+  $trackingNumber = $trackingNumber ?? $shipment?->tracking_number ?? $load?->public_id ?? $load?->id;
+  $shipmentStatus = $shipmentStatus ?? $shipment?->status ?? $load?->status ?? '—';
   $notes = $notes ?? null;
   $pickupStop = $origin;
   $deliveryStop = $destination;
-  $cargoLabel = $load->title ?: $load->goods_type ?: '—';
+  $cargoLabel = $load?->title ?: $load?->goods_type ?: '—';
 @endphp
 <!doctype html>
 <html lang="bs">
@@ -129,22 +131,24 @@
 
       <section class="meta">
         <div><span class="label">Datum izdavanja</span><b>{{ $date($invoice['issued_at']) }}</b></div>
-        <div><span class="label">Rok plaćanja</span><b>{{ $date($invoice['due_at']) }}</b></div>
-        <div><span class="label">Uslovi plaćanja</span><b>{{ $load->payment_terms ?: '—' }}</b></div>
+        <div><span class="label">{{ $paymentMode ? 'Datum plaćanja' : 'Rok plaćanja' }}</span><b>{{ $date($invoice['due_at']) }}</b></div>
+        <div><span class="label">{{ $paymentMode ? 'Način plaćanja' : 'Uslovi plaćanja' }}</span><b>{{ $paymentMode ? 'Kartica' : ($load?->payment_terms ?: '—') }}</b></div>
         <div><span class="label">Valuta</span><b>{{ $invoice['currency'] }}</b></div>
       </section>
 
-      <p class="section-title">Pošiljka</p>
-      <div class="shipment-box">
-        <div><span>ID naloga</span><span>{{ $trackingNumber }}</span></div>
-        <div><span>Relacija</span><span>{{ $pickupStop?->city ?: '—' }} → {{ $deliveryStop?->city ?: '—' }}</span></div>
-        <div><span>Preuzimanje</span><span>{{ $pickupStop?->window_starts_at ? $date($pickupStop->window_starts_at) : '—' }}</span></div>
-        <div><span>Isporuka</span><span>{{ $deliveryStop?->window_starts_at ? $date($deliveryStop->window_starts_at) : '—' }}</span></div>
-        <div><span>Roba</span><span>{{ $cargoLabel }}</span></div>
-        <div><span>Težina</span><span>{{ $load->weight_kg ? number_format((float) $load->weight_kg, 0, ',', '.').' kg' : '—' }}</span></div>
-        <div><span>Dužina utovara</span><span>{{ $load->length_m ? number_format((float) $load->length_m, 1, ',', '.').' m' : '—' }}</span></div>
-        <div><span>Vozilo</span><span>{{ $load->vehicle_type ?: '—' }}</span></div>
-      </div>
+      @unless($paymentMode)
+        <p class="section-title">Pošiljka</p>
+        <div class="shipment-box">
+          <div><span>ID naloga</span><span>{{ $trackingNumber }}</span></div>
+          <div><span>Relacija</span><span>{{ $pickupStop?->city ?: '—' }} → {{ $deliveryStop?->city ?: '—' }}</span></div>
+          <div><span>Preuzimanje</span><span>{{ $pickupStop?->window_starts_at ? $date($pickupStop->window_starts_at) : '—' }}</span></div>
+          <div><span>Isporuka</span><span>{{ $deliveryStop?->window_starts_at ? $date($deliveryStop->window_starts_at) : '—' }}</span></div>
+          <div><span>Roba</span><span>{{ $cargoLabel }}</span></div>
+          <div><span>Težina</span><span>{{ $load?->weight_kg ? number_format((float) $load->weight_kg, 0, ',', '.').' kg' : '—' }}</span></div>
+          <div><span>Dužina utovara</span><span>{{ $load?->length_m ? number_format((float) $load->length_m, 1, ',', '.').' m' : '—' }}</span></div>
+          <div><span>Vozilo</span><span>{{ $load?->vehicle_type ?: '—' }}</span></div>
+        </div>
+      @endunless
 
       <table style="margin-top:26px">
         <thead><tr><th>Opis usluge</th><th class="num">Količina</th><th class="num">Jed. cijena</th><th class="num">Ukupno</th></tr></thead>
@@ -163,11 +167,18 @@
 
       <div class="info-grid">
         <div>
-          <p class="section-title" style="margin-top:0">Podaci za plaćanje</p>
-          <p class="party-line"><span>Banka</span><span>{{ $seller?->bank_name ?: '—' }}</span></p>
-          <p class="party-line"><span>IBAN</span><span>{{ $seller?->iban ?: '—' }}</span></p>
-          <p class="party-line"><span>SWIFT/BIC</span><span>{{ $seller?->swift_bic ?: '—' }}</span></p>
-          <p class="party-line"><span>Poziv na broj</span><span>{{ $invoice['payment_reference'] }}</span></p>
+          <p class="section-title" style="margin-top:0">{{ $paymentMode ? 'Podaci o uplati' : 'Podaci za plaćanje' }}</p>
+          @if($paymentMode)
+            <p class="party-line"><span>Transakcija</span><span>#{{ $paymentDetails['id'] }}</span></p>
+            <p class="party-line"><span>Vrsta</span><span>{{ $paymentDetails['type'] }}</span></p>
+            <p class="party-line"><span>LenaAI poruke</span><span>+{{ number_format($paymentDetails['tokens'], 0, ',', '.') }}</span></p>
+            <p class="party-line"><span>Status</span><span>{{ $paymentDetails['status'] }}</span></p>
+          @else
+            <p class="party-line"><span>Banka</span><span>{{ $seller?->bank_name ?: '—' }}</span></p>
+            <p class="party-line"><span>IBAN</span><span>{{ $seller?->iban ?: '—' }}</span></p>
+            <p class="party-line"><span>SWIFT/BIC</span><span>{{ $seller?->swift_bic ?: '—' }}</span></p>
+            <p class="party-line"><span>Poziv na broj</span><span>{{ $invoice['payment_reference'] }}</span></p>
+          @endif
         </div>
         <div>
           <p class="section-title" style="margin-top:0">Napomene / uslovi</p>
@@ -176,7 +187,11 @@
       </div>
 
       <footer>
-        Status pošiljke: {{ $shipmentStatus }} · Status fakture: {{ $invoice['status_label'] }}
+        @if($paymentMode)
+          Status fakture: {{ $invoice['status_label'] }}
+        @else
+          Status pošiljke: {{ $shipmentStatus }} · Status fakture: {{ $invoice['status_label'] }}
+        @endif
       </footer>
     </article>
   </main>

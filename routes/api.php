@@ -18,10 +18,10 @@ use App\Http\Controllers\Api\FleetAccessController;
 use App\Http\Controllers\Api\HsCodeController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
-use App\Http\Controllers\Api\LoadInvoiceDocumentController;
+use App\Http\Controllers\Api\LenaGuidedAnswerController;
 use App\Http\Controllers\Api\LoadController;
 use App\Http\Controllers\Api\LoadDraftController;
-use App\Http\Controllers\Api\LenaGuidedAnswerController;
+use App\Http\Controllers\Api\LoadInvoiceDocumentController;
 use App\Http\Controllers\Api\LoadNoteController;
 use App\Http\Controllers\Api\LoadScanController;
 use App\Http\Controllers\Api\LoadStopController;
@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\MessageAttachmentController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\OfferController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PaymentInvoiceDocumentController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\RouteStopController;
@@ -121,6 +122,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('my-subscription', [UserSubscriptionController::class, 'selectMine']);
     Route::get('my-usage', [UsageController::class, 'mine']);
     Route::get('payments', [PaymentController::class, 'index']);
+    Route::get('payments/{payment}/invoice', PaymentInvoiceDocumentController::class);
     Route::post('payments', [PaymentController::class, 'store'])->middleware('throttle:20,1');
 
     Route::middleware('role:company,superadmin,master')->group(function (): void {
