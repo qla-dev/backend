@@ -8,6 +8,35 @@ use Illuminate\Support\Str;
 
 class CustomerMatcher
 {
+    public function matchAny(array $identities): ?array
+    {
+        // Mirror deklarant.ba: VAT/tax ID is authoritative and must be attempted for every party
+        // before any fuzzy name can accidentally claim a match belonging to another party.
+        foreach ($identities as $identity) {
+            if (! is_array($identity) || $this->taxNumber((string) ($identity['tax_number'] ?? '')) === '') {
+                continue;
+            }
+
+            $match = $this->match(['tax_number' => $identity['tax_number']]);
+            if ($match) {
+                return $match;
+            }
+        }
+
+        foreach ($identities as $identity) {
+            if (! is_array($identity)) {
+                continue;
+            }
+
+            $match = $this->match($identity);
+            if ($match) {
+                return $match;
+            }
+        }
+
+        return null;
+    }
+
     public function match(array $identity): ?array
     {
         $name = trim((string) ($identity['name'] ?? ''));
@@ -19,7 +48,7 @@ class CustomerMatcher
             return null;
         }
 
-        $nameTerms = $this->nameTerms($name);
+        $nameTerms = $this->nameTerms($name, $city);
         $query = Customer::query()->with('user');
         $query->where(function (Builder $customerQuery) use ($taxNumber, $nameTerms): void {
             if ($taxNumber !== '') {
@@ -76,10 +105,10 @@ class CustomerMatcher
             return 1000;
         }
 
-        $needle = $this->companyName($name);
+        $needle = $this->companyName($name, [$city]);
         $candidateNames = array_filter([
-            $this->companyName((string) $customer->name),
-            $this->companyName((string) $customer->company_name),
+            $this->companyName((string) $customer->name, [$city, (string) $customer->city]),
+            $this->companyName((string) $customer->company_name, [$city, (string) $customer->city]),
         ]);
         $score = collect($candidateNames)->max(function (string $candidate) use ($needle): int {
             if ($needle !== '' && $candidate === $needle) {
@@ -99,9 +128,9 @@ class CustomerMatcher
         return $score;
     }
 
-    private function nameTerms(string $name): array
+    private function nameTerms(string $name, string $city): array
     {
-        $normalized = $this->companyName($name);
+        $normalized = $this->companyName($name, [$city]);
         if ($normalized === '') {
             return [];
         }
@@ -112,10 +141,17 @@ class CustomerMatcher
         return array_values(array_unique(array_filter([$normalized, $firstWord])));
     }
 
-    private function companyName(string $value): string
+    private function companyName(string $value, array $cities = []): string
     {
         $value = Str::lower(Str::ascii(trim($value)));
-        $value = preg_replace('/\b(?:d\.?\s*o\.?\s*o\.?|gmbh|ag|ltd|llc|inc|doo)\b/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\b(?:d\s*\.?\s*o\s*\.?\s*o|doo|gmbh|ag|ltd|llc|inc|company|trgovina|trading|import|export)\b\.?/u', ' ', $value) ?? $value;
+
+        foreach ($cities as $city) {
+            $normalizedCity = Str::lower(Str::ascii(trim($city)));
+            if ($normalizedCity !== '') {
+                $value = str_replace($normalizedCity, ' ', $value);
+            }
+        }
 
         return trim(preg_replace('/[^a-z0-9]+/', ' ', $value) ?? $value);
     }

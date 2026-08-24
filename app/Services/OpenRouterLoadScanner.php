@@ -30,7 +30,7 @@ class OpenRouterLoadScanner
 
     public function scan(array $images, array $current = [], ?int $conversationId = null): array
     {
-        $userPrompt = 'Read the consignee/customer company name, tax or VAT number, city and country code, a short title summarizing the load, the road/air/sea transport type, the cargo type (e.g. Pallets, Machinery, Electronics), the goods type/description, '
+        $userPrompt = 'Determine the sender and receiver business separately, read every business party shown on the document into customerCandidates, plus the primary consignee/customer company name, tax or VAT number, city and country code, a short title summarizing the load, the road/air/sea transport type, the cargo type (e.g. Pallets, Machinery, Electronics), the goods type/description, '
             .'the weight in kilograms, the pallet/unit count, the required trailer body type if stated, '
             .'dimensions and volume, required vehicle type, loading/unloading equipment, road or air handling characteristics, special requirements, transport mode, delivery proof requirement, whether tracking is required, '
             .'the pickup city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), the delivery city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), '
@@ -86,7 +86,7 @@ class OpenRouterLoadScanner
     {
         $serverDate = now()->toDateString();
         $serverTimezone = (string) config('app.timezone', 'UTC');
-        $userPrompt = 'The shipper described the load in their own words below. Extract the consignee/customer company name, tax or VAT number, city and country code, a short title, the road/air/sea transport type, the cargo type, the goods type/description, the weight in kilograms, the pallet/unit count, '
+        $userPrompt = 'The shipper described the load in their own words below. Determine the sender and receiver business separately, extract every named business party into customerCandidates, plus the primary consignee/customer company name, tax or VAT number, city and country code, a short title, the road/air/sea transport type, the cargo type, the goods type/description, the weight in kilograms, the pallet/unit count, '
             .'the required trailer body type if stated, the pickup city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), '
             .'the delivery city, country code, street address, latitude, longitude and date (plus a date-range end and time window if given), '
             .'dimensions, volume, vehicle, loading/unloading equipment, road or air handling characteristics, special requirements, transport mode, delivery proof requirement, whether tracking is required, '
@@ -182,7 +182,7 @@ class OpenRouterLoadScanner
         return 'You read a freight document (a shipping order, rate confirmation, bill of lading, cargo manifest, or booking note) '
             .'to prefill a new load posting form. Do not invent values you cannot read; use an empty string, 0, or false for anything not shown, '
             .(($current !== []) ? 'unless a current draft is given below, in which case carry its existing values forward for anything this document does not address. ' : '')
-            .'Identify the consignee/customer whose record should be attached to the load. Return its printed legal company name, tax/VAT/ID number, city and two-letter country code. Prefer a tax/VAT/ID number because it uniquely identifies the database record; do not confuse a contact person with the company. '
+            .'Determine the sender and receiver companies separately from document roles and addresses, and return each in sender and receiver. Extract every business party printed on the document into customerCandidates, including supplier/Lieferant/shipper, buyer/consignee, issuer and delivery party. Put the supplier, shipper or pickup-side company first because that is the customer whose load is normally being created from a purchase order. Preserve each party\'s printed legal name, tax/VAT/ID number, city, country code and role. This list is used for an exact backend registry lookup, so never omit a party that has a printed tax/VAT/ID number. Also return the most likely consignee/customer in the dedicated consignee fields, but do not confuse a contact person with a company. '
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is shown, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'Read the cargo weight in kilograms, converting from other units if the document states them explicitly (e.g. lbs, tons). '
@@ -207,7 +207,7 @@ class OpenRouterLoadScanner
         return 'You read a free-text description of a freight load, written by a shipper in plain language (any of English, Bosnian/Croatian/Serbian, or German), '
             .'to prefill a new load posting form. Do not invent values that are not stated or clearly implied; use an empty string, 0, or false for anything not mentioned, '
             .(($current !== []) ? 'unless a current draft is given below, in which case carry its existing values forward for anything this message does not address, and correctly apply incremental changes (add, increase, remove, decrease) using the current value as the base. ' : '')
-            .'Identify the consignee/customer when the user names one. Return its company name, tax/VAT/ID number, city and two-letter country code; do not confuse a contact person with the company. '
+            .'Determine the sender and receiver companies separately and return each in sender and receiver. Extract every named business party into customerCandidates with its company name, tax/VAT/ID number, city, country code and role. Put the supplier, shipper or pickup-side company first. Also return the most likely consignee/customer in the dedicated consignee fields; do not confuse a contact person with a company. '
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is mentioned, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'The user may give a raw date or a relative date. Resolve danas/today/heute as the server date, sutra/tomorrow/morgen as server date plus 1 day, prekosutra/day after tomorrow/übermorgen as server date plus 2 days, and "za N dana"/"in N days"/"in N Tagen" as server date plus N days. Never infer the year from model knowledge or training data. '
@@ -398,6 +398,9 @@ class OpenRouterLoadScanner
 
         return [
             'isDocument' => $isDocument,
+            'sender' => $this->partyValue($result['sender'] ?? null),
+            'receiver' => $this->partyValue($result['receiver'] ?? null),
+            'customerCandidates' => $this->customerCandidateValues($result['customerCandidates'] ?? null),
             'consigneeName' => $this->stringValue($result['consigneeName'] ?? ''),
             'consigneeTaxNumber' => $this->stringValue($result['consigneeTaxNumber'] ?? ''),
             'consigneeCity' => $this->stringValue($result['consigneeCity'] ?? ''),
@@ -491,6 +494,40 @@ class OpenRouterLoadScanner
             ->all();
     }
 
+    private function customerCandidateValues(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return collect($value)
+            ->filter(fn ($item) => is_array($item))
+            ->map(fn (array $item): array => [
+                'role' => $this->stringValue($item['role'] ?? ''),
+                'name' => $this->stringValue($item['name'] ?? ''),
+                'taxNumber' => $this->stringValue($item['taxNumber'] ?? ''),
+                'city' => $this->stringValue($item['city'] ?? ''),
+                'countryCode' => strtoupper($this->stringValue($item['countryCode'] ?? '')),
+            ])
+            ->filter(fn (array $item): bool => $item['name'] !== '' || $item['taxNumber'] !== '')
+            ->take(8)
+            ->values()
+            ->all();
+    }
+
+    private function partyValue(mixed $value): array
+    {
+        $value = is_array($value) ? $value : [];
+
+        return [
+            'role' => $this->stringValue($value['role'] ?? ''),
+            'name' => $this->stringValue($value['name'] ?? ''),
+            'taxNumber' => $this->stringValue($value['taxNumber'] ?? ''),
+            'city' => $this->stringValue($value['city'] ?? ''),
+            'countryCode' => strtoupper($this->stringValue($value['countryCode'] ?? '')),
+        ];
+    }
+
     private function hsCodeValues(mixed $value): array
     {
         if (! is_array($value)) {
@@ -578,14 +615,50 @@ class OpenRouterLoadScanner
         return is_numeric($value) ? (float) $value : 0.0;
     }
 
+    private function partySchema(string $description): array
+    {
+        return [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'description' => $description,
+            'required' => ['role', 'name', 'taxNumber', 'city', 'countryCode'],
+            'properties' => [
+                'role' => ['type' => 'string'],
+                'name' => ['type' => 'string'],
+                'taxNumber' => ['type' => 'string'],
+                'city' => ['type' => 'string'],
+                'countryCode' => ['type' => 'string'],
+            ],
+        ];
+    }
+
     private function schema(): array
     {
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['isDocument', 'consigneeName', 'consigneeTaxNumber', 'consigneeCity', 'consigneeCountryCode', 'title', 'transportType', 'cargoType', 'goodsType', 'hsSearchTerms', 'hsCodes', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupLatitude', 'pickupLongitude', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryLatitude', 'deliveryLongitude', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
+            'required' => ['isDocument', 'sender', 'receiver', 'customerCandidates', 'consigneeName', 'consigneeTaxNumber', 'consigneeCity', 'consigneeCountryCode', 'title', 'transportType', 'cargoType', 'goodsType', 'hsSearchTerms', 'hsCodes', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupLatitude', 'pickupLongitude', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryLatitude', 'deliveryLongitude', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
             'properties' => [
                 'isDocument' => ['type' => 'boolean', 'description' => 'True only when the image shows a freight/shipping document.'],
+                'sender' => $this->partySchema('Company sending/issuing the document or shipment. Empty strings when unknown.'),
+                'receiver' => $this->partySchema('Company receiving the document, order or shipment. Empty strings when unknown.'),
+                'customerCandidates' => [
+                    'type' => 'array',
+                    'maxItems' => 8,
+                    'description' => 'Every business party printed on the source, supplier/shipper/pickup-side first. Never omit a party with a tax/VAT/ID number.',
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'required' => ['role', 'name', 'taxNumber', 'city', 'countryCode'],
+                        'properties' => [
+                            'role' => ['type' => 'string'],
+                            'name' => ['type' => 'string'],
+                            'taxNumber' => ['type' => 'string'],
+                            'city' => ['type' => 'string'],
+                            'countryCode' => ['type' => 'string'],
+                        ],
+                    ],
+                ],
                 'consigneeName' => ['type' => 'string', 'description' => 'Printed legal name of the consignee/customer company, or empty when not stated.'],
                 'consigneeTaxNumber' => ['type' => 'string', 'description' => 'Printed tax, VAT or company ID used to identify the consignee/customer, or empty when not stated.'],
                 'consigneeCity' => ['type' => 'string'],
