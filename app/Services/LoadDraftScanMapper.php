@@ -36,7 +36,7 @@ class LoadDraftScanMapper
             'volumeM3' => (float) ($draft->volume_m3 ?? 0),
             'vehicleType' => (string) ($draft->vehicle_type ?? ''),
             'loadingEquipment' => (string) (($draft->loading_methods ?? [])[0] ?? ''),
-            'characteristics' => (string) ($draft->characteristics ?? ''),
+            'characteristics' => (string) (($draft->characteristics ?? [])[0] ?? ''),
             'specialRequirements' => $draft->special_requirements ?? [],
             'transportMode' => (string) ($draft->transport_mode ?? ''),
             'deliveryProof' => (string) ($draft->delivery_proof ?? ''),

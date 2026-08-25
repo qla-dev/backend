@@ -60,7 +60,7 @@ class LoadDraftController extends CrudController
             'toll_roads_included' => ['nullable', 'boolean'], 'ferry_included' => ['nullable', 'boolean'], 'cmr_required' => ['nullable', 'boolean'],
             'pallet_exchange_required' => ['nullable', 'boolean'], 'customs_required' => ['nullable', 'boolean'],
             'insurance_required' => ['nullable', 'boolean'], 'certification_required' => ['nullable', 'boolean'], 'inspection_services_required' => ['nullable', 'boolean'],
-            'vehicle_type' => ['nullable', 'string', 'max:100'], 'transport_mode' => ['nullable', 'string', 'max:120'], 'special_requirements' => ['nullable', 'array'], 'special_requirements.*' => ['string', 'max:255'], 'characteristics' => ['nullable', 'string', 'max:255'], 'delivery_proof' => ['nullable', 'string', 'max:30'],
+            'vehicle_type' => ['nullable', 'string', 'max:100'], 'transport_mode' => ['nullable', 'string', 'max:120'], 'special_requirements' => ['nullable', 'array'], 'special_requirements.*' => ['string', 'max:255'], 'characteristics' => ['nullable', 'array'], 'characteristics.*' => ['string', 'max:255'], 'delivery_proof' => ['nullable', 'string', 'max:30'],
             'body_types' => ['nullable', 'array'], 'contact' => ['nullable', 'array'], 'notes' => ['nullable', 'string'], 'internal_comments' => ['nullable', 'string'],
             'external_comments' => ['nullable', 'string'],
             'pickup_place_type' => ['nullable', 'string', 'max:100'], 'pickup_city' => ['nullable', 'string', 'max:120'], 'pickup_country_code' => ['nullable', 'string', 'size:2'],

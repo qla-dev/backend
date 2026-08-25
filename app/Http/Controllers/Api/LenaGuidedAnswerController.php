@@ -31,7 +31,7 @@ class LenaGuidedAnswerController extends Controller
     use ScopesConversationAccess;
 
     // Multi-select pill steps only - a comma-joined list of chosen labels, not a single value.
-    private const MULTI_VALUE_STEPS = ['specialRequirements', 'requirements'];
+    private const MULTI_VALUE_STEPS = ['specialRequirements', 'requirements', 'characteristics'];
 
     // The steps applyAnswer() actually knows how to write into the draft (pill steps + the
     // regex-masked numeric/date ones). Every other step is skip-only here.
@@ -175,6 +175,8 @@ class LenaGuidedAnswerController extends Controller
 
             if ($step === 'specialRequirements') {
                 $draft['specialRequirements'] = array_values($values);
+            } elseif ($step === 'characteristics') {
+                $draft['characteristics'] = array_values($values);
             } else {
                 foreach (self::REQUIREMENT_FIELDS as $label => $field) {
                     $draft[$field] = in_array($label, $values, true);
@@ -193,7 +195,6 @@ class LenaGuidedAnswerController extends Controller
             'bodyType' => [...$draft, 'bodyType' => $value],
             'vehicleType' => [...$draft, 'vehicleType' => $value],
             'loadingEquipment' => [...$draft, 'loadingEquipment' => $value],
-            'characteristics' => [...$draft, 'characteristics' => $value],
             'transportMode' => [...$draft, 'transportMode' => $value],
             'deliveryProof' => [...$draft, 'deliveryProof' => $value],
             'priceTerms' => [...$draft, 'priceTerms' => $value],
