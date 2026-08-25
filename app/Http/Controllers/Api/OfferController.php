@@ -51,6 +51,7 @@ class OfferController extends CrudController
             'additional_charges.*.rate' => ['nullable', 'numeric'],
             'additional_charges.*.unit' => ['nullable', 'string', 'max:30'],
             'has_exceptions' => ['sometimes', 'boolean'],
+            'is_counter' => ['sometimes', 'boolean'],
             'confirmed_authorized' => $confirmed,
             'confirmed_details_match' => $confirmed,
             'confirmed_terms' => $confirmed,

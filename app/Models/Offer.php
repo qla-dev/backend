@@ -12,7 +12,7 @@ class Offer extends BaseModel
             'valid_until' => 'datetime', 'amount' => 'decimal:2',
             'included_charges' => 'array', 'excluded_charges' => 'array', 'additional_charges' => 'array',
             'available_date' => 'date', 'exact_loading_date' => 'date', 'estimated_delivery_date' => 'date',
-            'can_perform_as_required' => 'boolean', 'has_exceptions' => 'boolean',
+            'can_perform_as_required' => 'boolean', 'has_exceptions' => 'boolean', 'is_counter' => 'boolean',
             'confirmed_authorized' => 'boolean', 'confirmed_details_match' => 'boolean', 'confirmed_terms' => 'boolean',
         ];
     }
