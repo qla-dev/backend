@@ -140,7 +140,7 @@ class LoadController extends CrudController
             'length_m' => ['nullable', 'numeric', 'min:0'], 'width_m' => ['nullable', 'numeric', 'min:0'], 'height_m' => ['nullable', 'numeric', 'min:0'],
             'volume_m3' => ['nullable', 'numeric', 'min:0'], 'pallets' => ['nullable', 'integer', 'min:0'], 'quantity_measure' => ['nullable', 'string', 'max:255'],
             'teu' => ['nullable', 'string', 'max:80'], 'container_types' => ['nullable', 'string', 'max:255'], 'container_number' => ['nullable', 'string', 'max:255'],
-            'etd_at' => ['nullable', 'date'], 'atd_at' => ['nullable', 'date'], 'shipper_name' => ['nullable', 'string', 'max:255'],
+            'etd_at' => ['nullable', 'date'], 'atd_at' => ['nullable', 'date'], 'transit_days' => ['nullable', 'integer', 'min:0', 'max:200'], 'shipper_name' => ['nullable', 'string', 'max:255'],
             'mediator' => ['nullable', 'string', 'max:255'], 'incoterms' => ['nullable', 'string', 'max:80'],
             'price_insurance' => ['nullable', 'string'], 'profit_loss' => ['nullable', 'string'], 'temperature_min' => ['nullable', 'numeric'],
             'temperature_max' => ['nullable', 'numeric'], 'declared_value' => ['nullable', 'numeric', 'min:0'], 'shipment_value_currency' => ['nullable', 'string', 'size:3'], 'budget' => ['nullable', 'numeric', 'min:0'],
