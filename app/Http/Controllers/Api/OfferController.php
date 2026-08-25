@@ -20,7 +20,7 @@ class OfferController extends CrudController
 
     protected function relations(): array
     {
-        return ['freightLoad.stops', 'company', 'driver', 'creator', 'vehicle'];
+        return ['freightLoad.stops', 'company', 'driver', 'creator', 'vehicle', 'parentOffer'];
     }
 
     protected function rules(bool $u = false): array
@@ -52,6 +52,7 @@ class OfferController extends CrudController
             'additional_charges.*.unit' => ['nullable', 'string', 'max:30'],
             'has_exceptions' => ['sometimes', 'boolean'],
             'is_counter' => ['sometimes', 'boolean'],
+            'parent_offer_id' => ['nullable', 'integer', 'exists:offers,id'],
             'confirmed_authorized' => $confirmed,
             'confirmed_details_match' => $confirmed,
             'confirmed_terms' => $confirmed,
@@ -65,7 +66,7 @@ class OfferController extends CrudController
 
         $offer = DB::transaction(function () use ($data) {
             $load = Load::query()->lockForUpdate()->findOrFail($data['load_id']);
-            $this->validateBidFloor($load, (float) $data['amount'], $data['price_basis'] === 'best_bid');
+            $this->validateBidFloor($load, (float) $data['amount'], $data['price_basis'] === 'best_bid' || ($data['is_counter'] ?? false));
 
             return Offer::query()->create($data);
         });

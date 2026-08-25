@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Offer extends BaseModel
 {
@@ -40,5 +41,15 @@ class Offer extends BaseModel
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function parentOffer(): BelongsTo
+    {
+        return $this->belongsTo(Offer::class, 'parent_offer_id');
+    }
+
+    public function counterOffers(): HasMany
+    {
+        return $this->hasMany(Offer::class, 'parent_offer_id');
     }
 }
