@@ -52,7 +52,7 @@ class ConversationController extends CrudController
     {
         $p = $u ? 'sometimes' : 'required';
 
-        return ['company_id' => ['nullable', 'integer', 'exists:companies,id'], 'load_id' => ['nullable', 'integer', 'exists:loads,id'], 'load_draft_id' => ['nullable', 'integer', 'exists:load_drafts,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'channel' => ['sometimes', 'in:inapp,whatsapp,telegram'], 'subject' => ['nullable', 'string', 'max:255'], 'canvas' => ['sometimes', 'boolean'], 'last_message_at' => ['nullable', 'date'], 'participant_ids' => ['sometimes', 'array'], 'participant_ids.*' => ['integer', 'exists:users,id']];
+        return ['company_id' => ['nullable', 'integer', 'exists:companies,id'], 'load_id' => ['nullable', 'integer', 'exists:loads,id'], 'load_draft_id' => ['nullable', 'integer', 'exists:load_drafts,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'channel' => ['sometimes', 'in:inapp,whatsapp,telegram'], 'subject' => ['nullable', 'string', 'max:255'], 'canvas' => ['sometimes', 'boolean'], 'last_message_at' => ['nullable', 'date'], 'participant_ids' => ['sometimes', 'array'], 'participant_ids.*' => ['integer', 'exists:users,id'], 'initial_message' => ['nullable', 'string', 'max:2000']];
     }
 
     public function store(Request $request): JsonResponse
@@ -60,6 +60,8 @@ class ConversationController extends CrudController
         $data = $request->validate($this->rules());
         $participantIds = collect($data['participant_ids'] ?? [])->push($data['created_by_user_id'])->unique()->values();
         unset($data['participant_ids']);
+        $initialMessage = $data['initial_message'] ?? null;
+        unset($data['initial_message']);
 
         if (! blank($data['load_draft_id'] ?? null)) {
             $data['canvas'] = true;
@@ -73,7 +75,7 @@ class ConversationController extends CrudController
         // a LenaAI-originated draft which already backfills load_draft_id onto an existing,
         // already-active conversation (DispatchChatController) rather than creating a new one.
         if (! blank($data['load_draft_id'] ?? null)) {
-            $this->postDraftCreatedMessage($record, $request->user());
+            $this->postDraftCreatedMessage($record, $request->user(), $initialMessage);
         }
 
         $record->load($this->relations());
@@ -81,19 +83,25 @@ class ConversationController extends CrudController
         return $this->success((new EntityResource($record))->resolve($request), 'Resource created successfully.', status: 201);
     }
 
-    private function postDraftCreatedMessage(Conversation $conversation, ?User $user): void
+    private function postDraftCreatedMessage(Conversation $conversation, ?User $user, ?string $customBody = null): void
     {
         $aiDispatcherId = User::query()->where('username', 'ai_dispatcher')->value('id');
         if (! $aiDispatcherId) {
             return;
         }
 
-        $bodies = [
-            'bs' => "Čestitamo, kreirali ste draft tereta! Sačuvani podaci su učitani u Draft Panel. Želite li sada nastaviti vođeno popunjavanje?\n\n[[LENA_OPTIONS:continue_add_yes,continue_add_no]]",
-            'de' => "Ihr Ladungsentwurf wurde erstellt. Die gespeicherten Daten wurden in den Entwurfsbereich geladen. Möchten Sie jetzt mit der geführten Eingabe fortfahren?\n\n[[LENA_OPTIONS:continue_add_yes,continue_add_no]]",
-            'en' => "Your load draft was created. Its saved data is loaded in the Draft panel. Would you like to continue the guided form now?\n\n[[LENA_OPTIONS:continue_add_yes,continue_add_no]]",
-        ];
-        $body = $bodies[$user?->language] ?? $bodies['en'];
+        $optionsSuffix = "\n\n[[LENA_OPTIONS:continue_add_yes,continue_add_no]]";
+
+        if ($customBody !== null && trim($customBody) !== '') {
+            $body = $customBody.$optionsSuffix;
+        } else {
+            $bodies = [
+                'bs' => 'Čestitamo, kreirali ste draft tereta! Sačuvani podaci su učitani u Draft Panel. Želite li sada nastaviti vođeno popunjavanje?'.$optionsSuffix,
+                'de' => 'Ihr Ladungsentwurf wurde erstellt. Die gespeicherten Daten wurden in den Entwurfsbereich geladen. Möchten Sie jetzt mit der geführten Eingabe fortfahren?'.$optionsSuffix,
+                'en' => 'Your load draft was created. Its saved data is loaded in the Draft panel. Would you like to continue the guided form now?'.$optionsSuffix,
+            ];
+            $body = $bodies[$user?->language] ?? $bodies['en'];
+        }
 
         Message::query()->create([
             'conversation_id' => $conversation->id,
