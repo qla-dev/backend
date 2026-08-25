@@ -181,6 +181,13 @@ class LoadController extends CrudController
                 $data['company_id'] = $demoCompanyId;
             }
         }
+        if ($request->user()?->role?->name === 'company' && empty($data['company_id'])) {
+            $ownCompanyId = $request->user()->companies()->value('companies.id');
+
+            if ($ownCompanyId) {
+                $data['company_id'] = $ownCompanyId;
+            }
+        }
         $data['customer_user_id'] = $data['customer_user_id'] ?? $request->user()->id;
         $data['status'] = $data['status'] ?? 'pending';
         $data['public_id'] = (string) Str::uuid();
