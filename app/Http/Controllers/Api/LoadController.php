@@ -155,7 +155,7 @@ class LoadController extends CrudController
             'body_types' => ['nullable', 'array'], 'contact' => ['nullable', 'array'], 'notes' => ['nullable', 'string'], 'internal_comments' => ['nullable', 'string'],
             'external_comments' => ['nullable', 'string'], 'published_at' => ['nullable', 'date'], 'completed_at' => ['nullable', 'date'],
             'stops' => ['sometimes', 'array', 'min:2'], 'stops.*.type' => ['required_with:stops', 'in:pickup,waypoint,delivery'],
-            'stops.*.position' => ['required_with:stops', 'integer', 'min:1'], 'stops.*.place_type' => ['nullable', 'string', 'max:100'], 'stops.*.port' => ['nullable', 'string', 'max:255'],
+            'stops.*.position' => ['required_with:stops', 'integer', 'min:1'], 'stops.*.place_type' => ['nullable', 'string', 'max:100'], 'stops.*.port' => ['nullable', 'string', 'max:255'], 'stops.*.airport' => ['nullable', 'string', 'max:255'],
             'stops.*.city' => ['required_with:stops', 'string', 'max:120'], 'stops.*.country_code' => ['required_with:stops', 'string', 'size:2'],
             'stops.*.address' => ['nullable', 'string', 'max:255'], 'stops.*.latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'stops.*.longitude' => ['nullable', 'numeric', 'between:-180,180'], 'stops.*.window_starts_at' => ['nullable', 'date'],
