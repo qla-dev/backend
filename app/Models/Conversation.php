@@ -45,4 +45,12 @@ class Conversation extends BaseModel
     {
         return $this->hasMany(Message::class)->orderBy('sent_at');
     }
+
+    public function recentMessages(): HasMany
+    {
+        return $this->hasMany(Message::class)
+            ->orderByDesc('sent_at')
+            ->orderByDesc('id')
+            ->limit(2);
+    }
 }

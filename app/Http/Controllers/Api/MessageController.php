@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\ScopesConversationAccess;
 use App\Http\Resources\EntityResource;
 use App\Models\Message;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,29 @@ class MessageController extends CrudController
     protected function relations(): array
     {
         return ['conversation', 'sender'];
+    }
+
+    protected function relationsForRequest(Request $request): array
+    {
+        return ['sender'];
+    }
+
+    protected function applyFilters(Builder $query, Request $request): void
+    {
+        $request->validate(['conversation_id' => ['sometimes', 'integer', 'exists:conversations,id']]);
+        $userId = $request->user()?->id;
+
+        $query->whereHas('conversation', function (Builder $conversation) use ($request, $userId): void {
+            $this->scopeConversationToParticipant($conversation, $userId);
+            if ($request->filled('conversation_id')) {
+                $conversation->whereKey($request->integer('conversation_id'));
+            }
+        });
+    }
+
+    protected function applyOrdering(Builder $query, Request $request): void
+    {
+        $query->orderByDesc('sent_at')->orderByDesc('id');
     }
 
     protected function rules(bool $u = false): array

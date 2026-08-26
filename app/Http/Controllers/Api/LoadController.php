@@ -15,6 +15,23 @@ use Illuminate\Validation\Rule;
 
 class LoadController extends CrudController
 {
+    public function trackingStatusCounts(Request $request): JsonResponse
+    {
+        $request->query->set('tracking', 'true');
+        $request->query->remove('status');
+        $request->query->remove('statuses');
+        $query = Load::query();
+        $this->applyFilters($query, $request);
+        $counts = $query
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->get()
+            ->map(fn (Load $load): array => ['status' => $load->status, 'count' => (int) $load->aggregate])
+            ->values();
+
+        return $this->success($counts, 'Tracking status counts retrieved successfully.');
+    }
+
     public function publicIndex(): JsonResponse
     {
         $loads = Load::query()

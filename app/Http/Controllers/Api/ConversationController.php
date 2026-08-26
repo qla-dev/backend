@@ -25,6 +25,11 @@ class ConversationController extends CrudController
         return ['company', 'freightLoad.consignee', 'freightLoad.stops', 'freightLoadDraft.consignee', 'creator', 'participants.role', 'messages.sender'];
     }
 
+    protected function relationsForRequest(Request $request): array
+    {
+        return ['company', 'freightLoad.consignee', 'freightLoad.stops', 'freightLoadDraft.consignee', 'creator', 'participants.role', 'recentMessages.sender'];
+    }
+
     protected function searchColumns(): array
     {
         return ['subject', 'channel'];
