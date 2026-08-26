@@ -17,45 +17,70 @@ class OpenRouterDispatchAssistant
             'model' => config('services.openrouter.model'),
             'temperature' => 0.5,
             'usage' => ['include' => true],
+            // Gemini 2.5 Flash (the configured model) ships with "thinking" on by default, and
+            // OpenRouter has a well-documented failure mode where that internal reasoning consumes
+            // the response and the final answer comes back as a null message.content even though
+            // finish_reason reports a normal "stop" - not an HTTP error, so the generic retry below
+            // wouldn't even see it as a failure without the empty-content check. Reasoning adds cost
+            // and latency this dispatcher chat never needed anyway, so it's disabled outright rather
+            // than just worked around.
+            'reasoning' => ['enabled' => false],
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],
                 ...$history,
             ],
         ];
-        $startedAt = microtime(true);
 
-        try {
-            $response = Http::withToken((string) config('services.openrouter.api_key'))
-                ->acceptJson()
-                ->timeout(60)
-                ->withHeaders([
-                    'HTTP-Referer' => config('app.url'),
-                    'X-Title' => 'Freightbook.ai AI Dispatcher',
-                ])
-                ->post((string) config('services.openrouter.url'), $payload);
+        // Belt-and-suspenders: even with reasoning disabled, the provider occasionally still
+        // returns a "stop" completion with null content for reasons that never surface in the
+        // response body. That's not deterministic, so one immediate retry resolves it far more
+        // often than surfacing an error to the user for what's usually a one-off blip.
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            $startedAt = microtime(true);
 
-            if (! $response->successful()) {
-                $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, data_get($response->json(), 'error.message'));
+            try {
+                $response = Http::withToken((string) config('services.openrouter.api_key'))
+                    ->acceptJson()
+                    ->timeout(60)
+                    ->withHeaders([
+                        'HTTP-Referer' => config('app.url'),
+                        'X-Title' => 'Freightbook.ai AI Dispatcher',
+                    ])
+                    ->post((string) config('services.openrouter.url'), $payload);
 
-                throw new RuntimeException(data_get($response->json(), 'error.message', 'AI dispatcher is not available right now.'));
+                if (! $response->successful()) {
+                    $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, data_get($response->json(), 'error.message'));
+
+                    throw new RuntimeException(data_get($response->json(), 'error.message', 'AI dispatcher is not available right now.'));
+                }
+
+                $content = data_get($response->json(), 'choices.0.message.content');
+                if (is_string($content) && trim($content) !== '') {
+                    $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, true, null);
+
+                    return trim($content);
+                }
+
+                $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, 'The AI dispatcher did not return a reply.'.($attempt === 1 ? ' Retrying once.' : ''));
+
+                if ($attempt === 1) {
+                    continue;
+                }
+
+                throw new RuntimeException('The AI dispatcher did not return a reply.');
+            } catch (ConnectionException $exception) {
+                Log::warning('AI dispatcher reply failed.', ['error' => $exception->getMessage()]);
+                $this->log($payload, null, null, $conversationId, $hasAttachment, $startedAt, false, $exception->getMessage());
+
+                if ($attempt === 1) {
+                    continue;
+                }
+
+                throw new RuntimeException('AI dispatcher is not available right now. Please try again.');
             }
-
-            $content = data_get($response->json(), 'choices.0.message.content');
-            if (is_string($content) && trim($content) !== '') {
-                $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, true, null);
-
-                return trim($content);
-            }
-
-            $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, 'The AI dispatcher did not return a reply.');
-
-            throw new RuntimeException('The AI dispatcher did not return a reply.');
-        } catch (ConnectionException $exception) {
-            Log::warning('AI dispatcher reply failed.', ['error' => $exception->getMessage()]);
-            $this->log($payload, null, null, $conversationId, $hasAttachment, $startedAt, false, $exception->getMessage());
-
-            throw new RuntimeException('AI dispatcher is not available right now. Please try again.');
         }
+
+        throw new RuntimeException('AI dispatcher is not available right now. Please try again.');
     }
 
     private function log(array $payload, ?array $response, ?int $httpStatus, ?int $conversationId, bool $hasAttachment, float $startedAt, bool $success, ?string $error): void
