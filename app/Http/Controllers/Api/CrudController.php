@@ -24,6 +24,12 @@ abstract class CrudController extends Controller
     }
 
     /** @return list<string> */
+    protected function relationsForRequest(Request $request): array
+    {
+        return $this->relations();
+    }
+
+    /** @return list<string> */
     protected function searchColumns(): array
     {
         return [];
@@ -39,7 +45,7 @@ abstract class CrudController extends Controller
     public function index(Request $request): JsonResponse
     {
         $model = $this->modelClass();
-        $query = $model::query()->with($this->relations());
+        $query = $model::query()->with($this->relationsForRequest($request));
         $search = trim((string) $request->query('search', ''));
 
         if ($search !== '' && $this->searchColumns() !== []) {

@@ -72,6 +72,15 @@ class LoadController extends CrudController
         return ['customer.role', 'consignee.user.role', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'offers', 'shipment.events', 'routes.stops', 'notes.author', 'documents'];
     }
 
+    protected function relationsForRequest(Request $request): array
+    {
+        if ($request->boolean('tracking')) {
+            return ['consignee', 'company', 'stops', 'shipment'];
+        }
+
+        return parent::relationsForRequest($request);
+    }
+
     protected function searchColumns(): array
     {
         return ['title', 'status', 'cargo_type', 'goods_type', 'storage_type', 'warehouse_city'];
@@ -254,6 +263,12 @@ class LoadController extends CrudController
 
     protected function applyOrdering(Builder $query, Request $request): void
     {
+        if ($request->boolean('tracking')) {
+            $query->orderByDesc('updated_at')->orderByDesc('id');
+
+            return;
+        }
+
         [$column, $direction] = match ((string) $request->query('sort', 'price_asc')) {
             'price_desc' => ['budget', 'desc'], 'date_desc' => ['published_at', 'desc'],
             'date_asc' => ['published_at', 'asc'], default => ['budget', 'asc'],
