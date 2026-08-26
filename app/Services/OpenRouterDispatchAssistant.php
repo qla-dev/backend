@@ -9,6 +9,8 @@ use RuntimeException;
 
 class OpenRouterDispatchAssistant
 {
+    private const MAX_ATTEMPTS = 2;
+
     public function __construct(private readonly AiCallLogger $logger) {}
 
     public function reply(string $systemPrompt, array $history, ?int $conversationId = null, bool $hasAttachment = false): string
@@ -35,8 +37,9 @@ class OpenRouterDispatchAssistant
         // returns a "stop" completion with null content for reasons that never surface in the
         // response body. That's not deterministic, so one immediate retry resolves it far more
         // often than surfacing an error to the user for what's usually a one-off blip.
-        for ($attempt = 1; $attempt <= 2; $attempt++) {
+        for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             $startedAt = microtime(true);
+            $logContext = ['attempt' => $attempt, 'max_attempts' => self::MAX_ATTEMPTS, 'conversation_id' => $conversationId, 'model' => $payload['model']];
 
             try {
                 $response = Http::withToken((string) config('services.openrouter.api_key'))
@@ -49,9 +52,16 @@ class OpenRouterDispatchAssistant
                     ->post((string) config('services.openrouter.url'), $payload);
 
                 if (! $response->successful()) {
-                    $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, data_get($response->json(), 'error.message'));
+                    $errorMessage = data_get($response->json(), 'error.message');
+                    Log::warning('AI dispatcher call returned a non-successful response.', [
+                        ...$logContext,
+                        'http_status' => $response->status(),
+                        'error' => $errorMessage,
+                        'body' => $response->body(),
+                    ]);
+                    $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, $errorMessage);
 
-                    throw new RuntimeException(data_get($response->json(), 'error.message', 'AI dispatcher is not available right now.'));
+                    throw new RuntimeException($errorMessage ?: 'AI dispatcher is not available right now.');
                 }
 
                 $content = data_get($response->json(), 'choices.0.message.content');
@@ -61,18 +71,24 @@ class OpenRouterDispatchAssistant
                     return trim($content);
                 }
 
-                $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, 'The AI dispatcher did not return a reply.'.($attempt === 1 ? ' Retrying once.' : ''));
+                Log::warning('AI dispatcher call returned no content.', [
+                    ...$logContext,
+                    'http_status' => $response->status(),
+                    'finish_reason' => data_get($response->json(), 'choices.0.finish_reason'),
+                    'generation_id' => data_get($response->json(), 'id'),
+                ]);
+                $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, 'The AI dispatcher did not return a reply.'.($attempt < self::MAX_ATTEMPTS ? ' Retrying automatically.' : ''));
 
-                if ($attempt === 1) {
+                if ($attempt < self::MAX_ATTEMPTS) {
                     continue;
                 }
 
                 throw new RuntimeException('The AI dispatcher did not return a reply.');
             } catch (ConnectionException $exception) {
-                Log::warning('AI dispatcher reply failed.', ['error' => $exception->getMessage()]);
+                Log::warning('AI dispatcher call failed to connect.', [...$logContext, 'error' => $exception->getMessage()]);
                 $this->log($payload, null, null, $conversationId, $hasAttachment, $startedAt, false, $exception->getMessage());
 
-                if ($attempt === 1) {
+                if ($attempt < self::MAX_ATTEMPTS) {
                     continue;
                 }
 
