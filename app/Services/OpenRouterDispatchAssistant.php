@@ -15,31 +15,38 @@ class OpenRouterDispatchAssistant
 
     public function reply(string $systemPrompt, array $history, ?int $conversationId = null, bool $hasAttachment = false): string
     {
-        $payload = [
-            'model' => config('services.openrouter.model'),
-            'temperature' => 0.5,
-            'usage' => ['include' => true],
-            // Gemini 2.5 Flash (the configured model) ships with "thinking" on by default, and
-            // OpenRouter has a well-documented failure mode where that internal reasoning consumes
-            // the response and the final answer comes back as a null message.content even though
-            // finish_reason reports a normal "stop" - not an HTTP error, so the generic retry below
-            // wouldn't even see it as a failure without the empty-content check. Reasoning adds cost
-            // and latency this dispatcher chat never needed anyway, so it's disabled outright rather
-            // than just worked around.
-            'reasoning' => ['enabled' => false],
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ...$history,
-            ],
-        ];
+        $primaryModel = (string) config('services.openrouter.model');
+        $fallbackModel = config('services.openrouter.fallback_model');
 
         // Belt-and-suspenders: even with reasoning disabled, the provider occasionally still
         // returns a "stop" completion with null content for reasons that never surface in the
         // response body. That's not deterministic, so one immediate retry resolves it far more
-        // often than surfacing an error to the user for what's usually a one-off blip.
+        // often than surfacing an error to the user for what's usually a one-off blip. When a
+        // fallback model is configured, the retry switches to it instead of hitting the same
+        // provider again - a transient Gemini-specific glitch has no reason to also affect a
+        // completely different model, so this gives the retry a real chance of a different outcome
+        // rather than just rolling the dice on the same flaky call again.
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
+            $model = ($attempt > 1 && filled($fallbackModel)) ? $fallbackModel : $primaryModel;
+            $payload = [
+                'model' => $model,
+                'temperature' => 0.5,
+                'usage' => ['include' => true],
+                // Gemini 2.5 Flash (the default primary model) ships with "thinking" on by default,
+                // and OpenRouter has a well-documented failure mode where that internal reasoning
+                // consumes the response and the final answer comes back as a null message.content
+                // even though finish_reason reports a normal "stop" - not an HTTP error, so the
+                // empty-content check below is what actually catches it. Reasoning adds cost and
+                // latency this dispatcher chat never needed anyway, so it's disabled outright for
+                // every model, not just the one known to need it.
+                'reasoning' => ['enabled' => false],
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ...$history,
+                ],
+            ];
             $startedAt = microtime(true);
-            $logContext = ['attempt' => $attempt, 'max_attempts' => self::MAX_ATTEMPTS, 'conversation_id' => $conversationId, 'model' => $payload['model']];
+            $logContext = ['attempt' => $attempt, 'max_attempts' => self::MAX_ATTEMPTS, 'conversation_id' => $conversationId, 'model' => $model];
 
             try {
                 $response = Http::withToken((string) config('services.openrouter.api_key'))

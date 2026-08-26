@@ -43,6 +43,14 @@ class MessageController extends CrudController
             throw ValidationException::withMessages(['conversation_id' => ['You are not part of this conversation.']]);
         }
 
+        // The client-supplied sent_at is never trusted for ordering: browser clocks drift, and the
+        // frontend sends a plain new Date().toISOString() (always UTC) while Eloquent's datetime
+        // cast preserves whatever timezone a parsed string carries instead of re-localizing it to
+        // config('app.timezone') - so a client UTC timestamp lands in the DB 2 hours "behind" the
+        // server-side now() the AI dispatcher's reply gets a moment later, and messages sort out of
+        // order. The server clock is authoritative for every message, not just the AI's.
+        $data['sent_at'] = now();
+
         $record = Message::query()->create($data);
         $record->load($this->relations());
 

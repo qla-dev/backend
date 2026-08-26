@@ -348,8 +348,13 @@ class DispatchChatController extends Controller
 
                 return [
                     'role' => $message->sender_user_id === $aiDispatcherId ? 'assistant' : 'user',
+                    // Strip every hidden application marker, not just the "card" ones - LENA_STEP,
+                    // LENA_OPTIONS, LOAD_READY_TO_POST, and LENA_FOLLOWUP are also app-only control
+                    // signals the model should never see echoed back as its own prior words. Sending
+                    // that bracket-tag syntax back as assistant-authored history has been observed to
+                    // correlate with Gemini returning an empty completion on the following turn.
                     'content' => trim((string) preg_replace(
-                        '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u',
+                        '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+|LENA_STEP:[a-zA-Z]+|LENA_OPTIONS:[^\]\r\n]+|LOAD_READY_TO_POST(?::complete)?|LENA_FOLLOWUP)\]\]/u',
                         '',
                         $content
                     )).$this->attachmentContext($message),
@@ -357,6 +362,26 @@ class DispatchChatController extends Controller
             })
             ->values()
             ->all();
+
+        // A failed AI turn leaves the triggering user message saved with no assistant reply after
+        // it; a retry (automatic or the user clicking the same option again) then appends another
+        // user-only turn on top, so a struggling conversation accumulates several consecutive
+        // user-role entries with no assistant turn between them. That malformed, repetitive shape
+        // is itself a known trigger for Gemini returning an empty completion, which compounds the
+        // problem on every subsequent attempt. Collapse consecutive same-role turns into one before
+        // sending, so the model always sees a normal alternating conversation regardless of how many
+        // attempts a given step actually took.
+        $collapsedHistory = [];
+        foreach ($history as $entry) {
+            $previousIndex = count($collapsedHistory) - 1;
+            if ($previousIndex >= 0 && $collapsedHistory[$previousIndex]['role'] === $entry['role']) {
+                $collapsedHistory[$previousIndex]['content'] = trim($collapsedHistory[$previousIndex]['content']."\n".$entry['content']);
+
+                continue;
+            }
+            $collapsedHistory[] = $entry;
+        }
+        $history = $collapsedHistory;
 
         try {
             $reply = $assistant->reply($systemPrompt, $history, $conversation->id, $latestMessageHasFileAttachment);

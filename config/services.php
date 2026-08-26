@@ -38,6 +38,11 @@ return [
     'openrouter' => [
         'api_key' => env('OPENROUTER_API_KEY'),
         'model' => env('OPENROUTER_MODEL', 'google/gemini-2.5-flash'),
+        // Used by OpenRouterDispatchAssistant when the primary model's response comes back empty
+        // (a known intermittent Gemini-via-OpenRouter failure) or fails to connect - the retry
+        // switches models instead of hitting the same flaky provider again. Leave unset to disable
+        // the model switch and just retry the primary model a second time.
+        'fallback_model' => env('OPENROUTER_FALLBACK_MODEL'),
         'url' => env('OPENROUTER_URL', 'https://openrouter.ai/api/v1/chat/completions'),
     ],
 
