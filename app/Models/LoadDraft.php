@@ -9,7 +9,7 @@ class LoadDraft extends BaseModel
     protected function casts(): array
     {
         return [
-            'loading_methods' => 'array', 'body_types' => 'array', 'special_requirements' => 'array', 'characteristics' => 'array', 'contact' => 'array', 'hs_codes' => 'array',
+            'loading_methods' => 'array', 'body_types' => 'array', 'container_selections' => 'array', 'special_requirements' => 'array', 'characteristics' => 'array', 'contact' => 'array', 'hs_codes' => 'array',
             'is_fragile' => 'boolean', 'requires_adr' => 'boolean', 'requires_tail_lift' => 'boolean',
             'must_be_trackable' => 'boolean', 'is_urgent' => 'boolean', 'is_negotiable' => 'boolean',
             'toll_roads_included' => 'boolean', 'ferry_included' => 'boolean', 'cmr_required' => 'boolean',
