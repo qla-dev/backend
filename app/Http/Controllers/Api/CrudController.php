@@ -31,7 +31,7 @@ abstract class CrudController extends Controller
 
     protected function applyFilters(Builder $query, Request $request): void {}
 
-    protected function applyOrdering(Builder $query): void
+    protected function applyOrdering(Builder $query, Request $request): void
     {
         $query->orderByDesc('id');
     }
@@ -52,7 +52,7 @@ abstract class CrudController extends Controller
         }
 
         $this->applyFilters($query, $request);
-        $this->applyOrdering($query);
+        $this->applyOrdering($query, $request);
 
         $perPage = max(1, min(500, (int) $request->query('limit', $request->query('per_page', 25))));
         $pageNumber = max(1, (int) $request->query('pageno', $request->query('page_no', $request->query('page', 1))));

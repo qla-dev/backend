@@ -69,7 +69,7 @@ class CustomerController extends CrudController
         }
     }
 
-    protected function applyOrdering(Builder $query): void
+    protected function applyOrdering(Builder $query, Request $request): void
     {
         $query
             ->orderByRaw('source_sort_order IS NULL')

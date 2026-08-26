@@ -43,7 +43,7 @@ class ConversationController extends CrudController
     // conversation started long ago but with a brand new reply would stay buried. Every frontend
     // (web, native) wants the same "most recently active first" order, so it's centralized here
     // instead of each client re-sorting the list itself after fetching it.
-    protected function applyOrdering(Builder $query): void
+    protected function applyOrdering(Builder $query, Request $request): void
     {
         $query->orderByDesc('last_message_at')->orderByDesc('id');
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\SubscriptionPackage;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 
 class SubscriptionPackageController extends CrudController
 {
@@ -24,7 +25,7 @@ class SubscriptionPackageController extends CrudController
         }
     }
 
-    protected function applyOrdering(Builder $query): void
+    protected function applyOrdering(Builder $query, Request $request): void
     {
         $query->orderBy('sort_order')->orderBy('id');
     }

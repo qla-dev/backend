@@ -74,7 +74,7 @@ class LoadController extends CrudController
 
     protected function searchColumns(): array
     {
-        return ['title', 'status', 'cargo_type', 'goods_type'];
+        return ['title', 'status', 'cargo_type', 'goods_type', 'storage_type', 'warehouse_city'];
     }
 
     protected function applyFilters(Builder $query, Request $request): void
@@ -83,6 +83,61 @@ class LoadController extends CrudController
 
         if ($status !== '') {
             $query->where('status', $status);
+        }
+
+        if ($request->has('for_storage')) {
+            $query->where('for_storage', $request->boolean('for_storage'));
+        }
+
+        $this->applyLocationFilter($query, 'pickup', trim((string) $request->query('origin', '')));
+        $this->applyLocationFilter($query, 'delivery', trim((string) $request->query('destination', '')));
+        if ($warehouseLocation = trim((string) $request->query('warehouse_location', ''))) {
+            $query->where(function (Builder $location) use ($warehouseLocation): void {
+                $location->where('warehouse_city', 'like', "%{$warehouseLocation}%")
+                    ->orWhere('warehouse_country_code', 'like', "%{$warehouseLocation}%")
+                    ->orWhere('warehouse_address', 'like', "%{$warehouseLocation}%");
+            });
+        }
+
+        foreach ([
+            'budget' => 'budget', 'weight' => 'weight_kg', 'length' => 'length_m', 'width' => 'width_m',
+            'height' => 'height_m', 'cargo_value' => 'declared_value', 'transit_days' => 'transit_days',
+            'pallets' => 'pallets', 'volume' => 'volume_m3',
+        ] as $parameter => $column) {
+            $this->applyNumericRange($query, $request, $parameter, $column);
+        }
+        if ($request->filled('temperature_min')) $query->where('temperature_max', '>=', $request->query('temperature_min'));
+        if ($request->filled('temperature_max')) $query->where('temperature_min', '<=', $request->query('temperature_max'));
+        if ($request->filled('storage_start_from')) $query->whereDate('storage_start_date', '>=', $request->query('storage_start_from'));
+        if ($request->filled('storage_start_to')) $query->whereDate('storage_start_date', '<=', $request->query('storage_start_to'));
+
+        $this->applyWhereIn($query, 'goods_type', $request->query('goods_types'));
+        $this->applyWhereIn($query, 'payment_terms', $request->query('payment_terms'));
+        $this->applyWhereIn($query, 'storage_type', $request->query('storage_types'));
+        if ($request->filled('price_terms')) {
+            $terms = $this->csv($request->query('price_terms'));
+            $query->where(function (Builder $scope) use ($terms): void {
+                if (in_array('negotiable', $terms, true)) $scope->orWhere('is_negotiable', true);
+                if (in_array('fixed', $terms, true)) $scope->orWhere('is_negotiable', false);
+            });
+        }
+        if ($request->filled('sensitivity')) $query->where('is_fragile', true);
+        if ($request->filled('urgency')) {
+            $urgency = $this->csv($request->query('urgency'));
+            $query->whereIn('is_urgent', array_values(array_unique(array_map(fn (string $value): bool => strtolower($value) === 'express', $urgency))));
+        }
+        foreach ($this->csv($request->query('loading_methods')) as $method) {
+            $query->whereJsonContains('loading_methods', $method);
+        }
+        foreach ($this->csv($request->query('requirements')) as $requirement) {
+            $column = match ($requirement) {
+                'customs_bonded' => 'requires_customs_bonded', 'racking' => 'requires_racking',
+                'insurance' => 'insurance_required', 'security' => 'requires_security', default => null,
+            };
+            if ($column) $query->where($column, true);
+        }
+        if ($request->boolean('my_bids') && $request->user()) {
+            $query->whereHas('offers', fn (Builder $offers) => $offers->where('created_by_user_id', $request->user()->id));
         }
 
         $user = $request->user();
@@ -118,6 +173,42 @@ class LoadController extends CrudController
         }
     }
 
+    protected function applyOrdering(Builder $query, Request $request): void
+    {
+        [$column, $direction] = match ((string) $request->query('sort', 'price_asc')) {
+            'price_desc' => ['budget', 'desc'], 'date_desc' => ['published_at', 'desc'],
+            'date_asc' => ['published_at', 'asc'], default => ['budget', 'asc'],
+        };
+        $query->orderByRaw("{$column} is null")
+            ->orderBy($column, $direction)
+            ->orderByDesc('id');
+    }
+
+    private function applyNumericRange(Builder $query, Request $request, string $parameter, string $column): void
+    {
+        if ($request->filled("{$parameter}_min")) $query->where($column, '>=', $request->query("{$parameter}_min"));
+        if ($request->filled("{$parameter}_max")) $query->where($column, '<=', $request->query("{$parameter}_max"));
+    }
+
+    private function applyLocationFilter(Builder $query, string $type, string $value): void
+    {
+        if ($value === '') return;
+        $query->whereHas('stops', fn (Builder $stops) => $stops->where('type', $type)->where(function (Builder $location) use ($value): void {
+            $location->where('city', 'like', "%{$value}%")->orWhere('country_code', 'like', "%{$value}%")->orWhere('address', 'like', "%{$value}%");
+        }));
+    }
+
+    private function applyWhereIn(Builder $query, string $column, mixed $value): void
+    {
+        $values = $this->csv($value);
+        if ($values !== []) $query->whereIn($column, $values);
+    }
+
+    private function csv(mixed $value): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', (string) $value)), fn (string $item): bool => $item !== ''));
+    }
+
     protected function rules(bool $updating = false): array
     {
         $p = $updating ? 'sometimes' : 'required';
@@ -127,7 +218,7 @@ class LoadController extends CrudController
             'assigned_driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'title' => [$p, 'string', 'max:255'], 'booking_reference' => ['nullable', 'string', 'max:160'], 'insurance' => ['nullable', 'string', 'max:255'],
             'department' => ['nullable', 'string', 'max:120'], 'freight_mode' => ['nullable', 'string', 'max:120'], 'subdepartment' => ['nullable', 'string', 'max:120'],
-            'status' => ['sometimes', Rule::in(Load::STATUSES)], 'transport_type' => ['sometimes', 'in:road,air,sea,warehouse'],
+            'status' => ['sometimes', Rule::in(Load::STATUSES)], 'transport_type' => ['sometimes', 'in:road,air,sea,warehouse'], 'for_storage' => ['sometimes', 'boolean'],
             'cargo_type' => [$updating ? 'sometimes' : 'required_unless:transport_type,warehouse', 'nullable', 'string', 'max:100'], 'goods_type' => ['nullable', 'string', 'max:100'],
             'hs_codes' => ['nullable', 'array', 'max:20'], 'hs_codes.*.code' => ['required', 'string', 'regex:/^\d{6}$/'],
             'hs_codes.*.description' => ['nullable', 'string', 'max:1000'], 'hs_codes.*.confidence' => ['nullable', 'numeric', 'between:0,1'],
@@ -204,6 +295,7 @@ class LoadController extends CrudController
         }
         $data['customer_user_id'] = $data['customer_user_id'] ?? $request->user()->id;
         $data['status'] = $data['status'] ?? 'pending';
+        $data['for_storage'] = $data['for_storage'] ?? (($data['transport_type'] ?? 'road') === 'warehouse');
         $data['public_id'] = (string) Str::uuid();
         $load = DB::transaction(function () use ($data, $stops, $trackingNumbers) {
             $load = Load::query()->create($data);
@@ -343,6 +435,7 @@ class LoadController extends CrudController
                 }
                 $data['customer_user_id'] = $data['customer_user_id'] ?? $request->user()->id;
                 $data['status'] = $data['status'] ?? 'pending';
+                $data['for_storage'] = $data['for_storage'] ?? (($data['transport_type'] ?? 'road') === 'warehouse');
                 $data['public_id'] = (string) Str::uuid();
 
                 $load = Load::query()->create($data);

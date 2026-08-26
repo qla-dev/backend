@@ -25,7 +25,7 @@ class Load extends BaseModel
             'loading_methods' => 'array', 'body_types' => 'array', 'container_selections' => 'array', 'special_requirements' => 'array', 'characteristics' => 'array', 'contact' => 'array', 'hs_codes' => 'array',
             'handling_requirements' => 'array',
             'is_fragile' => 'boolean', 'requires_adr' => 'boolean', 'requires_tail_lift' => 'boolean',
-            'must_be_trackable' => 'boolean', 'is_urgent' => 'boolean', 'is_negotiable' => 'boolean', 'published_at' => 'datetime', 'completed_at' => 'datetime',
+            'must_be_trackable' => 'boolean', 'is_urgent' => 'boolean', 'is_negotiable' => 'boolean', 'for_storage' => 'boolean', 'published_at' => 'datetime', 'completed_at' => 'datetime',
             'toll_roads_included' => 'boolean', 'ferry_included' => 'boolean', 'cmr_required' => 'boolean',
             'pallet_exchange_required' => 'boolean', 'customs_required' => 'boolean',
             'insurance_required' => 'boolean', 'certification_required' => 'boolean', 'inspection_services_required' => 'boolean',
