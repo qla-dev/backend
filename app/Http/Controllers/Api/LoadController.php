@@ -79,6 +79,28 @@ class LoadController extends CrudController
 
     protected function applyFilters(Builder $query, Request $request): void
     {
+        $request->validate([
+            'for_storage' => ['sometimes', Rule::in(['true', 'false', '1', '0', 1, 0, true, false])],
+            'sort' => ['sometimes', Rule::in(['price_asc', 'price_desc', 'date_asc', 'date_desc'])],
+            'origin' => ['sometimes', 'nullable', 'string', 'max:255'], 'destination' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'warehouse_location' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'budget_min' => ['sometimes', 'numeric', 'min:0'], 'budget_max' => ['sometimes', 'numeric', 'min:0'],
+            'weight_min' => ['sometimes', 'numeric', 'min:0'], 'weight_max' => ['sometimes', 'numeric', 'min:0'],
+            'length_min' => ['sometimes', 'numeric', 'min:0'], 'length_max' => ['sometimes', 'numeric', 'min:0'],
+            'width_min' => ['sometimes', 'numeric', 'min:0'], 'width_max' => ['sometimes', 'numeric', 'min:0'],
+            'height_min' => ['sometimes', 'numeric', 'min:0'], 'height_max' => ['sometimes', 'numeric', 'min:0'],
+            'temperature_min' => ['sometimes', 'numeric'], 'temperature_max' => ['sometimes', 'numeric'],
+            'cargo_value_min' => ['sometimes', 'numeric', 'min:0'], 'cargo_value_max' => ['sometimes', 'numeric', 'min:0'],
+            'transit_days_min' => ['sometimes', 'integer', 'min:0'], 'transit_days_max' => ['sometimes', 'integer', 'min:0'],
+            'pallets_min' => ['sometimes', 'integer', 'min:0'], 'pallets_max' => ['sometimes', 'integer', 'min:0'],
+            'volume_min' => ['sometimes', 'numeric', 'min:0'], 'volume_max' => ['sometimes', 'numeric', 'min:0'],
+            'storage_start_from' => ['sometimes', 'date'], 'storage_start_to' => ['sometimes', 'date', 'after_or_equal:storage_start_from'],
+            'goods_types' => ['sometimes', 'string', 'max:1000'], 'payment_terms' => ['sometimes', 'string', 'max:500'],
+            'storage_types' => ['sometimes', 'string', 'max:1000'], 'price_terms' => ['sometimes', 'string', 'max:100'],
+            'adr_classes' => ['sometimes', 'string', 'max:500'], 'sensitivity' => ['sometimes', 'string', 'max:500'],
+            'urgency' => ['sometimes', 'string', 'max:500'], 'loading_methods' => ['sometimes', 'string', 'max:500'],
+            'requirements' => ['sometimes', 'string', 'max:500'],
+        ]);
         $status = trim((string) $request->query('status', ''));
 
         if ($status !== '') {
@@ -122,6 +144,11 @@ class LoadController extends CrudController
             });
         }
         if ($request->filled('sensitivity')) $query->where('is_fragile', true);
+        if ($request->filled('adr_classes')) {
+            $classes = $this->csv($request->query('adr_classes'));
+            if ($classes === ['None']) $query->where('requires_adr', false);
+            elseif (! in_array('None', $classes, true)) $query->where('requires_adr', true);
+        }
         if ($request->filled('urgency')) {
             $urgency = $this->csv($request->query('urgency'));
             $query->whereIn('is_urgent', array_values(array_unique(array_map(fn (string $value): bool => strtolower($value) === 'express', $urgency))));
