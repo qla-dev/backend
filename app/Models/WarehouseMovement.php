@@ -16,8 +16,8 @@ class WarehouseMovement extends BaseModel
         return $this->belongsTo(Warehouse::class);
     }
 
-    public function warehouseRequest(): BelongsTo
+    public function load(): BelongsTo
     {
-        return $this->belongsTo(WarehouseRequest::class);
+        return $this->belongsTo(Load::class);
     }
 }

@@ -127,8 +127,8 @@ class LoadController extends CrudController
             'assigned_driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'title' => [$p, 'string', 'max:255'], 'booking_reference' => ['nullable', 'string', 'max:160'], 'insurance' => ['nullable', 'string', 'max:255'],
             'department' => ['nullable', 'string', 'max:120'], 'freight_mode' => ['nullable', 'string', 'max:120'], 'subdepartment' => ['nullable', 'string', 'max:120'],
-            'status' => ['sometimes', Rule::in(Load::STATUSES)], 'transport_type' => ['sometimes', 'in:road,air,sea'],
-            'cargo_type' => [$p, 'string', 'max:100'], 'goods_type' => ['nullable', 'string', 'max:100'],
+            'status' => ['sometimes', Rule::in(Load::STATUSES)], 'transport_type' => ['sometimes', 'in:road,air,sea,warehouse'],
+            'cargo_type' => [$updating ? 'sometimes' : 'required_unless:transport_type,warehouse', 'nullable', 'string', 'max:100'], 'goods_type' => ['nullable', 'string', 'max:100'],
             'hs_codes' => ['nullable', 'array', 'max:20'], 'hs_codes.*.code' => ['required', 'string', 'regex:/^\d{6}$/'],
             'hs_codes.*.description' => ['nullable', 'string', 'max:1000'], 'hs_codes.*.confidence' => ['nullable', 'numeric', 'between:0,1'],
             // Laravel's validate() rebuilds arrays strictly from the rule paths defined here, so the
@@ -136,7 +136,7 @@ class LoadController extends CrudController
             // explicitly or it is silently dropped even though the frontend sends it.
             'hs_codes.*.chapterCode' => ['nullable', 'string', 'max:10'], 'hs_codes.*.chapterName' => ['nullable', 'string', 'max:255'],
             'hs_codes.*.headingCode' => ['nullable', 'string', 'max:10'], 'hs_codes.*.headingName' => ['nullable', 'string', 'max:255'],
-            'weight_kg' => [$p, 'numeric', 'min:0.01'],
+            'weight_kg' => [$updating ? 'sometimes' : 'required_unless:transport_type,warehouse', 'nullable', 'numeric', 'min:0'],
             'length_m' => ['nullable', 'numeric', 'min:0'], 'width_m' => ['nullable', 'numeric', 'min:0'], 'height_m' => ['nullable', 'numeric', 'min:0'],
             'volume_m3' => ['nullable', 'numeric', 'min:0'], 'pallets' => ['nullable', 'integer', 'min:0'], 'quantity_measure' => ['nullable', 'string', 'max:255'],
             'teu' => ['nullable', 'string', 'max:80'], 'container_types' => ['nullable', 'string', 'max:255'], 'container_number' => ['nullable', 'string', 'max:255'],
@@ -153,6 +153,15 @@ class LoadController extends CrudController
             'insurance_required' => ['sometimes', 'boolean'], 'certification_required' => ['sometimes', 'boolean'], 'inspection_services_required' => ['sometimes', 'boolean'],
             'vehicle_type' => ['nullable', 'string', 'max:100'], 'transport_mode' => ['nullable', 'string', 'max:120'], 'special_requirements' => ['nullable', 'array'], 'special_requirements.*' => ['string', 'max:255'], 'characteristics' => ['nullable', 'array'], 'characteristics.*' => ['string', 'max:255'], 'delivery_proof' => ['nullable', 'string', 'max:30'],
             'body_types' => ['nullable', 'array'],
+            'storage_type' => ['nullable', 'required_if:transport_type,warehouse', 'string', 'max:100'],
+            'warehouse_city' => ['nullable', 'required_if:transport_type,warehouse', 'string', 'max:120'],
+            'warehouse_country_code' => ['nullable', 'required_if:transport_type,warehouse', 'string', 'size:2'],
+            'warehouse_address' => ['nullable', 'string', 'max:255'],
+            'warehouse_latitude' => ['nullable', 'numeric', 'between:-90,90'], 'warehouse_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'storage_start_date' => ['nullable', 'required_if:transport_type,warehouse', 'date'], 'storage_end_date' => ['nullable', 'date'],
+            'is_storage_ongoing' => ['sometimes', 'boolean'], 'handling_requirements' => ['nullable', 'array'], 'handling_requirements.*' => ['string', 'max:255'],
+            'requires_customs_bonded' => ['sometimes', 'boolean'], 'requires_racking' => ['sometimes', 'boolean'], 'requires_security' => ['sometimes', 'boolean'],
+            'rate_unit' => ['nullable', 'string', 'max:50'],
             'container_selections' => ['nullable', 'array'], 'container_selections.*.type' => ['required_with:container_selections', 'string', 'max:20'], 'container_selections.*.quantity' => ['required_with:container_selections', 'integer', 'min:1'],
             'bl_type' => ['nullable', 'string', 'max:30'],
             'dg_un_number' => ['nullable', 'string', 'max:20'], 'dg_imo_class' => ['nullable', 'string', 'max:20'], 'dg_packing_group' => ['nullable', 'string', 'max:10'], 'dg_proper_shipping_name' => ['nullable', 'string', 'max:255'],
@@ -201,9 +210,11 @@ class LoadController extends CrudController
             if ($stops !== []) {
                 $load->stops()->createMany($stops);
             }
-            $load->shipment()->create([
-                'tracking_number' => $trackingNumbers->generate($load->transport_type),
-            ]);
+            if ($load->transport_type !== 'warehouse') {
+                $load->shipment()->create([
+                    'tracking_number' => $trackingNumbers->generate($load->transport_type),
+                ]);
+            }
 
             return $load;
         });
@@ -338,9 +349,11 @@ class LoadController extends CrudController
                 if ($stops !== []) {
                     $load->stops()->createMany($stops);
                 }
-                $load->shipment()->create([
-                    'tracking_number' => $trackingNumbers->generate($load->transport_type),
-                ]);
+                if ($load->transport_type !== 'warehouse') {
+                    $load->shipment()->create([
+                        'tracking_number' => $trackingNumbers->generate($load->transport_type),
+                    ]);
+                }
                 $created[] = $load;
             }
 

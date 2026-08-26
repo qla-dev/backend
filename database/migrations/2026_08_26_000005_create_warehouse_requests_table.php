@@ -4,11 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-// The "berza skladišta" (warehouse exchange) counterpart to `loads`: a storage-service request a
-// shipper posts from PostLoadModal when transportType is 'warehouse'. Deliberately its own table
-// rather than columns on `loads` - the shape is pallet/CBM/storage-duration oriented, not route
-// oriented, and shares almost no fields with a transport load. Kept to a flat posted/cancelled
-// status for now; matching a request to a warehouse company (offers/booking) is a later phase.
+// Historical migration retained for databases that already ran it. The consolidation migration
+// moves these records into `loads` and drops this table from the final schema.
 return new class extends Migration
 {
     public function up(): void

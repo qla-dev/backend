@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::create('warehouse_movements', function (Blueprint $table) {
             $table->id();
             $table->foreignId('warehouse_id')->constrained('warehouses')->cascadeOnDelete()->cascadeOnUpdate();
-            $table->foreignId('warehouse_request_id')->nullable()->constrained('warehouse_requests')->nullOnDelete()->cascadeOnUpdate();
+            $table->foreignId('load_id')->nullable()->constrained('loads')->nullOnDelete()->cascadeOnUpdate();
             $table->string('direction'); // inbound | outbound
             $table->string('status')->default('scheduled'); // scheduled | completed
             $table->timestamp('scheduled_at');
