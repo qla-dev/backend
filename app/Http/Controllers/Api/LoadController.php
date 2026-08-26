@@ -141,6 +141,18 @@ class LoadController extends CrudController
             'adr_classes' => ['sometimes', 'string', 'max:500'], 'sensitivity' => ['sometimes', 'string', 'max:500'],
             'urgency' => ['sometimes', 'string', 'max:500'], 'loading_methods' => ['sometimes', 'string', 'max:500'],
             'requirements' => ['sometimes', 'string', 'max:500'],
+            // Freight-exchange filter bar: route, cargo nature, equipment, stop windows and assignment.
+            'pickup_country' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'pickup_city' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'delivery_country' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'delivery_city' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'cargo_flags' => ['sometimes', 'string', 'max:500'],
+            'equipment_types' => ['sometimes', 'string', 'max:500'],
+            'pickup_date_from' => ['sometimes', 'date'],
+            'pickup_date_to' => ['sometimes', 'date', 'after_or_equal:pickup_date_from'],
+            'delivery_date_from' => ['sometimes', 'date'],
+            'delivery_date_to' => ['sometimes', 'date', 'after_or_equal:delivery_date_from'],
+            'assignment' => ['sometimes', 'string', 'max:200'],
         ]);
         $status = trim((string) $request->query('status', ''));
 
@@ -235,12 +247,32 @@ class LoadController extends CrudController
             $query->whereJsonContains('loading_methods', $method);
         }
         foreach ($this->csv($request->query('requirements')) as $requirement) {
+            // Special requirements are AND-ed: asking for CMR + ADR means both must hold.
             $column = match ($requirement) {
                 'customs_bonded' => 'requires_customs_bonded', 'racking' => 'requires_racking',
-                'insurance' => 'insurance_required', 'security' => 'requires_security', default => null,
+                'insurance' => 'insurance_required', 'security' => 'requires_security',
+                'cmr' => 'cmr_required', 'adr' => 'requires_adr', 'customs' => 'customs_required',
+                'tail_lift' => 'requires_tail_lift', 'tracking' => 'must_be_trackable',
+                'pallet_exchange' => 'pallet_exchange_required', 'certification' => 'certification_required',
+                'inspection' => 'inspection_services_required',
+                default => null,
             };
-            if ($column) $query->where($column, true);
+            if ($column) {
+                $query->where($column, true);
+                continue;
+            }
+            if ($requirement === 'forklift') {
+                $query->whereJsonContains('loading_methods', 'Forklift');
+            } elseif ($requirement === 'temperature_control') {
+                $query->where(fn (Builder $scope) => $scope->whereNotNull('temperature_min')->orWhereNotNull('temperature_max'));
+            }
         }
+
+        $this->applyStopFilters($query, $request);
+        $this->applyCargoFlagFilters($query, $request);
+        $this->applyEquipmentFilters($query, $request);
+        $this->applyAssignmentFilters($query, $request);
+
         if ($request->boolean('my_bids') && $request->user()) {
             $query->whereHas('offers', fn (Builder $offers) => $offers->where('created_by_user_id', $request->user()->id));
         }
@@ -313,6 +345,107 @@ class LoadController extends CrudController
     {
         $values = $this->csv($value);
         if ($values !== []) $query->whereIn($column, $values);
+    }
+
+    /**
+     * Route + stop-window filters. Pickup and delivery are separate stop rows, so each constraint
+     * has to be expressed against the matching stop type rather than the load itself.
+     */
+    private function applyStopFilters(Builder $query, Request $request): void
+    {
+        foreach (['pickup', 'delivery'] as $type) {
+            if ($city = trim((string) $request->query("{$type}_city", ''))) {
+                $query->whereHas('stops', fn (Builder $stops) => $stops->where('type', $type)->where('city', 'like', "%{$city}%"));
+            }
+            if ($country = trim((string) $request->query("{$type}_country", ''))) {
+                $query->whereHas('stops', fn (Builder $stops) => $stops->where('type', $type)->where(function (Builder $scope) use ($country): void {
+                    $scope->where('country_code', strtoupper($country))->orWhere('country_code', 'like', "%{$country}%");
+                }));
+            }
+
+            $from = $request->query("{$type}_date_from");
+            $to = $request->query("{$type}_date_to");
+            if (! $request->filled("{$type}_date_from") && ! $request->filled("{$type}_date_to")) continue;
+
+            $query->whereHas('stops', function (Builder $stops) use ($type, $from, $to): void {
+                $stops->where('type', $type);
+                // A stop's window can straddle the requested range, so compare against both ends.
+                // The null branch stays grouped, otherwise the OR would escape the type constraint.
+                if ($from) {
+                    $stops->where(fn (Builder $scope) => $scope->whereDate('window_ends_at', '>=', $from)->orWhereNull('window_ends_at'));
+                }
+                if ($to) {
+                    $stops->where(fn (Builder $scope) => $scope->whereDate('window_starts_at', '<=', $to)->orWhereNull('window_starts_at'));
+                }
+            });
+        }
+    }
+
+    /**
+     * Cargo nature chips are OR-ed within the group - picking ADR and Fragile means either.
+     */
+    private function applyCargoFlagFilters(Builder $query, Request $request): void
+    {
+        $flags = $this->csv($request->query('cargo_flags'));
+        if ($flags === []) return;
+
+        $query->where(function (Builder $group) use ($flags): void {
+            foreach ($flags as $flag) {
+                $group->orWhere(function (Builder $scope) use ($flag): void {
+                    match ($flag) {
+                        'adr' => $scope->where('requires_adr', true),
+                        'fragile' => $scope->where('is_fragile', true),
+                        'temperature_controlled' => $scope->whereNotNull('temperature_min')->orWhereNotNull('temperature_max'),
+                        'refrigerated' => $scope->where('vehicle_type', 'like', '%Reefer%')->orWhere('goods_type', 'like', '%Refrigerated%'),
+                        'oversized' => $scope->where('oog_in_gauge', false)->orWhereNotNull('oog_length_m')->orWhereNotNull('oog_weight_kg'),
+                        'high_value' => $scope->whereNotNull('declared_value')->where('declared_value', '>', 0),
+                        'general' => $scope->whereNull('requires_adr')->orWhere('requires_adr', false),
+                        default => $scope->where('goods_type', 'like', '%' . str_replace('_', ' ', $flag) . '%'),
+                    };
+                });
+            }
+        });
+    }
+
+    /**
+     * Equipment spans two columns: load type lives in cargo_type (FTL/LTL/FCL/LCL) while the body
+     * type lives in vehicle_type (Reefer/Mega/Box/...), so match either.
+     */
+    private function applyEquipmentFilters(Builder $query, Request $request): void
+    {
+        $equipment = $this->csv($request->query('equipment_types'));
+        if ($equipment === []) return;
+
+        $query->where(function (Builder $group) use ($equipment): void {
+            foreach ($equipment as $item) {
+                $group->orWhere('cargo_type', $item)
+                    ->orWhere('vehicle_type', 'like', "%{$item}%")
+                    ->orWhere('container_types', 'like', "%{$item}%");
+            }
+        });
+    }
+
+    private function applyAssignmentFilters(Builder $query, Request $request): void
+    {
+        $assignment = $this->csv($request->query('assignment'));
+        if ($assignment === []) return;
+        $userId = $request->user()?->id;
+
+        $query->where(function (Builder $group) use ($assignment, $userId): void {
+            foreach ($assignment as $item) {
+                $group->orWhere(function (Builder $scope) use ($item, $userId): void {
+                    match ($item) {
+                        'unassigned' => $scope->whereNull('assigned_driver_user_id'),
+                        'assigned_to_me' => $userId ? $scope->where('assigned_driver_user_id', $userId) : $scope->whereRaw('1 = 0'),
+                        'assigned_driver' => $scope->whereNotNull('assigned_driver_user_id'),
+                        'full_truck' => $scope->whereIn('cargo_type', ['FTL', 'FCL']),
+                        'partial_load' => $scope->whereIn('cargo_type', ['LTL', 'LCL', 'Groupage']),
+                        'available_capacity' => $scope->whereNull('assigned_driver_user_id')->whereIn('cargo_type', ['LTL', 'LCL', 'Groupage']),
+                        default => $scope->whereRaw('1 = 0'),
+                    };
+                });
+            }
+        });
     }
 
     private function csv(mixed $value): array
