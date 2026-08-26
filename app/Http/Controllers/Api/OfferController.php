@@ -66,7 +66,7 @@ class OfferController extends CrudController
 
         $offer = DB::transaction(function () use ($data) {
             $load = Load::query()->lockForUpdate()->findOrFail($data['load_id']);
-            $this->validateBidFloor($load, (float) $data['amount'], $data['price_basis'] === 'best_bid' || ($data['is_counter'] ?? false));
+            $this->validateBidFloor($load, (float) $data['amount'], $data['price_basis'] !== 'best_bid');
 
             return Offer::query()->create($data);
         });
@@ -90,7 +90,7 @@ class OfferController extends CrudController
             if (array_key_exists('amount', $data) || array_key_exists('price_basis', $data)) {
                 $priceBasis = $data['price_basis'] ?? $offer->price_basis;
                 $amount = (float) ($data['amount'] ?? $offer->amount);
-                $this->validateBidFloor($load, $amount, $priceBasis === 'best_bid');
+                $this->validateBidFloor($load, $amount, $priceBasis !== 'best_bid');
             }
 
             $offer->update($data);
