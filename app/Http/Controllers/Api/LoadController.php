@@ -80,6 +80,21 @@ class LoadController extends CrudController
     protected function applyFilters(Builder $query, Request $request): void
     {
         $request->validate([
+            'tracking' => ['sometimes', Rule::in(['true', 'false', '1', '0', 1, 0, true, false])],
+            'tracking_search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'status' => ['sometimes', Rule::in(Load::STATUSES)],
+            'statuses' => ['sometimes', 'string', 'max:500'],
+            'transport_types' => ['sometimes', 'string', 'max:500'],
+            'services' => ['sometimes', 'string', 'max:500'],
+            'partner' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'equipment' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'characteristics' => ['sometimes', 'string', 'max:1000'],
+            'incoterms' => ['sometimes', 'string', 'max:500'],
+            'currencies' => ['sometimes', 'string', 'max:100'],
+            'tracking_date_from' => ['sometimes', 'date'],
+            'tracking_date_to' => ['sometimes', 'date', 'after_or_equal:tracking_date_from'],
+            'tracking_requires_adr' => ['sometimes', Rule::in(['true', 'false', '1', '0', 1, 0, true, false])],
+            'tracking_is_urgent' => ['sometimes', Rule::in(['true', 'false', '1', '0', 1, 0, true, false])],
             'for_storage' => ['sometimes', Rule::in(['true', 'false', '1', '0', 1, 0, true, false])],
             'sort' => ['sometimes', Rule::in(['price_asc', 'price_desc', 'date_asc', 'date_desc'])],
             'origin' => ['sometimes', 'nullable', 'string', 'max:255'], 'destination' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -105,7 +120,44 @@ class LoadController extends CrudController
 
         if ($status !== '') {
             $query->where('status', $status);
+        } elseif ($request->boolean('tracking')) {
+            $query->where('status', '!=', 'posted');
         }
+
+        $this->applyWhereIn($query, 'status', $request->query('statuses'));
+        $this->applyWhereIn($query, 'transport_type', $request->query('transport_types'));
+        $this->applyWhereIn($query, 'cargo_type', $request->query('services'));
+        $this->applyWhereIn($query, 'incoterms', $request->query('incoterms'));
+        $this->applyWhereIn($query, 'currency', $request->query('currencies'));
+
+        if ($trackingSearch = trim((string) $request->query('tracking_search', ''))) {
+            $query->where(function (Builder $search) use ($trackingSearch): void {
+                $search->where('title', 'like', "%{$trackingSearch}%")
+                    ->orWhere('booking_reference', 'like', "%{$trackingSearch}%")
+                    ->orWhereHas('shipment', fn (Builder $shipment) => $shipment
+                        ->where('tracking_number', 'like', "%{$trackingSearch}%")
+                        ->orWhere('carrier', 'like', "%{$trackingSearch}%"))
+                    ->orWhereHas('company', fn (Builder $company) => $company->where('name', 'like', "%{$trackingSearch}%"))
+                    ->orWhereHas('stops', fn (Builder $stops) => $stops->where('city', 'like', "%{$trackingSearch}%"));
+            });
+        }
+
+        if ($partner = trim((string) $request->query('partner', ''))) {
+            $query->where(function (Builder $partners) use ($partner): void {
+                $partners->whereHas('shipment', fn (Builder $shipment) => $shipment->where('carrier', 'like', "%{$partner}%"))
+                    ->orWhereHas('company', fn (Builder $company) => $company->where('name', 'like', "%{$partner}%"));
+            });
+        }
+        if ($equipment = trim((string) $request->query('equipment', ''))) {
+            $query->where('vehicle_type', $equipment);
+        }
+        foreach ($this->csv($request->query('characteristics')) as $characteristic) {
+            $query->whereJsonContains('characteristics', $characteristic);
+        }
+        if ($request->filled('tracking_date_from')) $query->whereDate('updated_at', '>=', $request->query('tracking_date_from'));
+        if ($request->filled('tracking_date_to')) $query->whereDate('updated_at', '<=', $request->query('tracking_date_to'));
+        if ($request->has('tracking_requires_adr')) $query->where('requires_adr', $request->boolean('tracking_requires_adr'));
+        if ($request->has('tracking_is_urgent')) $query->where('is_urgent', $request->boolean('tracking_is_urgent'));
 
         if ($request->has('for_storage')) {
             $query->where('for_storage', $request->boolean('for_storage'));
