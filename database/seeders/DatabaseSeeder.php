@@ -12,6 +12,8 @@ use App\Models\SubscriptionPackage;
 use App\Models\User;
 use App\Models\UserSubscription;
 use App\Models\Vehicle;
+use App\Models\Warehouse;
+use App\Models\WarehouseMovement;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -21,7 +23,7 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $roleLabels = ['master' => 'Master', 'superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'guest' => 'Guest', 'system' => 'AI Assistant'];
+        $roleLabels = ['master' => 'Master', 'superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'warehouse' => 'Warehouse Company', 'guest' => 'Guest', 'system' => 'AI Assistant'];
         $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => in_array($name, Role::PROTECTED_NAMES, true) ? ['*'] : [], 'is_active' => ! in_array($name, ['guest', 'system'], true)])]);
 
         $accounts = [
@@ -31,6 +33,7 @@ class DatabaseSeeder extends Seeder
             'driver_demo' => ['role' => 'driver', 'name' => 'Demo Driver'],
             'company_demo' => ['role' => 'company', 'name' => 'Freightbook Logistics Hub'],
             'finance_demo' => ['role' => 'finance', 'name' => 'Demo Finance'],
+            'warehouse_demo' => ['role' => 'warehouse', 'name' => 'Freightbook Warehousing Co.'],
             'guest_demo' => ['role' => 'guest', 'name' => 'Guest'],
             'ai_dispatcher' => ['role' => 'system', 'name' => 'AI Dispatcher'],
         ];
@@ -72,6 +75,23 @@ class DatabaseSeeder extends Seeder
         $load->stops()->createMany([['type' => 'pickup', 'position' => 1, 'city' => 'Sarajevo', 'country_code' => 'BA', 'window_starts_at' => now()], ['type' => 'delivery', 'position' => 2, 'city' => 'Vienna', 'country_code' => 'AT', 'window_starts_at' => now()->addDay()]]);
         $shipment = Shipment::query()->updateOrCreate(['load_id' => $load->id], ['tracking_number' => 'SWP-DEMO-001', 'carrier' => $company->name, 'estimated_delivery_at' => now()->addDay()]);
         $shipment->events()->firstOrCreate(['title' => 'Departed Sarajevo Hub'], ['status' => 'in_transit', 'location' => 'Sarajevo, BA', 'occurred_at' => now(), 'created_by_user_id' => $users['driver_demo']->id]);
+
+        $warehouse = Warehouse::query()->updateOrCreate(['user_id' => $users['warehouse_demo']->id], [
+            'name' => 'Freightbook Warehousing Co. - Sarajevo Hub', 'address' => 'Bulevar Meše Selimovića 16', 'city' => 'Sarajevo', 'country_code' => 'BA',
+            'latitude' => 43.8563, 'longitude' => 18.4131, 'total_capacity_pallets' => 500,
+            'storage_types' => ['Ambient', 'Chilled', 'Bonded'], 'certifications' => ['ISO 9001', 'HACCP'],
+        ]);
+        WarehouseMovement::query()->where('warehouse_id', $warehouse->id)->delete();
+        collect([
+            ['direction' => 'inbound', 'status' => 'completed', 'scheduled_at' => now()->subDays(10), 'completed_at' => now()->subDays(10), 'customer_name' => 'Bosnalijek d.d.', 'storage_type' => 'Ambient', 'pallets' => 80, 'cbm' => 120, 'weight_kg' => 24000, 'rate' => 960, 'currency' => 'EUR', 'description' => 'Pharma stock intake'],
+            ['direction' => 'inbound', 'status' => 'completed', 'scheduled_at' => now()->subDays(7), 'completed_at' => now()->subDays(7), 'customer_name' => 'Klas d.d.', 'storage_type' => 'Chilled', 'pallets' => 60, 'cbm' => 90, 'weight_kg' => 18000, 'rate' => 780, 'currency' => 'EUR', 'description' => 'Chilled goods intake'],
+            ['direction' => 'inbound', 'status' => 'completed', 'scheduled_at' => now()->subDays(5), 'completed_at' => now()->subDays(5), 'customer_name' => 'Coca-Cola HBC', 'storage_type' => 'Ambient', 'pallets' => 100, 'cbm' => 150, 'weight_kg' => 30000, 'rate' => 1200, 'currency' => 'EUR', 'description' => 'Beverage stock intake'],
+            ['direction' => 'outbound', 'status' => 'completed', 'scheduled_at' => now()->subDays(3), 'completed_at' => now()->subDays(3), 'customer_name' => 'Bosnalijek d.d.', 'storage_type' => 'Ambient', 'pallets' => 20, 'cbm' => 30, 'weight_kg' => 6000, 'currency' => 'EUR', 'description' => 'Partial dispatch'],
+            ['direction' => 'inbound', 'status' => 'completed', 'scheduled_at' => now()->subDays(1), 'completed_at' => now()->subDays(1), 'customer_name' => 'Fabrika Duhana Sarajevo', 'storage_type' => 'Bonded', 'pallets' => 40, 'cbm' => 60, 'weight_kg' => 12000, 'rate' => 640, 'currency' => 'EUR', 'description' => 'Bonded stock intake'],
+            ['direction' => 'outbound', 'status' => 'scheduled', 'scheduled_at' => now()->startOfDay()->addHours(9), 'customer_name' => 'Klas d.d.', 'storage_type' => 'Chilled', 'pallets' => 15, 'dock_number' => 'D-2', 'currency' => 'EUR', 'description' => 'Scheduled dispatch'],
+            ['direction' => 'inbound', 'status' => 'scheduled', 'scheduled_at' => now()->startOfDay()->addHours(14), 'customer_name' => 'Argeta d.o.o.', 'storage_type' => 'Ambient', 'pallets' => 30, 'dock_number' => 'D-3', 'currency' => 'EUR', 'description' => 'Scheduled intake'],
+            ['direction' => 'inbound', 'status' => 'scheduled', 'scheduled_at' => now()->startOfDay()->addHours(16)->addMinutes(30), 'customer_name' => 'Coca-Cola HBC', 'storage_type' => 'Ambient', 'pallets' => 25, 'dock_number' => 'D-1', 'currency' => 'EUR', 'description' => 'Scheduled intake'],
+        ])->each(fn (array $movement) => WarehouseMovement::query()->create($movement + ['warehouse_id' => $warehouse->id]));
 
         $this->call(SubscriptionPackageSeeder::class);
         $proPackage = SubscriptionPackage::query()->where('slug', 'pro')->first();

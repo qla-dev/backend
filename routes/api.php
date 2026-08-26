@@ -42,6 +42,8 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserSubscriptionController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleLocationController;
+use App\Http\Controllers\Api\WarehouseController;
+use App\Http\Controllers\Api\WarehouseRequestController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('health', fn () => response()->json(['message' => 'Freightbook.ai API is healthy.', 'data' => ['status' => 'ok', 'timestamp' => now()->toIso8601String()], 'meta' => [], 'errors' => []]));
@@ -79,6 +81,16 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::middleware('role:user,driver,company,superadmin,master')->group(function (): void {
         Route::post('loads', [LoadController::class, 'store']);
         Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
+        // Same posters as loads - PostLoadModal's "Warehouse" type posts here instead of /loads.
+        Route::post('warehouse-requests', [WarehouseRequestController::class, 'store']);
+    });
+
+    // The warehouse company's own facility: only a warehouse-role account manages it.
+    Route::middleware('role:warehouse,superadmin,master')->group(function (): void {
+        Route::get('warehouse/overview', [WarehouseController::class, 'overview']);
+        Route::post('warehouses', [WarehouseController::class, 'store']);
+        Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update']);
+        Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy']);
     });
 
     // Instant-booking a posted, non-negotiable load. Drivers book for themselves; companies book
@@ -103,6 +115,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'messages' => MessageController::class,
     ]);
     Route::apiResource('loads', LoadController::class)->except(['store']);
+    Route::apiResource('warehouse-requests', WarehouseRequestController::class)->except(['store']);
+    Route::apiResource('warehouses', WarehouseController::class)->only(['index', 'show']);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
