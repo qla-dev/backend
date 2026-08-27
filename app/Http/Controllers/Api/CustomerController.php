@@ -88,7 +88,7 @@ class CustomerController extends CrudController
 
         $query = Customer::query()->with('user');
         $this->applyFilters($query, $request);
-        $this->applyOrdering($query);
+        $this->applyOrdering($query, $request);
 
         $limit = (int) $request->query('limit', 20);
         $pageNumber = (int) $request->query('pageno', 1);
