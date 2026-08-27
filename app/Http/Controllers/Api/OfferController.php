@@ -20,8 +20,14 @@ class OfferController extends CrudController
 
     protected function relations(): array
     {
-        return ['freightLoad.stops', 'company', 'driver', 'creator', 'vehicle', 'parentOffer'];
+        return ['freightLoad.stops', 'company', 'driver', 'creator', 'vehicle', 'warehouse', 'parentOffer'];
     }
+
+    /** What a transport bid may be priced on. */
+    private const TRANSPORT_PRICE_BASIS = ['fixed_total', 'best_bid', 'per_km', 'per_ton', 'per_pallet'];
+
+    /** What a warehousing bid may be priced on - storage is billed per unit and per period, never per km. */
+    private const STORAGE_PRICE_BASIS = ['fixed_total', 'best_bid', 'per_pallet_day', 'per_pallet_month', 'per_m2_month', 'per_m3_month', 'custom'];
 
     protected function rules(bool $u = false): array
     {
@@ -30,7 +36,7 @@ class OfferController extends CrudController
 
         return [
             'load_id' => [$p, 'integer', 'exists:loads,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'], 'driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'amount' => [$p, 'numeric', 'min:0'], 'currency' => ['sometimes', 'string', 'size:3'], 'status' => ['sometimes', 'string', 'max:50'], 'valid_until' => [$p, 'date'], 'message' => ['nullable', 'string'],
-            'price_basis' => [$p, 'string', 'in:fixed_total,best_bid,per_km,per_ton,per_pallet'],
+            'price_basis' => [$p, 'string', 'in:'.implode(',', self::TRANSPORT_PRICE_BASIS)],
             'vat' => [$p, 'string', 'in:included,excluded'],
             'payment_terms' => [$p, 'string', 'max:30'],
             'included_charges' => ['nullable', 'array'],
@@ -61,7 +67,7 @@ class OfferController extends CrudController
 
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate($this->rules());
+        $data = $request->validate($this->rulesForRequest($request, false));
         $this->validateBestBidPaymentTerms($data['price_basis'], $data['payment_terms']);
 
         $offer = DB::transaction(function () use ($data) {
@@ -77,7 +83,7 @@ class OfferController extends CrudController
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate($this->rules(true));
+        $data = $request->validate($this->rulesForRequest($request, true, Offer::query()->find($id)));
 
         $offer = DB::transaction(function () use ($id, $data) {
             $offer = Offer::query()->lockForUpdate()->findOrFail($id);
@@ -127,6 +133,52 @@ class OfferController extends CrudController
         });
 
         return $this->success((new EntityResource($offer))->resolve($request), 'Offer approved and driver assigned.');
+    }
+
+    /**
+     * The rules for the load actually being bid on. A storage request is answered with capacity -
+     * from when, how much, for how long, at what rate per unit - so the transport commitment fields
+     * (truck, loading date, transit time) stop being required and the warehouse ones take over.
+     */
+    private function rulesForRequest(Request $request, bool $updating, ?Offer $offer = null): array
+    {
+        $rules = $this->rules($updating);
+        $loadId = $request->input('load_id') ?? $offer?->load_id;
+        $load = $loadId ? Load::query()->find($loadId) : null;
+
+        if (! $load || ! ($load->for_storage || $load->transport_type === 'warehouse')) {
+            return $rules;
+        }
+
+        $p = $updating ? 'sometimes' : 'required';
+
+        return array_merge($rules, [
+            'price_basis' => [$p, 'string', 'in:'.implode(',', self::STORAGE_PRICE_BASIS)],
+            'equipment_type' => ['nullable', 'string', 'max:60'],
+            'vehicle_availability' => ['nullable', 'string', 'in:available,not_available'],
+            'available_date' => ['nullable', 'date'],
+            'exact_loading_date' => ['nullable', 'date'],
+            'estimated_transit_days' => ['nullable', 'integer', 'min:0'],
+            'capacity_status' => [$p, 'string', 'in:available,partial,propose_changes'],
+            'available_from' => [$p, 'date'],
+            'available_capacity' => ['nullable', 'numeric', 'min:0'],
+            'capacity_unit' => ['nullable', 'string', 'max:30'],
+            'minimum_storage_period' => ['nullable', 'string', 'max:30'],
+            'price_breakdown' => ['nullable', 'array'],
+            'price_breakdown.*.service' => ['nullable', 'string', 'max:120'],
+            'price_breakdown.*.unit' => ['nullable', 'string', 'max:60'],
+            'price_breakdown.*.price' => ['nullable', 'numeric'],
+            'services_included' => ['nullable', 'array'],
+            'services_included.*' => ['string', 'max:60'],
+            'optional_conditions' => ['nullable', 'array'],
+            'optional_conditions.*' => ['string', 'max:60'],
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            // A storage bid is not a transport mandate, so the licensing and shipment-details
+            // confirmations do not apply to it; confirming the quoted terms still does.
+            'confirmed_authorized' => ['sometimes', 'boolean'],
+            'confirmed_details_match' => ['sometimes', 'boolean'],
+            'confirmed_terms' => $updating ? ['sometimes', 'boolean'] : ['required', 'accepted'],
+        ]);
     }
 
     private function validateBidFloor(Load $load, float $amount, bool $allowBelowFloor = false): void

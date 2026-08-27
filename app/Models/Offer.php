@@ -15,6 +15,8 @@ class Offer extends BaseModel
             'available_date' => 'date', 'exact_loading_date' => 'date', 'estimated_delivery_date' => 'date',
             'can_perform_as_required' => 'boolean', 'has_exceptions' => 'boolean', 'is_counter' => 'boolean',
             'confirmed_authorized' => 'boolean', 'confirmed_details_match' => 'boolean', 'confirmed_terms' => 'boolean',
+            'available_from' => 'date', 'available_capacity' => 'decimal:2',
+            'price_breakdown' => 'array', 'services_included' => 'array', 'optional_conditions' => 'array',
         ];
     }
 
@@ -36,6 +38,11 @@ class Offer extends BaseModel
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function creator(): BelongsTo
