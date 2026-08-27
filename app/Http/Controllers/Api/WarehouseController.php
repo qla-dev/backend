@@ -7,6 +7,7 @@ use App\Models\Warehouse;
 use App\Models\WarehouseMovement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class WarehouseController extends CrudController
@@ -32,6 +33,16 @@ class WarehouseController extends CrudController
             'storage_types' => ['nullable', 'array'],
             'certifications' => ['nullable', 'array'],
         ];
+    }
+
+    protected function searchColumns(): array
+    {
+        return ['name', 'address', 'city', 'country_code'];
+    }
+
+    protected function applyOrdering(Builder $query, Request $request): void
+    {
+        $query->orderBy('name')->orderBy('id');
     }
 
     public function store(Request $request): JsonResponse

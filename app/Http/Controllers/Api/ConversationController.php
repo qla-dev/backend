@@ -37,6 +37,11 @@ class ConversationController extends CrudController
 
     protected function applyFilters(Builder $query, Request $request): void
     {
+        // The conversation list is also the ready-to-render first message page. The count lets
+        // clients know whether an upward scroll should request page 2 without refetching page 1
+        // every time the user switches conversations.
+        $query->withCount('messages');
+
         if ($request->filled('load_id')) {
             $query->where('load_id', $request->integer('load_id'));
         }

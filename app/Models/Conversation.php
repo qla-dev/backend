@@ -51,6 +51,6 @@ class Conversation extends BaseModel
         return $this->hasMany(Message::class)
             ->orderByDesc('sent_at')
             ->orderByDesc('id')
-            ->limit(2);
+            ->limit(10);
     }
 }
