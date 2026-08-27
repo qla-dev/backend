@@ -55,7 +55,7 @@ class LoadDraftController extends CrudController
             'temperature_max' => ['nullable', 'numeric'], 'declared_value' => ['nullable', 'numeric', 'min:0'], 'shipment_value_currency' => ['nullable', 'string', 'size:3'], 'budget' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['nullable', 'string', 'size:3'], 'payment_terms' => ['nullable', 'string', 'max:50'], 'payment_due_days' => ['nullable', 'integer', 'min:0'],
             'is_negotiable' => ['nullable', 'boolean'],
-            'is_fragile' => ['nullable', 'boolean'], 'requires_adr' => ['nullable', 'boolean'], 'requires_tail_lift' => ['nullable', 'boolean'],
+            'is_fragile' => ['nullable', 'boolean'], 'requires_food_grade' => ['nullable', 'boolean'], 'requires_adr' => ['nullable', 'boolean'], 'requires_tail_lift' => ['nullable', 'boolean'],
             'must_be_trackable' => ['nullable', 'boolean'], 'is_urgent' => ['nullable', 'boolean'], 'loading_methods' => ['nullable', 'array'],
             'toll_roads_included' => ['nullable', 'boolean'], 'ferry_included' => ['nullable', 'boolean'], 'cmr_required' => ['nullable', 'boolean'],
             'pallet_exchange_required' => ['nullable', 'boolean'], 'customs_required' => ['nullable', 'boolean'],

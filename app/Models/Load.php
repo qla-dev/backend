@@ -32,7 +32,7 @@ class Load extends BaseModel
             'status_change' => 'array',
             'etd_at' => 'datetime', 'atd_at' => 'datetime',
             'storage_start_date' => 'date', 'storage_end_date' => 'date', 'is_storage_ongoing' => 'boolean',
-            'requires_customs_bonded' => 'boolean', 'requires_racking' => 'boolean', 'requires_security' => 'boolean',
+            'requires_customs_bonded' => 'boolean', 'requires_racking' => 'boolean', 'requires_security' => 'boolean', 'requires_food_grade' => 'boolean',
         ];
     }
 
