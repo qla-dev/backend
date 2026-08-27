@@ -493,6 +493,7 @@ class LoadController extends CrudController
             'warehouse_country_code' => ['nullable', 'required_if:transport_type,warehouse', 'string', 'size:2'],
             'warehouse_address' => ['nullable', 'string', 'max:255'],
             'warehouse_latitude' => ['nullable', 'numeric', 'between:-90,90'], 'warehouse_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'warehouse_radius_km' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'storage_start_date' => ['nullable', 'required_if:transport_type,warehouse', 'date'], 'storage_end_date' => ['nullable', 'date'],
             'is_storage_ongoing' => ['sometimes', 'boolean'], 'handling_requirements' => ['nullable', 'array'], 'handling_requirements.*' => ['string', 'max:255'],
             'requires_customs_bonded' => ['sometimes', 'boolean'], 'requires_racking' => ['sometimes', 'boolean'], 'requires_security' => ['sometimes', 'boolean'],

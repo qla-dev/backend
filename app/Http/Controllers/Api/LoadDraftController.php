@@ -72,7 +72,7 @@ class LoadDraftController extends CrudController
             'pickup_address' => ['nullable', 'string', 'max:255'], 'pickup_port' => ['nullable', 'string', 'max:255'], 'pickup_airport' => ['nullable', 'string', 'max:255'], 'pickup_latitude' => ['nullable', 'numeric', 'between:-90,90'], 'pickup_longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'pickup_date' => ['nullable', 'date'], 'pickup_date_to' => ['nullable', 'date'], 'pickup_time_from' => ['nullable', 'date_format:H:i'], 'pickup_time_to' => ['nullable', 'date_format:H:i'],
             'delivery_place_type' => ['nullable', 'string', 'max:100'], 'delivery_city' => ['nullable', 'string', 'max:120'], 'delivery_country_code' => ['nullable', 'string', 'size:2'],
-            'delivery_address' => ['nullable', 'string', 'max:255'], 'delivery_port' => ['nullable', 'string', 'max:255'], 'delivery_airport' => ['nullable', 'string', 'max:255'], 'delivery_latitude' => ['nullable', 'numeric', 'between:-90,90'], 'delivery_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'delivery_address' => ['nullable', 'string', 'max:255'], 'delivery_port' => ['nullable', 'string', 'max:255'], 'delivery_airport' => ['nullable', 'string', 'max:255'], 'delivery_latitude' => ['nullable', 'numeric', 'between:-90,90'], 'delivery_longitude' => ['nullable', 'numeric', 'between:-180,180'], 'delivery_radius_km' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'delivery_date' => ['nullable', 'date'], 'delivery_date_to' => ['nullable', 'date'], 'delivery_time_from' => ['nullable', 'date_format:H:i'], 'delivery_time_to' => ['nullable', 'date_format:H:i'],
         ];
     }
