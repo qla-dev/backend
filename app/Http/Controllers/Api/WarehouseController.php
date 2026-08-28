@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\EntityResource;
+use App\Models\Role;
+use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseMovement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class WarehouseController extends CrudController
 {
@@ -24,6 +27,10 @@ class WarehouseController extends CrudController
         return [
             'user_id' => ['sometimes', 'integer', 'exists:users,id'],
             'name' => [$p, 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'tax_number' => ['nullable', 'string', 'max:100'],
+            'registration_number' => ['nullable', 'string', 'max:100'],
             'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:120'],
             'country_code' => ['nullable', 'string', 'size:2'],
@@ -32,7 +39,15 @@ class WarehouseController extends CrudController
             'total_capacity_pallets' => ['nullable', 'integer', 'min:0'],
             'storage_types' => ['nullable', 'array'],
             'certifications' => ['nullable', 'array'],
+            'plan' => ['sometimes', 'string', 'max:50'],
+            'status' => ['sometimes', 'string', 'max:50'],
+            'verified_at' => ['nullable', 'date'],
         ];
+    }
+
+    protected function relations(): array
+    {
+        return ['owner'];
     }
 
     protected function searchColumns(): array
@@ -53,6 +68,56 @@ class WarehouseController extends CrudController
         $warehouse = Warehouse::query()->create($data);
 
         return $this->success((new EntityResource($warehouse))->resolve($request), 'Warehouse created successfully.', status: 201);
+    }
+
+    // Creates the warehouse company and its owner login in one step, mirroring how a logistics
+    // company is onboarded - the admin console never has to create the user separately.
+    public function onboard(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'company_name' => ['required', 'string', 'max:255'],
+            'company_email' => ['nullable', 'email', 'max:255'],
+            'company_phone' => ['nullable', 'string', 'max:50'],
+            'country_code' => ['required', 'string', 'size:2'],
+            'city' => ['nullable', 'string', 'max:120'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'tax_number' => ['nullable', 'string', 'max:100'],
+            'registration_number' => ['nullable', 'string', 'max:100'],
+            'total_capacity_pallets' => ['nullable', 'integer', 'min:0'],
+            'storage_types' => ['nullable', 'array'],
+            'plan' => ['nullable', 'string', 'max:50'],
+            'status' => ['nullable', 'string', 'max:50'],
+            'owner_name' => ['required', 'string', 'max:255'],
+            'owner_email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'owner_username' => ['required', 'string', 'max:80', 'unique:users,username'],
+            'owner_password' => ['required', 'string', 'min:8'],
+            'owner_phone' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $warehouse = DB::transaction(function () use ($data) {
+            $role = Role::query()->where('name', 'warehouse')->firstOrFail();
+            $owner = User::query()->create([
+                'role_id' => $role->id, 'name' => $data['owner_name'], 'email' => $data['owner_email'],
+                'username' => $data['owner_username'], 'password' => $data['owner_password'],
+                'phone' => $data['owner_phone'] ?? null, 'language' => 'bs',
+                'country_code' => strtoupper($data['country_code']), 'is_active' => true, 'email_verified_at' => now(),
+            ]);
+
+            $warehouse = Warehouse::query()->create([
+                'user_id' => $owner->id, 'name' => $data['company_name'],
+                'email' => $data['company_email'] ?? null, 'phone' => $data['company_phone'] ?? null,
+                'tax_number' => $data['tax_number'] ?? null, 'registration_number' => $data['registration_number'] ?? null,
+                'country_code' => strtoupper($data['country_code']), 'city' => $data['city'] ?? null,
+                'address' => $data['address'] ?? null,
+                'total_capacity_pallets' => (int) ($data['total_capacity_pallets'] ?? 0),
+                'storage_types' => $data['storage_types'] ?? null,
+                'plan' => $data['plan'] ?? 'starter', 'status' => $data['status'] ?? 'pending',
+            ]);
+
+            return $warehouse->load($this->relations());
+        });
+
+        return $this->success((new EntityResource($warehouse))->resolve($request), 'Warehouse company and owner account created.', status: 201);
     }
 
     // Everything the "Moj Warehouse" dashboard renders, aggregated server-side from a single
