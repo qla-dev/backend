@@ -16,18 +16,26 @@ class HsCodeController extends Controller
     {
         $validated = $request->validate([
             'lang' => ['sometimes', 'string', 'in:en,de,bs'],
+            'section' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
         $lang = (string) ($validated['lang'] ?? 'en');
-        $rows = HsCode::query()->orderBy('id')->get();
+        $section = $validated['section'] ?? null;
+        $rows = HsCode::query()
+            ->when(filled($section), fn (Builder $query) => $query->where('section', $section))
+            ->orderBy('id')
+            ->get();
+        $groupColumn = filled($section) ? 'chapter' : 'section';
         $categories = $rows
-            ->groupBy(fn (HsCode $item): string => (string) $item->section)
-            ->map(function ($items, string $section) use ($lang, $search): array {
+            ->groupBy(fn (HsCode $item): string => (string) $item->{$groupColumn})
+            ->map(function ($items, string $id) use ($lang, $search, $groupColumn): array {
                 $first = $items->first();
                 $formatted = $search->formatItem($first, 1.0, $lang);
 
                 return [
-                    'id' => $section,
-                    'label' => $formatted['section'] ?: $section,
+                    'id' => $id,
+                    'label' => $groupColumn === 'chapter'
+                        ? ($formatted['chapterName'] ?: $id)
+                        : ($formatted['section'] ?: $id),
                     'count' => $items->count(),
                     'selectableCount' => $items->filter(fn (HsCode $item): bool => strlen($this->digits((string) $item->tariff_code)) === 10)->count(),
                 ];
@@ -42,6 +50,7 @@ class HsCodeController extends Controller
                 'categories' => $categories->count(),
                 'coded' => $rows->whereNotNull('tariff_code')->count(),
                 'selectable' => $categories->sum('selectableCount'),
+                'parent_section' => $section,
             ],
             'errors' => [],
         ]);
@@ -52,6 +61,7 @@ class HsCodeController extends Controller
         $validated = $request->validate([
             'query' => ['sometimes', 'nullable', 'string', 'max:300'],
             'section' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'chapter' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'lang' => ['sometimes', 'string', 'in:en,de,bs'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:10', 'max:100'],
@@ -61,6 +71,9 @@ class HsCodeController extends Controller
 
         if (filled($validated['section'] ?? null)) {
             $query->where('section', $validated['section']);
+        }
+        if (filled($validated['chapter'] ?? null)) {
+            $query->where('chapter', $validated['chapter']);
         }
         if (filled($validated['query'] ?? null)) {
             $this->applyCatalogSearch($query, (string) $validated['query']);
