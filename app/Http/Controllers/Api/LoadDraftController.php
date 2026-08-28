@@ -38,7 +38,7 @@ class LoadDraftController extends CrudController
             'cargo_type' => ['nullable', 'string', 'max:100'],
             'goods_type' => ['nullable', 'string', 'max:100'],
             'hs_codes' => ['nullable', 'array', 'max:20'],
-            'hs_codes.*.code' => ['required', 'string', 'regex:/^\d{6}$/'],
+            'hs_codes.*.code' => ['required', 'string', 'regex:/^\d{4}(?:\s?\d{2}){1,3}$/'],
             'hs_codes.*.description' => ['nullable', 'string', 'max:1000'],
             'hs_codes.*.confidence' => ['nullable', 'numeric', 'between:0,1'],
             'hs_codes.*.chapterCode' => ['nullable', 'string', 'max:10'],

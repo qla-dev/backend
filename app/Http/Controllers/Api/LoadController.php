@@ -464,7 +464,7 @@ class LoadController extends CrudController
             'department' => ['nullable', 'string', 'max:120'], 'freight_mode' => ['nullable', 'string', 'max:120'], 'subdepartment' => ['nullable', 'string', 'max:120'],
             'status' => ['sometimes', Rule::in(Load::STATUSES)], 'transport_type' => ['sometimes', 'in:road,air,sea,rail,warehouse'], 'for_storage' => ['sometimes', 'boolean'],
             'cargo_type' => [$updating ? 'sometimes' : 'required_unless:transport_type,warehouse', 'nullable', 'string', 'max:100'], 'goods_type' => ['nullable', 'string', 'max:100'],
-            'hs_codes' => ['nullable', 'array', 'max:20'], 'hs_codes.*.code' => ['required', 'string', 'regex:/^\d{6}$/'],
+            'hs_codes' => ['nullable', 'array', 'max:20'], 'hs_codes.*.code' => ['required', 'string', 'regex:/^\d{4}(?:\s?\d{2}){1,3}$/'],
             'hs_codes.*.description' => ['nullable', 'string', 'max:1000'], 'hs_codes.*.confidence' => ['nullable', 'numeric', 'between:0,1'],
             // Laravel's validate() rebuilds arrays strictly from the rule paths defined here, so the
             // chapter/heading context used to pick a category icon on the frontend must be listed

@@ -186,7 +186,7 @@ class OpenRouterLoadScanner
             .'Read the pickup and delivery locations as city names, and their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is shown, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'Read the cargo weight in kilograms, converting from other units if the document states them explicitly (e.g. lbs, tons). '
-            .'For any identifiable goods, return hsSearchTerms as a short English catalog search phrase (product, material, processing state, intended use) for each distinct product visible in the document, separated by semicolons when there is more than one; try to identify every distinct product, not just the main or first one, so each can get its own HS code immediately, without waiting for a later message. A single phrase is fine when only one product is shown. Preserve any explicitly printed six-digit HS codes in hsCodes. '
+            .'For any identifiable goods, return hsSearchTerms as a short English catalog search phrase (product, material, processing state, intended use) for each distinct product visible in the document, separated by semicolons when there is more than one; try to identify every distinct product, not just the main or first one, so each can get its own tariff code immediately, without waiting for a later message. A single phrase is fine when only one product is shown. Preserve any explicitly printed HS or ten-digit tariff codes in hsCodes. '
             .'Read the pallet or unit count as a plain number when the document states a quantity (e.g. "24 pallets" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
@@ -213,7 +213,7 @@ class OpenRouterLoadScanner
             .'Read the pickup date and delivery date separately as YYYY-MM-DD; if only one date is mentioned, use it for whichever of the two it clearly refers to and leave the other empty. '
             .'The user may give a raw date or a relative date. Resolve danas/today/heute as the server date, sutra/tomorrow/morgen as server date plus 1 day, prekosutra/day after tomorrow/übermorgen as server date plus 2 days, and "za N dana"/"in N days"/"in N Tagen" as server date plus N days. Never infer the year from model knowledge or training data. '
             .'Read the cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
-            .'For any identifiable goods, return hsSearchTerms as a short English catalog search phrase (product, material, processing state, intended use) for each distinct product stated by the user, separated by semicolons when there is more than one; try to identify every distinct product, not just the main or first one. A single phrase is fine when only one product is mentioned. Preserve any explicitly stated six-digit HS codes in hsCodes. '
+            .'For any identifiable goods, return hsSearchTerms as a short English catalog search phrase (product, material, processing state, intended use) for each distinct product stated by the user, separated by semicolons when there is more than one; try to identify every distinct product, not just the main or first one. A single phrase is fine when only one product is mentioned. Preserve any explicitly stated HS or ten-digit tariff codes in hsCodes. '
             .'Read the pallet or unit count as a plain number when a quantity is mentioned (e.g. "24 paleta" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
             .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
@@ -674,7 +674,7 @@ class OpenRouterLoadScanner
                 'hsCodes' => [
                     'type' => 'array',
                     'maxItems' => 10,
-                    'description' => 'Six-digit HS codes explicitly stated in the source. Leave empty when none is stated; the server searches the catalog after extraction.',
+                    'description' => 'HS or ten-digit tariff codes explicitly stated in the source. Leave empty when none is stated; the server searches the catalog after extraction.',
                     'items' => [
                         'type' => 'object',
                         'additionalProperties' => false,
