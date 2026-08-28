@@ -136,7 +136,7 @@ class HsCodeController extends Controller
     {
         $value = trim($value);
         $digits = $this->digits($value);
-        if (strlen($digits) >= 2) {
+        if (strlen($digits) >= 2 && preg_match('/^\s*\d[\d\s.\/-]*$/u', $value) === 1) {
             $query->whereNotNull('tariff_code')
                 ->whereRaw("REPLACE(tariff_code, ' ', '') LIKE ?", [substr($digits, 0, 10).'%']);
 
