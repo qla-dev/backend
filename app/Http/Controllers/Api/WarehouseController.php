@@ -176,7 +176,9 @@ class WarehouseController extends CrudController
     public function overview(Request $request): JsonResponse
     {
         $warehouses = Warehouse::query()
-            ->where('user_id', $request->user()->id)
+            // Admin/master use the same operations dashboard as warehouse companies, but across
+            // the complete network. A warehouse account remains strictly scoped to its own rows.
+            ->when(! $request->user()?->isSuperAdminOrMaster(), fn (Builder $query) => $query->where('user_id', $request->user()->id))
             ->orderBy('name')
             ->orderBy('id')
             ->get();
