@@ -126,6 +126,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('message-attachments', [MessageAttachmentController::class, 'store'])->middleware('throttle:20,1');
     Route::get('message-attachments/{conversation}/{filename}', [MessageAttachmentController::class, 'show'])
         ->where('filename', '[a-f0-9\-]+\.[a-zA-Z0-9]+');
+    Route::get('tariffs/categories', [HsCodeController::class, 'categories'])->middleware('throttle:60,1');
+    Route::get('tariffs/catalog', [HsCodeController::class, 'catalog'])->middleware('throttle:60,1');
     Route::get('hs-codes', [HsCodeController::class, 'index'])->middleware('throttle:60,1');
     Route::post('hs-codes/bulk', [HsCodeController::class, 'bulk'])->middleware('throttle:60,1');
 

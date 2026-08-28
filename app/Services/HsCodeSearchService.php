@@ -41,7 +41,7 @@ class HsCodeSearchService
 
             if ($codeMatches->isNotEmpty()) {
                 return $codeMatches
-                    ->map(fn (HsCode $item): array => $this->result($item, 1.0, $lang))
+                    ->map(fn (HsCode $item): array => $this->formatItem($item, 1.0, $lang))
                     ->values()
                     ->all();
             }
@@ -93,7 +93,7 @@ class HsCodeSearchService
                 return $right['score'] <=> $left['score'] ?: $left['item']->id <=> $right['item']->id;
             })
             ->take($limit)
-            ->map(fn (array $candidate): array => $this->result(
+            ->map(fn (array $candidate): array => $this->formatItem(
                 $candidate['item'],
                 min(0.98, max(0.35, $candidate['score'] / 170)),
                 $lang,
@@ -131,14 +131,14 @@ class HsCodeSearchService
 
         return $normalized
             ->map(fn (string $code): ?array => $matches->has($code)
-                ? $this->result($matches->get($code), 1.0, $lang)
+                ? $this->formatItem($matches->get($code), 1.0, $lang)
                 : null)
             ->filter()
             ->values()
             ->all();
     }
 
-    private function result(HsCode $item, float $confidence, string $lang): array
+    public function formatItem(HsCode $item, float $confidence, string $lang): array
     {
         $code = (string) ($item->tariff_code ?? '');
         $path = $this->localizedPath($item, $lang);
