@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\HsCodeController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\LenaGuidedAnswerController;
+use App\Http\Controllers\Api\LandingStatsController;
 use App\Http\Controllers\Api\LoadController;
 use App\Http\Controllers\Api\LoadDraftController;
 use App\Http\Controllers\Api\LoadInvoiceDocumentController;
@@ -55,6 +56,9 @@ Route::get('public-loads', [LoadController::class, 'publicIndex']);
 
 // Public landing-page pricing table - same active packages the in-app Pricing screen shows.
 Route::get('public-subscription-packages', [SubscriptionPackageController::class, 'index']);
+
+// Public landing-page module counts. Aggregate values only; no customer or tariff data is exposed.
+Route::get('public-module-counts', [LandingStatsController::class, 'index'])->middleware('throttle:60,1');
 
 Route::prefix('auth')->group(function (): void {
     Route::post('login', [AuthController::class, 'login']);
