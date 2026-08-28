@@ -462,7 +462,7 @@ class LoadController extends CrudController
             'assigned_driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'title' => [$p, 'string', 'max:255'], 'booking_reference' => ['nullable', 'string', 'max:160'], 'insurance' => ['nullable', 'string', 'max:255'],
             'department' => ['nullable', 'string', 'max:120'], 'freight_mode' => ['nullable', 'string', 'max:120'], 'subdepartment' => ['nullable', 'string', 'max:120'],
-            'status' => ['sometimes', Rule::in(Load::STATUSES)], 'transport_type' => ['sometimes', 'in:road,air,sea,warehouse'], 'for_storage' => ['sometimes', 'boolean'],
+            'status' => ['sometimes', Rule::in(Load::STATUSES)], 'transport_type' => ['sometimes', 'in:road,air,sea,rail,warehouse'], 'for_storage' => ['sometimes', 'boolean'],
             'cargo_type' => [$updating ? 'sometimes' : 'required_unless:transport_type,warehouse', 'nullable', 'string', 'max:100'], 'goods_type' => ['nullable', 'string', 'max:100'],
             'hs_codes' => ['nullable', 'array', 'max:20'], 'hs_codes.*.code' => ['required', 'string', 'regex:/^\d{6}$/'],
             'hs_codes.*.description' => ['nullable', 'string', 'max:1000'], 'hs_codes.*.confidence' => ['nullable', 'numeric', 'between:0,1'],

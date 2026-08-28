@@ -97,6 +97,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('loads/{load}/book', [LoadController::class, 'book']);
     });
 
+    Route::post('documents/upload', [DocumentController::class, 'upload']);
+    Route::get('documents/{document}/download', [DocumentController::class, 'download']);
+
     Route::apiResources([
         'vehicles' => VehicleController::class,
         'vehicle-locations' => VehicleLocationController::class,

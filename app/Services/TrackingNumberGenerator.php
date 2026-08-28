@@ -5,8 +5,8 @@ namespace App\Services;
 use App\Models\TrackingNumberSequence;
 use Illuminate\Support\Facades\DB;
 
-// Freightbook shipment tracking format: FB-{C|R|L}-{YY}{NNN}.
-// C = road, R = air, L = sea.
+// Freightbook shipment tracking format: FB-{C|R|L|Z}-{YY}{NNN}.
+// C = road, R = air, L = sea, Z = rail.
 // Each transport type has its own zero-based yearly sequence: FB-C-26000, FB-C-26001, ...
 class TrackingNumberGenerator
 {
@@ -14,6 +14,7 @@ class TrackingNumberGenerator
         'road' => 'C',
         'sea' => 'L',
         'air' => 'R',
+        'rail' => 'Z',
     ];
 
     public function generate(?string $transportType): string
