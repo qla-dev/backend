@@ -102,6 +102,23 @@ class WarehouseController extends CrudController
         return $this->success((new EntityResource($warehouse))->resolve($request), 'Warehouse created successfully.', status: 201);
     }
 
+    // A warehouse account may keep its own facility details current, but flipping the record live
+    // (or back off) is an admin decision - only superadmin/master may write status/verified_at.
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate($this->rules(true));
+
+        if (! $request->user()?->isSuperAdminOrMaster()) {
+            unset($data['status'], $data['verified_at']);
+        }
+
+        $warehouse = Warehouse::query()->findOrFail($id);
+        $warehouse->update($data);
+        $warehouse->load($this->relations());
+
+        return $this->success((new EntityResource($warehouse))->resolve($request), 'Warehouse updated successfully.');
+    }
+
     // Creates the warehouse company and its owner login in one step, mirroring how a logistics
     // company is onboarded - the admin console never has to create the user separately.
     public function onboard(Request $request): JsonResponse
