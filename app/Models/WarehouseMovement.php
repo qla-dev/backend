@@ -16,8 +16,10 @@ class WarehouseMovement extends BaseModel
         return $this->belongsTo(Warehouse::class);
     }
 
-    public function load(): BelongsTo
+    // Not named load() - that would clash with Eloquent's Model::load($relations) signature and
+    // fatal-error the whole model, so the relation carries the foreign key explicitly instead.
+    public function freightLoad(): BelongsTo
     {
-        return $this->belongsTo(Load::class);
+        return $this->belongsTo(Load::class, 'load_id');
     }
 }
