@@ -171,47 +171,99 @@ class WarehouseController extends CrudController
 
     // Everything the "Moj Warehouse" dashboard renders, aggregated server-side from a single
     // inbound/outbound ledger (warehouse_movements) so the frontend never computes business figures
-    // itself - it only fetches and displays this one payload.
+    // itself - it only fetches and displays this one payload. An account can operate several
+    // facilities: the figures below cover all of them at once unless ?warehouse_id= narrows the scope.
     public function overview(Request $request): JsonResponse
     {
-        $warehouse = Warehouse::query()->where('user_id', $request->user()->id)->first();
+        $warehouses = Warehouse::query()
+            ->where('user_id', $request->user()->id)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
 
-        if (! $warehouse) {
-            return $this->success(['warehouse' => null], 'No warehouse found for this account.');
+        if ($warehouses->isEmpty()) {
+            return $this->success([
+                'warehouse' => null,
+                'warehouses' => [],
+                'selected_warehouse_id' => null,
+                'stats' => [],
+                'dock_schedule' => [],
+                'inventory_summary' => [],
+                'recent_arrivals' => [],
+                'top_customers' => [],
+            ], 'No warehouse found for this account.');
         }
 
-        $completed = WarehouseMovement::query()->where('warehouse_id', $warehouse->id)->where('status', 'completed');
+        // An id the account does not own falls back to the combined view rather than erroring - the
+        // dashboard treats "all facilities" as the default scope.
+        $selected = $warehouses->firstWhere('id', (int) $request->query('warehouse_id', 0));
+        $allIds = $warehouses->pluck('id')->all();
+        $scopeIds = $selected ? [$selected->id] : $allIds;
+
+        $net = "SUM(CASE WHEN direction = 'inbound' THEN pallets ELSE -pallets END)";
+        $completed = WarehouseMovement::query()->whereIn('warehouse_id', $scopeIds)->where('status', 'completed');
 
         $netByCustomer = (clone $completed)
-            ->selectRaw("customer_name, SUM(CASE WHEN direction = 'inbound' THEN pallets ELSE -pallets END) as net_pallets")
+            ->selectRaw("customer_name, {$net} as net_pallets")
             ->groupBy('customer_name')
-            ->havingRaw('SUM(CASE WHEN direction = \'inbound\' THEN pallets ELSE -pallets END) > 0')
+            ->havingRaw("{$net} > 0")
             ->orderByDesc('net_pallets')
             ->get();
 
         $netByStorageType = (clone $completed)
-            ->selectRaw("storage_type, SUM(CASE WHEN direction = 'inbound' THEN pallets ELSE -pallets END) as net_pallets")
+            ->selectRaw("storage_type, {$net} as net_pallets")
             ->groupBy('storage_type')
-            ->havingRaw('SUM(CASE WHEN direction = \'inbound\' THEN pallets ELSE -pallets END) > 0')
+            ->havingRaw("{$net} > 0")
             ->orderByDesc('net_pallets')
             ->get();
 
-        $occupiedPallets = (int) $netByCustomer->sum('net_pallets');
-        $totalCapacity = max(0, (int) $warehouse->total_capacity_pallets);
+        // Per-facility occupancy is computed over every facility, not just the selected scope, so the
+        // facility list and its chart stay populated while a single warehouse is being inspected.
+        $netByWarehouse = WarehouseMovement::query()
+            ->whereIn('warehouse_id', $allIds)
+            ->where('status', 'completed')
+            ->selectRaw("warehouse_id, {$net} as net_pallets")
+            ->groupBy('warehouse_id')
+            ->pluck('net_pallets', 'warehouse_id');
+
+        $facilities = $warehouses->map(function (Warehouse $warehouse) use ($netByWarehouse): array {
+            $capacity = max(0, (int) $warehouse->total_capacity_pallets);
+            $occupied = max(0, (int) ($netByWarehouse[$warehouse->id] ?? 0));
+
+            return [
+                'id' => $warehouse->id,
+                'name' => $warehouse->name,
+                'city' => $warehouse->city,
+                'country_code' => $warehouse->country_code,
+                'status' => $warehouse->status,
+                'storage_types' => $warehouse->storage_types,
+                'total_capacity_pallets' => $capacity,
+                'occupied_pallets' => $occupied,
+                'available_pallets' => max(0, $capacity - $occupied),
+                'occupancy_percent' => $capacity > 0 ? min(100, round(($occupied / $capacity) * 100, 1)) : 0.0,
+            ];
+        });
+
+        $inScope = $facilities->whereIn('id', $scopeIds);
+        $occupiedPallets = (int) $inScope->sum('occupied_pallets');
+        $totalCapacity = (int) $inScope->sum('total_capacity_pallets');
         $occupancyPercent = $totalCapacity > 0 ? min(100, round(($occupiedPallets / $totalCapacity) * 100, 1)) : 0.0;
 
+        $names = $warehouses->pluck('name', 'id');
         $today = Carbon::today();
         $todaysMovements = WarehouseMovement::query()
-            ->where('warehouse_id', $warehouse->id)
+            ->whereIn('warehouse_id', $scopeIds)
             ->whereDate('scheduled_at', $today)
             ->orderBy('scheduled_at')
-            ->get();
+            ->get()
+            ->map(fn (WarehouseMovement $movement) => $movement->toArray() + ['warehouse_name' => $names[$movement->warehouse_id] ?? null]);
 
         $recentArrivals = (clone $completed)
             ->where('direction', 'inbound')
             ->orderByDesc('completed_at')
             ->limit(5)
-            ->get();
+            ->get()
+            ->map(fn (WarehouseMovement $movement) => $movement->toArray() + ['warehouse_name' => $names[$movement->warehouse_id] ?? null]);
 
         $monthStart = Carbon::now()->startOfMonth();
         $storageRevenue = (clone $completed)
@@ -221,8 +273,12 @@ class WarehouseController extends CrudController
         $totalRevenue = (clone $completed)->where('direction', 'inbound')->sum('rate');
 
         return $this->success([
-            'warehouse' => $warehouse,
+            'warehouse' => $selected ?? $warehouses->first(),
+            'warehouses' => $facilities->values(),
+            'selected_warehouse_id' => $selected?->id,
             'stats' => [
+                'warehouse_count' => $warehouses->count(),
+                'scoped_warehouse_count' => count($scopeIds),
                 'occupancy_percent' => $occupancyPercent,
                 'occupied_pallets' => $occupiedPallets,
                 'available_pallets' => max(0, $totalCapacity - $occupiedPallets),
@@ -231,7 +287,7 @@ class WarehouseController extends CrudController
                 'outbound_today' => $todaysMovements->where('direction', 'outbound')->count(),
                 'storage_revenue' => round((float) $storageRevenue, 2),
                 'total_revenue' => round((float) $totalRevenue, 2),
-                'currency' => $warehouse->movements()->value('currency') ?? 'EUR',
+                'currency' => WarehouseMovement::query()->whereIn('warehouse_id', $scopeIds)->value('currency') ?? 'EUR',
             ],
             'dock_schedule' => $todaysMovements->values(),
             'inventory_summary' => $netByStorageType->values(),
