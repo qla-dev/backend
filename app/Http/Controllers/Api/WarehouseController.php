@@ -175,10 +175,19 @@ class WarehouseController extends CrudController
     // facilities: the figures below cover all of them at once unless ?warehouse_id= narrows the scope.
     public function overview(Request $request): JsonResponse
     {
+        $user = $request->user();
+        // Resolve the protected role directly from role_id. This endpoint must never accidentally
+        // scope a master/superadmin to warehouses they personally own because the relation was not
+        // preloaded on the Sanctum user instance.
+        $isNetworkView = $user && Role::query()
+            ->whereKey($user->role_id)
+            ->whereIn('name', Role::PROTECTED_NAMES)
+            ->exists();
+
         $warehouses = Warehouse::query()
             // Admin/master use the same operations dashboard as warehouse companies, but across
             // the complete network. A warehouse account remains strictly scoped to its own rows.
-            ->when(! $request->user()?->isSuperAdminOrMaster(), fn (Builder $query) => $query->where('user_id', $request->user()->id))
+            ->when(! $isNetworkView, fn (Builder $query) => $query->where('user_id', $user->id))
             ->orderBy('name')
             ->orderBy('id')
             ->get();
