@@ -104,13 +104,52 @@ class AuthController extends Controller
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => ['nullable', 'string', 'max:50'], 'language' => ['nullable', 'string', 'max:5'],
             'country_code' => ['nullable', 'string', 'size:2'], 'avatar_url' => ['nullable', 'url'],
+            'headline' => ['nullable', 'string', 'max:255'], 'bio' => ['nullable', 'string', 'max:3000'],
             'password' => ['sometimes', 'string', 'min:8'],
             'role_id' => ['sometimes', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->whereNotIn('name', Role::PROTECTED_NAMES))],
+            'company' => ['sometimes', 'array'],
+            'company.id' => ['required_with:company', 'integer', 'exists:companies,id'],
+            'company.name' => ['sometimes', 'string', 'max:255'],
+            'company.email' => ['nullable', 'email', 'max:255'],
+            'company.phone' => ['nullable', 'string', 'max:50'],
+            'company.country_code' => ['sometimes', 'string', 'size:2'],
+            'company.city' => ['nullable', 'string', 'max:120'],
+            'company.address' => ['nullable', 'string', 'max:255'],
+            'company.website' => ['nullable', 'url', 'max:255'],
+            'company.logo_url' => ['nullable', 'url', 'max:255'],
+            'company.description' => ['nullable', 'string', 'max:3000'],
+            'company.tax_number' => ['nullable', 'string', 'max:100'],
+            'company.vat_number' => ['nullable', 'string', 'max:100'],
+            'company.registration_number' => ['nullable', 'string', 'max:100'],
         ]);
         if (isset($data['country_code'])) {
             $data['country_code'] = strtoupper($data['country_code']);
         }
-        $user->update($data);
+        $companyData = $data['company'] ?? null;
+        unset($data['company']);
+        $company = null;
+        if (is_array($companyData)) {
+            $company = $user->companies()
+                ->where('companies.id', $companyData['id'])
+                ->wherePivot('status', 'active')
+                ->first();
+            abort_unless(
+                $company && ((int) $company->owner_user_id === (int) $user->id || $company->pivot?->company_role === 'admin'),
+                403,
+                'You are not allowed to edit this company profile.'
+            );
+            unset($companyData['id']);
+            if (isset($companyData['country_code'])) {
+                $companyData['country_code'] = strtoupper($companyData['country_code']);
+            }
+        }
+
+        DB::transaction(function () use ($user, $data, $company, $companyData): void {
+            $user->update($data);
+            if ($company && is_array($companyData)) {
+                $company->update($companyData);
+            }
+        });
 
         return response()->json(['message' => 'Profile updated.', 'data' => (new EntityResource($user->load(['role', 'companies', 'driver', 'customerProfile'])))->resolve($request), 'meta' => [], 'errors' => []]);
     }
