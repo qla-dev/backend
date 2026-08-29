@@ -180,6 +180,32 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertMatchesRegularExpression('/^FB-S-\d{5}$/', $warehouseLoad->shipment()->firstOrFail()->tracking_number);
     }
 
+    public function test_public_tracking_resolves_an_exact_number_without_authentication(): void
+    {
+        $shipment = Shipment::query()->with('freightLoad.stops')->firstOrFail();
+
+        $this->getJson('/api/public-tracking/'.$shipment->tracking_number)
+            ->assertOk()
+            ->assertJsonPath('data.tracking_number', $shipment->tracking_number)
+            ->assertJsonPath('data.title', $shipment->freightLoad->title)
+            ->assertJsonPath('meta.source', 'shipment_database')
+            ->assertJsonPath('meta.ai_used', false)
+            ->assertJsonStructure(['data' => [
+                'tracking_number',
+                'title',
+                'status',
+                'transport_type',
+                'origin',
+                'destination',
+                'latest_event',
+            ]]);
+
+        $this->getJson('/api/public-tracking/FB-C-99999')
+            ->assertNotFound()
+            ->assertJsonPath('data', null)
+            ->assertJsonPath('meta.ai_used', false);
+    }
+
     public function test_authenticated_customer_options_use_remote_search_and_load_more_pagination(): void
     {
         $token = $this->postJson('/api/auth/login', [

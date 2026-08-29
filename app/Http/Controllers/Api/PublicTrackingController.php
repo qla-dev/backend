@@ -23,7 +23,7 @@ class PublicTrackingController extends Controller
 
         $shipment = Shipment::query()
             ->with([
-                'freightLoad:id,title,status,transport_type',
+                'freightLoad:id,title,status,transport_type,cargo_type,goods_type,weight_kg,currency,budget',
                 'freightLoad.stops' => fn ($query) => $query
                     ->select(['id', 'load_id', 'type', 'position', 'city', 'country_code'])
                     ->orderBy('position'),
@@ -48,6 +48,7 @@ class PublicTrackingController extends Controller
             'message' => 'Shipment tracking details retrieved.',
             'data' => [
                 'tracking_number' => $shipment->tracking_number,
+                'load_id' => (string) $load->id,
                 'title' => $load->title,
                 'status' => $shipment->status ?: $load->status,
                 'transport_type' => $load->transport_type,
@@ -61,6 +62,36 @@ class PublicTrackingController extends Controller
                     'location' => $latestEvent->location,
                     'occurred_at' => optional($latestEvent->occurred_at)->toIso8601String(),
                 ] : null,
+                'load' => [
+                    'id' => $load->id,
+                    'title' => $load->title,
+                    'status' => $load->status,
+                    'transport_type' => $load->transport_type,
+                    'cargo_type' => $load->cargo_type,
+                    'goods_type' => $load->goods_type,
+                    'weight_kg' => $load->weight_kg,
+                    'currency' => $load->currency,
+                    'budget' => $load->budget,
+                    'booking_reference' => $shipment->tracking_number,
+                    'stops' => $load->stops->map(fn ($stop): array => [
+                        'type' => $stop->type,
+                        'position' => $stop->position,
+                        'city' => $stop->city,
+                        'country_code' => $stop->country_code,
+                    ])->values(),
+                    'shipment' => [
+                        'tracking_number' => $shipment->tracking_number,
+                        'status' => $shipment->status,
+                        'carrier' => $shipment->carrier,
+                        'estimated_delivery_at' => optional($shipment->estimated_delivery_at)->toIso8601String(),
+                        'events' => $latestEvent ? [[
+                            'status' => $latestEvent->status,
+                            'title' => $latestEvent->title,
+                            'location' => $latestEvent->location,
+                            'occurred_at' => optional($latestEvent->occurred_at)->toIso8601String(),
+                        ]] : [],
+                    ],
+                ],
             ],
             'meta' => ['source' => 'shipment_database', 'ai_used' => false],
             'errors' => [],
