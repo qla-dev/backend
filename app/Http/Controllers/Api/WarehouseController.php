@@ -47,7 +47,7 @@ class WarehouseController extends CrudController
             'storage_types' => ['nullable', 'array'],
             'certifications' => ['nullable', 'array'],
             'plan' => ['sometimes', 'string', 'max:50'],
-            'status' => ['sometimes', 'string', 'max:50'],
+            'status' => ['sometimes', 'string', 'in:pending,verified,suspended,active,inactive,under maintenance'],
             'verified_at' => ['nullable', 'date'],
             'code' => ['nullable', 'string', 'max:60'],
             'warehouse_type' => ['nullable', 'string', 'max:60'],
@@ -114,19 +114,18 @@ class WarehouseController extends CrudController
         return $this->success((new EntityResource($warehouse))->resolve($request), 'Warehouse created successfully.', status: 201);
     }
 
-    // A warehouse account may keep its own facility details current, but flipping the record live
-    // (or back off) is an admin decision - only superadmin/master may write status/verified_at.
+    // Owners may maintain their own facility, including its publication status. verified_at is
+    // derived here so every quick-status control leaves the status and timestamp consistent.
     public function update(Request $request, int $id): JsonResponse
     {
         $data = $request->validate($this->rules(true));
 
-        if (! $request->user()?->isSuperAdminOrMaster()) {
-            unset($data['status'], $data['verified_at']);
-        }
-
         $warehouse = Warehouse::query()->findOrFail($id);
         $this->authorizeWarehouse($request, $warehouse);
-        unset($data['user_id']);
+        unset($data['user_id'], $data['verified_at']);
+        if (array_key_exists('status', $data)) {
+            $data['verified_at'] = $data['status'] === 'verified' ? now() : null;
+        }
         $warehouse->update($data);
         $warehouse->load($this->relations());
 
