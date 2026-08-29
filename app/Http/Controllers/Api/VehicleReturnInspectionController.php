@@ -38,6 +38,7 @@ class VehicleReturnInspectionController extends Controller
     {
         $user = $request->user();
         abort_unless($load->vehicle_id, 422, 'Assign a vehicle before completing the car drop.');
+        abort_if($load->vehicleReturnInspection()->exists(), 409, 'A vehicle return is already recorded for this load.');
         $vehicle = Vehicle::query()->findOrFail($load->vehicle_id);
         $this->authorizeLoad($request, $load, $vehicle);
 
@@ -48,7 +49,7 @@ class VehicleReturnInspectionController extends Controller
             'damage_notes' => ['nullable', 'required_if:has_damage,1,true', 'string', 'max:5000'],
             'parking_location' => ['nullable', 'string', 'max:255'],
             'photos' => ['required', 'array', 'min:3', 'max:10'],
-            'photos.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,heic,heif', 'max:12288'],
+            'photos.*' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/heic,image/heif', 'max:12288'],
         ], [
             'photos.min' => 'Add at least three current parking-lot photos.',
             'damage_notes.required_if' => 'Describe the reported damage.',
@@ -68,24 +69,17 @@ class VehicleReturnInspectionController extends Controller
         $storedPaths = [];
         try {
             $inspection = DB::transaction(function () use ($request, $user, $load, $vehicle, $data, &$storedPaths): VehicleReturnInspection {
-                $inspection = VehicleReturnInspection::query()->updateOrCreate(
-                    ['load_id' => $load->id],
-                    [
-                        'vehicle_id' => $vehicle->id,
-                        'recorded_by_user_id' => $user->id,
-                        'mileage_km' => $data['mileage_km'],
-                        'fuel_level_percent' => $data['fuel_level_percent'],
-                        'has_damage' => $data['has_damage'],
-                        'damage_notes' => trim((string) ($data['damage_notes'] ?? '')) ?: null,
-                        'parking_location' => trim((string) ($data['parking_location'] ?? '')) ?: null,
-                        'inspected_at' => now(),
-                    ],
-                );
-
-                foreach ($inspection->photos as $oldPhoto) {
-                    Storage::disk('local')->delete($oldPhoto->path);
-                    $oldPhoto->delete();
-                }
+                $inspection = VehicleReturnInspection::query()->create([
+                    'load_id' => $load->id,
+                    'vehicle_id' => $vehicle->id,
+                    'recorded_by_user_id' => $user->id,
+                    'mileage_km' => $data['mileage_km'],
+                    'fuel_level_percent' => $data['fuel_level_percent'],
+                    'has_damage' => $data['has_damage'],
+                    'damage_notes' => trim((string) ($data['damage_notes'] ?? '')) ?: null,
+                    'parking_location' => trim((string) ($data['parking_location'] ?? '')) ?: null,
+                    'inspected_at' => now(),
+                ]);
 
                 foreach ($request->file('photos', []) as $file) {
                     $extension = strtolower((string) ($file->getClientOriginalExtension() ?: $file->extension() ?: 'jpg'));
@@ -155,6 +149,7 @@ class VehicleReturnInspectionController extends Controller
                 (int) $vehicle->owner_user_id === (int) $user->id
                 || (int) $vehicle->assigned_driver_user_id === (int) $user->id
                 || $vehicle->permittedUsers()->whereKey($user->id)->exists()
+                || $vehicle->loads()->where('assigned_driver_user_id', $user->id)->exists()
             ));
 
         abort_unless($allowed, 403);

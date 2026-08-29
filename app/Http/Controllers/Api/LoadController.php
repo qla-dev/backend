@@ -636,6 +636,7 @@ class LoadController extends CrudController
             && (int) $load->customer_user_id === (int) $user->id
             && $data['status'] === 'received';
         abort_unless($canManageStatus || $isReceivingCustomer, 403, 'You cannot update this load status.');
+        abort_if($isReceivingCustomer && $load->status !== 'in_delivery', 409, 'The load can be received only while it is in delivery.');
         abort_if($data['status'] === 'finished', 422, 'Complete the vehicle return inspection before finishing the load.');
 
         $load->update(['status' => $data['status']]);
