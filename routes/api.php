@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\OfferController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentInvoiceDocumentController;
+use App\Http\Controllers\Api\PublicTrackingController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\RouteStopController;
@@ -60,6 +61,11 @@ Route::get('public-subscription-packages', [SubscriptionPackageController::class
 
 // Public landing-page module counts. Aggregate values only; no customer or tariff data is exposed.
 Route::get('public-module-counts', [LandingStatsController::class, 'index'])->middleware('throttle:60,1');
+
+// Exact-number public shipment lookup used by the landing-page Lena tracking flow.
+Route::get('public-tracking/{trackingNumber}', [PublicTrackingController::class, 'show'])
+    ->where('trackingNumber', 'FB-[CRLZS]-[0-9]{5}')
+    ->middleware('throttle:30,1');
 
 Route::prefix('auth')->group(function (): void {
     Route::post('login', [AuthController::class, 'login']);
