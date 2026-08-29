@@ -83,6 +83,11 @@ class User extends Authenticatable
         return $this->hasMany(Vehicle::class, 'owner_user_id');
     }
 
+    public function warehouses(): HasMany
+    {
+        return $this->hasMany(Warehouse::class);
+    }
+
     public function customerLoads(): HasMany
     {
         return $this->hasMany(Load::class, 'customer_user_id');

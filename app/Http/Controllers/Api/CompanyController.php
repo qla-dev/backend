@@ -28,12 +28,19 @@ class CompanyController extends CrudController
     {
         $p = $updating ? 'sometimes' : 'required';
 
-        return ['owner_user_id' => [$p, 'integer', 'exists:users,id'], 'name' => [$p, 'string', 'max:255'], 'slug' => [$p, 'string', 'max:255'], 'email' => ['nullable', 'email'], 'phone' => ['nullable', 'string', 'max:50'], 'tax_number' => ['nullable', 'string', 'max:100'], 'vat_number' => ['nullable', 'string', 'max:100'], 'registration_number' => ['nullable', 'string', 'max:100'], 'country_code' => [$p, 'string', 'size:2'], 'city' => ['nullable', 'string', 'max:120'], 'address' => ['nullable', 'string', 'max:255'], 'website' => ['nullable', 'url', 'max:255'], 'logo_url' => ['nullable', 'url', 'max:255'], 'description' => ['nullable', 'string', 'max:3000'], 'plan' => ['sometimes', 'string', 'max:50'], 'status' => ['sometimes', 'string', 'max:50'], 'verified_at' => ['nullable', 'date']];
+        return ['owner_user_id' => [$p, 'integer', 'exists:users,id'], 'name' => [$p, 'string', 'max:255'], 'slug' => [$p, 'string', 'max:255'], 'email' => ['nullable', 'email'], 'phone' => ['nullable', 'string', 'max:50'], 'tax_number' => ['nullable', 'string', 'max:100'], 'vat_number' => ['nullable', 'string', 'max:100'], 'registration_number' => ['nullable', 'string', 'max:100'], 'country_code' => [$p, 'string', 'size:2'], 'city' => ['nullable', 'string', 'max:120'], 'address' => ['nullable', 'string', 'max:255'], 'website' => ['nullable', 'url', 'max:255'], 'logo_url' => ['nullable', 'url', 'max:255'], 'description' => ['nullable', 'string', 'max:3000'], 'warehouse_first' => ['sometimes', 'boolean'], 'plan' => ['sometimes', 'string', 'max:50'], 'status' => ['sometimes', 'string', 'max:50'], 'verified_at' => ['nullable', 'date']];
     }
 
     protected function relations(): array
     {
-        return ['owner', 'users', 'vehicles'];
+        return ['owner', 'users', 'vehicles', 'warehouses'];
+    }
+
+    protected function applyFilters(Builder $query, Request $request): void
+    {
+        if ($request->has('warehouse_first')) {
+            $query->where('warehouse_first', $request->boolean('warehouse_first'));
+        }
     }
 
     protected function searchColumns(): array
@@ -79,7 +86,7 @@ class CompanyController extends CrudController
                 'tax_number' => $data['tax_number'] ?? null, 'registration_number' => $data['registration_number'] ?? null,
                 'country_code' => strtoupper($data['country_code']), 'city' => $data['city'] ?? null,
                 'address' => $data['address'] ?? null, 'plan' => $data['plan'] ?? 'starter',
-                'status' => $data['status'] ?? 'pending',
+                'status' => $data['status'] ?? 'pending', 'warehouse_first' => false,
             ]);
             $company->users()->attach($owner->id, ['company_role' => 'admin', 'status' => 'active', 'invited_by_user_id' => $request->user()->id, 'joined_at' => now()]);
             return $company->load($this->relations());

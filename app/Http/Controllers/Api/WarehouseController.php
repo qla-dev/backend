@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\EntityResource;
+use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -12,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class WarehouseController extends CrudController
 {
@@ -100,7 +102,12 @@ class WarehouseController extends CrudController
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());
-        $data['user_id'] = $data['user_id'] ?? $request->user()->id;
+        $data['user_id'] = $request->user()->id;
+
+        if (! $request->user()->isSuperAdminOrMaster()) {
+            unset($data['verified_at']);
+            $data['status'] = 'pending';
+        }
 
         $warehouse = Warehouse::query()->create($data);
 
@@ -118,6 +125,8 @@ class WarehouseController extends CrudController
         }
 
         $warehouse = Warehouse::query()->findOrFail($id);
+        $this->authorizeWarehouse($request, $warehouse);
+        unset($data['user_id']);
         $warehouse->update($data);
         $warehouse->load($this->relations());
 
@@ -148,8 +157,8 @@ class WarehouseController extends CrudController
             'owner_phone' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $warehouse = DB::transaction(function () use ($data) {
-            $role = Role::query()->where('name', 'warehouse')->firstOrFail();
+        $company = DB::transaction(function () use ($data, $request) {
+            $role = Role::query()->where('name', 'company')->firstOrFail();
             $owner = User::query()->create([
                 'role_id' => $role->id, 'name' => $data['owner_name'], 'email' => $data['owner_email'],
                 'username' => $data['owner_username'], 'password' => $data['owner_password'],
@@ -157,7 +166,24 @@ class WarehouseController extends CrudController
                 'country_code' => strtoupper($data['country_code']), 'is_active' => true, 'email_verified_at' => now(),
             ]);
 
-            $warehouse = Warehouse::query()->create([
+            $baseSlug = Str::slug($data['company_name']) ?: 'warehouse-company';
+            $slug = $baseSlug;
+            $suffix = 2;
+            while (Company::query()->where('slug', $slug)->exists()) $slug = $baseSlug.'-'.$suffix++;
+
+            $company = Company::query()->create([
+                'owner_user_id' => $owner->id, 'name' => $data['company_name'], 'slug' => $slug,
+                'email' => $data['company_email'] ?? null, 'phone' => $data['company_phone'] ?? null,
+                'tax_number' => $data['tax_number'] ?? null, 'registration_number' => $data['registration_number'] ?? null,
+                'country_code' => strtoupper($data['country_code']), 'city' => $data['city'] ?? null,
+                'address' => $data['address'] ?? null, 'warehouse_first' => true,
+                'plan' => $data['plan'] ?? 'starter', 'status' => $data['status'] ?? 'pending',
+            ]);
+            $company->users()->attach($owner->id, [
+                'company_role' => 'admin', 'status' => 'active',
+                'invited_by_user_id' => $request->user()->id, 'joined_at' => now(),
+            ]);
+            Warehouse::query()->create([
                 'user_id' => $owner->id, 'name' => $data['company_name'],
                 'email' => $data['company_email'] ?? null, 'phone' => $data['company_phone'] ?? null,
                 'tax_number' => $data['tax_number'] ?? null, 'registration_number' => $data['registration_number'] ?? null,
@@ -168,10 +194,10 @@ class WarehouseController extends CrudController
                 'plan' => $data['plan'] ?? 'starter', 'status' => $data['status'] ?? 'pending',
             ]);
 
-            return $warehouse->load($this->relations());
+            return $company->load(['owner', 'users', 'warehouses']);
         });
 
-        return $this->success((new EntityResource($warehouse))->resolve($request), 'Warehouse company and owner account created.', status: 201);
+        return $this->success((new EntityResource($company))->resolve($request), 'Warehouse company and owner account created.', status: 201);
     }
 
     // Everything the "Moj Warehouse" dashboard renders, aggregated server-side from a single
@@ -310,5 +336,21 @@ class WarehouseController extends CrudController
             'recent_arrivals' => $recentArrivals->values(),
             'top_customers' => $netByCustomer->take(5)->values(),
         ], 'Warehouse overview retrieved successfully.');
+    }
+
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $warehouse = Warehouse::query()->findOrFail($id);
+        $this->authorizeWarehouse($request, $warehouse);
+        $warehouse->delete();
+
+        return $this->success(null, 'Warehouse deleted successfully.');
+    }
+
+    private function authorizeWarehouse(Request $request, Warehouse $warehouse): void
+    {
+        if ($request->user()->isSuperAdminOrMaster()) return;
+
+        abort_unless((int) $warehouse->user_id === (int) $request->user()->id, 403);
     }
 }

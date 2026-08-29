@@ -91,8 +91,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
     });
 
-    // The warehouse company's own facility: only a warehouse-role account manages it.
-    Route::middleware('role:warehouse,superadmin,master')->group(function (): void {
+    // Warehouses are user-owned facilities. These roles may create and manage their own rows;
+    // protected admins may additionally manage any facility in the network.
+    Route::middleware('role:user,driver,company,warehouse,superadmin,master')->group(function (): void {
         Route::get('warehouse/overview', [WarehouseController::class, 'overview']);
         Route::post('warehouses', [WarehouseController::class, 'store']);
         Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update']);
@@ -126,6 +127,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::apiResource('loads', LoadController::class)->except(['store']);
     Route::apiResource('warehouses', WarehouseController::class)->only(['index', 'show']);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
+    Route::apiResource('customers', CustomerController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
     Route::post('lena-guided-answer', [LenaGuidedAnswerController::class, 'store'])->middleware('throttle:30,1');
@@ -182,12 +184,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::apiResources([
             'roles' => RoleController::class,
             'users' => UserController::class,
-            'customers' => CustomerController::class,
             'companies' => CompanyController::class,
             'email-templates' => EmailTemplateController::class,
             'email-campaigns' => EmailCampaignController::class,
             'email-campaign-recipients' => EmailCampaignRecipientController::class,
         ]);
+        Route::apiResource('customers', CustomerController::class)->except(['index', 'show']);
     });
 
     // AI Stats is viewable by superadmin too, but permanently purging a conversation stays

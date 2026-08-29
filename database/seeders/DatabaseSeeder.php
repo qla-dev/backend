@@ -32,7 +32,7 @@ class DatabaseSeeder extends Seeder
             'driver_demo' => ['role' => 'driver', 'name' => 'Demo Driver'],
             'company_demo' => ['role' => 'company', 'name' => 'Freightbook Logistics Hub'],
             'finance_demo' => ['role' => 'finance', 'name' => 'Demo Finance'],
-            'warehouse_demo' => ['role' => 'warehouse', 'name' => 'Freightbook Warehousing Co.'],
+            'warehouse_demo' => ['role' => 'company', 'name' => 'Freightbook Warehousing Co.'],
             'guest_demo' => ['role' => 'guest', 'name' => 'Guest'],
             'ai_dispatcher' => ['role' => 'system', 'name' => 'AI Dispatcher'],
         ];
@@ -76,7 +76,15 @@ class DatabaseSeeder extends Seeder
         $shipment->update(['carrier' => $company->name, 'estimated_delivery_at' => now()->addDay()]);
         $shipment->events()->firstOrCreate(['title' => 'Departed Sarajevo Hub'], ['status' => 'in_transit', 'location' => 'Sarajevo, BA', 'occurred_at' => now(), 'created_by_user_id' => $users['driver_demo']->id]);
 
-        $warehouse = Warehouse::query()->updateOrCreate(['user_id' => $users['warehouse_demo']->id], [
+        $warehouseCompany = Company::query()->updateOrCreate(['slug' => 'freightbook-warehousing-co'], [
+            'owner_user_id' => $users['warehouse_demo']->id, 'name' => 'Freightbook Warehousing Co.',
+            'email' => 'warehouse_demo@freightbook.test', 'country_code' => 'BA', 'city' => 'Sarajevo',
+            'plan' => 'enterprise', 'status' => 'verified', 'verified_at' => now(), 'warehouse_first' => true,
+        ]);
+        $warehouseCompany->users()->syncWithoutDetaching([
+            $users['warehouse_demo']->id => ['company_role' => 'admin', 'status' => 'active', 'joined_at' => now()],
+        ]);
+        $warehouse = Warehouse::query()->updateOrCreate(['user_id' => $users['warehouse_demo']->id, 'name' => 'Freightbook Warehousing Co. - Sarajevo Hub'], [
             'name' => 'Freightbook Warehousing Co. - Sarajevo Hub', 'address' => 'Bulevar Meše Selimovića 16', 'city' => 'Sarajevo', 'country_code' => 'BA',
             'latitude' => 43.8563, 'longitude' => 18.4131, 'total_capacity_pallets' => 500,
             'storage_types' => ['Ambient', 'Chilled', 'Bonded'], 'certifications' => ['ISO 9001', 'HACCP'],

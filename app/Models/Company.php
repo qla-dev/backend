@@ -13,7 +13,7 @@ class Company extends BaseModel
 
     protected function casts(): array
     {
-        return ['verified_at' => 'datetime'];
+        return ['verified_at' => 'datetime', 'warehouse_first' => 'boolean'];
     }
 
     public function owner(): BelongsTo
@@ -34,6 +34,11 @@ class Company extends BaseModel
     public function loads(): HasMany
     {
         return $this->hasMany(Load::class);
+    }
+
+    public function warehouses(): HasMany
+    {
+        return $this->hasMany(Warehouse::class, 'user_id', 'owner_user_id');
     }
 
     public function invitations(): HasMany
