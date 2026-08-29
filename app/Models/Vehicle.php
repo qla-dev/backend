@@ -42,4 +42,9 @@ class Vehicle extends BaseModel
     {
         return $this->hasMany(Load::class);
     }
+
+    public function returnInspections(): HasMany
+    {
+        return $this->hasMany(VehicleReturnInspection::class)->latest('inspected_at');
+    }
 }

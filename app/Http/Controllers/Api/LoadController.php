@@ -621,20 +621,22 @@ class LoadController extends CrudController
     {
         $user = $request->user();
         $role = $user?->role?->name;
-        $canUpdateStatus = in_array($role, [
+        $canManageStatus = in_array($role, [
             'driver',
             'company',
-            'finance',
-            'warehouse',
             'superadmin',
             'master',
         ], true);
 
-        abort_unless($canUpdateStatus, 403, 'Customers cannot update load statuses.');
-
         $data = $request->validate([
             'status' => ['required', Rule::in(Load::STATUSES)],
         ]);
+
+        $isReceivingCustomer = $role === 'user'
+            && (int) $load->customer_user_id === (int) $user->id
+            && $data['status'] === 'received';
+        abort_unless($canManageStatus || $isReceivingCustomer, 403, 'You cannot update this load status.');
+        abort_if($data['status'] === 'finished', 422, 'Complete the vehicle return inspection before finishing the load.');
 
         $load->update(['status' => $data['status']]);
         $load->load($this->relations());

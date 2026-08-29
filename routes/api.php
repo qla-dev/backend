@@ -46,6 +46,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserSubscriptionController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleLocationController;
+use App\Http\Controllers\Api\VehicleReturnInspectionController;
 use App\Http\Controllers\Api\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
@@ -82,6 +83,8 @@ Route::prefix('auth')->group(function (): void {
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('fuel-stations', [FuelStationController::class, 'index'])->middleware('throttle:120,1');
+    Route::get('vehicles/{vehicle}/return-inspections', [VehicleReturnInspectionController::class, 'index']);
+    Route::get('vehicle-return-photos/{photo}', [VehicleReturnInspectionController::class, 'photo']);
     Route::get('reviews', [ReviewController::class, 'index']);
     Route::post('reviews', [ReviewController::class, 'store'])->middleware('throttle:20,1');
     Route::get('loads/{load}/invoice/{document}', LoadInvoiceDocumentController::class)
@@ -175,7 +178,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     Route::patch('loads/{load}/status', [LoadController::class, 'updateStatus'])
-        ->middleware('role:driver,company,finance,warehouse,superadmin,master');
+        ->middleware('role:user,driver,company,superadmin,master');
+
+    Route::post('loads/{load}/vehicle-return', [VehicleReturnInspectionController::class, 'store'])
+        ->middleware('role:driver,company,superadmin,master');
 
     Route::middleware('role:superadmin,master')->group(function (): void {
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);

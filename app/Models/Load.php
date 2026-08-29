@@ -123,4 +123,9 @@ class Load extends BaseModel
     {
         return $this->hasMany(WarehouseMovement::class);
     }
+
+    public function vehicleReturnInspection(): HasOne
+    {
+        return $this->hasOne(VehicleReturnInspection::class);
+    }
 }
