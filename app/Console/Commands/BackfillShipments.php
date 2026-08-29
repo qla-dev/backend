@@ -47,12 +47,12 @@ class BackfillShipments extends Command
 
             $trackingQueues = $loads
                 ->filter(fn (Load $load): bool => ! $load->shipment
-                    || preg_match('/^FB-[CRL]-\d{5}$/', $load->shipment->tracking_number) !== 1)
+                    || ! $trackingNumbers->isValid($load->shipment->tracking_number))
                 ->groupBy('transport_type')
                 ->map(fn ($group, string $transportType): array => $trackingNumbers->generateBatch($transportType, $group->count()))
                 ->all();
 
-            $loads->each(function (Load $load) use (&$trackingQueues, &$created, &$renumbered, &$located): void {
+            $loads->each(function (Load $load) use ($trackingNumbers, &$trackingQueues, &$created, &$renumbered, &$located): void {
                 $shipment = $load->shipment;
 
                 if (! $shipment) {
@@ -60,7 +60,7 @@ class BackfillShipments extends Command
                         'tracking_number' => array_shift($trackingQueues[$load->transport_type]),
                     ]);
                     $created++;
-                } elseif (preg_match('/^FB-[CRL]-\d{5}$/', $shipment->tracking_number) !== 1) {
+                } elseif (! $trackingNumbers->isValid($shipment->tracking_number)) {
                     $shipment->tracking_number = array_shift($trackingQueues[$load->transport_type]);
                     $renumbered++;
                 }

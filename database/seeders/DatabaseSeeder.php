@@ -73,7 +73,8 @@ class DatabaseSeeder extends Seeder
         $load = Load::query()->updateOrCreate(['public_id' => '00000000-0000-4000-8000-000000000001'], ['customer_user_id' => $users['customer_demo']->id, 'company_id' => $company->id, 'assigned_driver_user_id' => $users['driver_demo']->id, 'vehicle_id' => $vehicle->id, 'title' => 'Pharma Temperature Cargo', 'status' => 'in_delivery', 'transport_type' => 'road', 'cargo_type' => 'FTL', 'goods_type' => 'Pharma', 'weight_kg' => 11200, 'budget' => 1480, 'currency' => 'EUR', 'payment_terms' => 'on_delivery', 'must_be_trackable' => true, 'published_at' => now()]);
         $load->stops()->delete();
         $load->stops()->createMany([['type' => 'pickup', 'position' => 1, 'city' => 'Sarajevo', 'country_code' => 'BA', 'window_starts_at' => now()], ['type' => 'delivery', 'position' => 2, 'city' => 'Vienna', 'country_code' => 'AT', 'window_starts_at' => now()->addDay()]]);
-        $shipment = Shipment::query()->updateOrCreate(['load_id' => $load->id], ['tracking_number' => 'SWP-DEMO-001', 'carrier' => $company->name, 'estimated_delivery_at' => now()->addDay()]);
+        $shipment = $load->shipment()->firstOrFail();
+        $shipment->update(['carrier' => $company->name, 'estimated_delivery_at' => now()->addDay()]);
         $shipment->events()->firstOrCreate(['title' => 'Departed Sarajevo Hub'], ['status' => 'in_transit', 'location' => 'Sarajevo, BA', 'occurred_at' => now(), 'created_by_user_id' => $users['driver_demo']->id]);
 
         $warehouse = Warehouse::query()->updateOrCreate(['user_id' => $users['warehouse_demo']->id], [

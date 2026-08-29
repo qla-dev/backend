@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\TrackingNumberGenerator;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -41,6 +42,14 @@ class Load extends BaseModel
         static::creating(function (Load $load): void {
             $load->status_change ??= [$load->status => now()->toIso8601String()];
 
+        });
+
+        // A tracking number belongs to every load, regardless of whether it was published
+        // manually, restored from a draft, created by LenaAI, or imported in bulk.
+        static::created(function (Load $load): void {
+            $load->shipment()->create([
+                'tracking_number' => app(TrackingNumberGenerator::class)->generate($load->transport_type),
+            ]);
         });
 
         static::updating(function (Load $load): void {

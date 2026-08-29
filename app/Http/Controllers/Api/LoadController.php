@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Resources\EntityResource;
 use App\Models\Company;
 use App\Models\Load;
-use App\Services\TrackingNumberGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -515,7 +514,6 @@ class LoadController extends CrudController
 
     public function store(Request $request): JsonResponse
     {
-        $trackingNumbers = app(TrackingNumberGenerator::class);
         $data = $request->validate($this->rules());
         $stops = $data['stops'] ?? [];
         unset($data['stops']);
@@ -542,17 +540,11 @@ class LoadController extends CrudController
         $data['status'] = $data['status'] ?? 'pending';
         $data['for_storage'] = $data['for_storage'] ?? (($data['transport_type'] ?? 'road') === 'warehouse');
         $data['public_id'] = (string) Str::uuid();
-        $load = DB::transaction(function () use ($data, $stops, $trackingNumbers) {
+        $load = DB::transaction(function () use ($data, $stops) {
             $load = Load::query()->create($data);
             if ($stops !== []) {
                 $load->stops()->createMany($stops);
             }
-            if ($load->transport_type !== 'warehouse') {
-                $load->shipment()->create([
-                    'tracking_number' => $trackingNumbers->generate($load->transport_type),
-                ]);
-            }
-
             return $load;
         });
         $load->load($this->relations());
@@ -660,13 +652,13 @@ class LoadController extends CrudController
         return $driverUserId;
     }
 
-    public function bulkStore(Request $request, TrackingNumberGenerator $trackingNumbers): JsonResponse
+    public function bulkStore(Request $request): JsonResponse
     {
         $payload = $request->validate([
             'loads' => ['required', 'array', 'min:1', 'max:50'],
         ]);
 
-        $loads = DB::transaction(function () use ($payload, $request, $trackingNumbers): array {
+        $loads = DB::transaction(function () use ($payload, $request): array {
             $created = [];
             foreach ($payload['loads'] as $index => $loadPayload) {
                 $data = validator(
@@ -686,11 +678,6 @@ class LoadController extends CrudController
                 $load = Load::query()->create($data);
                 if ($stops !== []) {
                     $load->stops()->createMany($stops);
-                }
-                if ($load->transport_type !== 'warehouse') {
-                    $load->shipment()->create([
-                        'tracking_number' => $trackingNumbers->generate($load->transport_type),
-                    ]);
                 }
                 $created[] = $load;
             }

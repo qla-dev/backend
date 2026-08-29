@@ -149,6 +149,37 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseMissing('load_stops', ['load_id' => $loadId]);
     }
 
+    public function test_every_load_creation_path_assigns_a_freightbook_tracking_number(): void
+    {
+        $customer = User::query()->where('username', 'customer_demo')->firstOrFail();
+
+        $roadLoad = Load::query()->create([
+            'customer_user_id' => $customer->id,
+            'public_id' => '00000000-0000-4000-8000-000000000090',
+            'title' => 'Draft or Lena published load',
+            'status' => 'posted',
+            'transport_type' => 'road',
+            'cargo_type' => 'FTL',
+            'weight_kg' => 1000,
+            'currency' => 'EUR',
+        ]);
+
+        $warehouseLoad = Load::query()->create([
+            'customer_user_id' => $customer->id,
+            'public_id' => '00000000-0000-4000-8000-000000000091',
+            'title' => 'Warehouse storage request',
+            'status' => 'posted',
+            'transport_type' => 'warehouse',
+            'for_storage' => true,
+            'cargo_type' => 'storage',
+            'weight_kg' => 1000,
+            'currency' => 'EUR',
+        ]);
+
+        $this->assertMatchesRegularExpression('/^FB-C-\d{5}$/', $roadLoad->shipment()->firstOrFail()->tracking_number);
+        $this->assertMatchesRegularExpression('/^FB-S-\d{5}$/', $warehouseLoad->shipment()->firstOrFail()->tracking_number);
+    }
+
     public function test_authenticated_customer_options_use_remote_search_and_load_more_pagination(): void
     {
         $token = $this->postJson('/api/auth/login', [

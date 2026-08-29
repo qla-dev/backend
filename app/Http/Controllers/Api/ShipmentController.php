@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Shipment;
+use App\Services\TrackingNumberGenerator;
 
 class ShipmentController extends CrudController
 {
@@ -25,6 +26,6 @@ class ShipmentController extends CrudController
     {
         $p = $u ? 'sometimes' : 'required';
 
-        return ['load_id' => [$p, 'integer', 'exists:loads,id'], 'tracking_number' => [$p, 'string', 'regex:/^FB-[CRL]-\d{5}$/'], 'carrier' => ['nullable', 'string', 'max:120'], 'current_latitude' => ['nullable', 'numeric', 'between:-90,90'], 'current_longitude' => ['nullable', 'numeric', 'between:-180,180'], 'estimated_delivery_at' => ['nullable', 'date'], 'delivered_at' => ['nullable', 'date']];
+        return ['load_id' => [$p, 'integer', 'exists:loads,id'], 'tracking_number' => [$p, 'string', 'regex:'.TrackingNumberGenerator::FORMAT_REGEX], 'carrier' => ['nullable', 'string', 'max:120'], 'current_latitude' => ['nullable', 'numeric', 'between:-90,90'], 'current_longitude' => ['nullable', 'numeric', 'between:-180,180'], 'estimated_delivery_at' => ['nullable', 'date'], 'delivered_at' => ['nullable', 'date']];
     }
 }

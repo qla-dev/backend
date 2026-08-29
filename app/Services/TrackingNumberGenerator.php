@@ -5,8 +5,8 @@ namespace App\Services;
 use App\Models\TrackingNumberSequence;
 use Illuminate\Support\Facades\DB;
 
-// Freightbook shipment tracking format: FB-{C|R|L|Z}-{YY}{NNN}.
-// C = road, R = air, L = sea, Z = rail.
+// Freightbook shipment tracking format: FB-{C|R|L|Z|S}-{YY}{NNN}.
+// C = road, R = air, L = sea, Z = rail, S = warehouse/storage.
 // Each transport type has its own zero-based yearly sequence: FB-C-26000, FB-C-26001, ...
 class TrackingNumberGenerator
 {
@@ -15,7 +15,15 @@ class TrackingNumberGenerator
         'sea' => 'L',
         'air' => 'R',
         'rail' => 'Z',
+        'warehouse' => 'S',
     ];
+
+    public const FORMAT_REGEX = '/^FB-[CRLZS]-\d{5}$/';
+
+    public function isValid(?string $trackingNumber): bool
+    {
+        return preg_match(self::FORMAT_REGEX, (string) $trackingNumber) === 1;
+    }
 
     public function generate(?string $transportType): string
     {

@@ -41,7 +41,7 @@ class ShipmentInvoiceDocumentController extends Controller
         $isProforma = $document === 'predracun';
         $origin = $load->stops->first();
         $destination = $load->stops->last();
-        $trackingNumber = (string) ($shipment->tracking_number ?: $load->public_id ?: $load->id);
+        $trackingNumber = (string) ($shipment->tracking_number ?: '—');
         $invoiceStatusLabels = ['draft' => 'Nacrt', 'sent' => 'Poslano', 'paid' => 'Plaćeno', 'overdue' => 'Kasni', 'cancelled' => 'Otkazano'];
 
         $items = $invoice?->items->map(fn ($item): array => [

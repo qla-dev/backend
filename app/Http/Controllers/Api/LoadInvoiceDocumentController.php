@@ -25,7 +25,7 @@ class LoadInvoiceDocumentController extends Controller
             ->first();
 
         $shipment = $load->shipment;
-        $trackingNumber = (string) ($shipment?->tracking_number ?: $load->public_id ?: $load->id);
+        $trackingNumber = (string) ($shipment?->tracking_number ?: '—');
         $currency = (string) ($invoice?->currency ?: $load->currency ?: 'EUR');
         $amount = (float) ($invoice?->subtotal ?? $load->budget ?? 0);
         $tax = (float) ($invoice?->tax ?? 0);
