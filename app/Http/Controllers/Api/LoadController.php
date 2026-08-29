@@ -619,6 +619,13 @@ class LoadController extends CrudController
 
     public function updateStatus(Request $request, Load $load): JsonResponse
     {
+        $user = $request->user();
+        $role = $user?->role?->name;
+        $canUpdateStatus = in_array($role, ['superadmin', 'master'], true)
+            || ($role === 'driver' && (int) $load->assigned_driver_user_id === (int) $user?->id);
+
+        abort_unless($canUpdateStatus, 403, 'You can only update the status of loads assigned to you.');
+
         $data = $request->validate([
             'status' => ['required', Rule::in(Load::STATUSES)],
         ]);

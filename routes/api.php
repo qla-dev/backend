@@ -172,8 +172,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ]);
     });
 
+    Route::patch('loads/{load}/status', [LoadController::class, 'updateStatus'])
+        ->middleware('role:driver,superadmin,master');
+
     Route::middleware('role:superadmin,master')->group(function (): void {
-        Route::patch('loads/{load}/status', [LoadController::class, 'updateStatus']);
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
         Route::post('warehouses/onboard', [WarehouseController::class, 'onboard']);
