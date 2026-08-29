@@ -46,6 +46,12 @@ return [
         'url' => env('OPENROUTER_URL', 'https://openrouter.ai/api/v1/chat/completions'),
     ],
 
+    'fuelo' => [
+        'base_url' => env('FUELO_BASE_URL', 'https://de.fuelo.net/'),
+        'stations_url' => env('FUELO_STATIONS_URL', 'https://de.fuelo.net/ajax/get_gasstations_within_bounds_mysql_clustering'),
+        'python_binary' => env('FUELO_PYTHON_BINARY', 'python3'),
+    ],
+
     'google' => [
         'client_ids' => array_values(array_unique(array_filter([
             ...array_map('trim', explode(',', (string) env('GOOGLE_CLIENT_IDS', ''))),

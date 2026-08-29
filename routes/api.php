@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\EmailCampaignController;
 use App\Http\Controllers\Api\EmailCampaignRecipientController;
 use App\Http\Controllers\Api\EmailTemplateController;
 use App\Http\Controllers\Api\FleetAccessController;
+use App\Http\Controllers\Api\FuelStationController;
 use App\Http\Controllers\Api\HsCodeController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
@@ -80,6 +81,7 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('fuel-stations', [FuelStationController::class, 'index'])->middleware('throttle:120,1');
     Route::get('reviews', [ReviewController::class, 'index']);
     Route::post('reviews', [ReviewController::class, 'store'])->middleware('throttle:20,1');
     Route::get('loads/{load}/invoice/{document}', LoadInvoiceDocumentController::class)
