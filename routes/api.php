@@ -173,7 +173,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     Route::patch('loads/{load}/status', [LoadController::class, 'updateStatus'])
-        ->middleware('role:driver,superadmin,master');
+        ->middleware('role:driver,company,finance,warehouse,superadmin,master');
 
     Route::middleware('role:superadmin,master')->group(function (): void {
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);

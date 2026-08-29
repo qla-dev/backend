@@ -621,10 +621,16 @@ class LoadController extends CrudController
     {
         $user = $request->user();
         $role = $user?->role?->name;
-        $canUpdateStatus = in_array($role, ['superadmin', 'master'], true)
-            || ($role === 'driver' && (int) $load->assigned_driver_user_id === (int) $user?->id);
+        $canUpdateStatus = in_array($role, [
+            'driver',
+            'company',
+            'finance',
+            'warehouse',
+            'superadmin',
+            'master',
+        ], true);
 
-        abort_unless($canUpdateStatus, 403, 'You can only update the status of loads assigned to you.');
+        abort_unless($canUpdateStatus, 403, 'Customers cannot update load statuses.');
 
         $data = $request->validate([
             'status' => ['required', Rule::in(Load::STATUSES)],
