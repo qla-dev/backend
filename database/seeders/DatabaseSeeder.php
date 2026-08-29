@@ -76,11 +76,15 @@ class DatabaseSeeder extends Seeder
         $shipment->update(['carrier' => $company->name, 'estimated_delivery_at' => now()->addDay()]);
         $shipment->events()->firstOrCreate(['title' => 'Departed Sarajevo Hub'], ['status' => 'in_transit', 'location' => 'Sarajevo, BA', 'occurred_at' => now(), 'created_by_user_id' => $users['driver_demo']->id]);
 
-        $warehouseCompany = Company::query()->updateOrCreate(['slug' => 'freightbook-warehousing-co'], [
+        $warehouseCompany = Company::query()
+            ->where('owner_user_id', $users['warehouse_demo']->id)
+            ->where('warehouse_first', true)
+            ->first() ?? new Company(['slug' => 'freightbook-warehousing-co']);
+        $warehouseCompany->fill([
             'owner_user_id' => $users['warehouse_demo']->id, 'name' => 'Freightbook Warehousing Co.',
             'email' => 'warehouse_demo@freightbook.test', 'country_code' => 'BA', 'city' => 'Sarajevo',
             'plan' => 'enterprise', 'status' => 'verified', 'verified_at' => now(), 'warehouse_first' => true,
-        ]);
+        ])->save();
         $warehouseCompany->users()->syncWithoutDetaching([
             $users['warehouse_demo']->id => ['company_role' => 'admin', 'status' => 'active', 'joined_at' => now()],
         ]);

@@ -71,34 +71,33 @@ class ReviewController extends Controller
             ]);
         }
 
-        if (Review::query()
+        $review = Review::query()
             ->where('reviewer_user_id', $request->user()->id)
             ->where('reviewable_type', $target::class)
             ->where('reviewable_id', $target->getKey())
-            ->exists()) {
-            throw ValidationException::withMessages([
-                'review' => ['You have already reviewed this profile.'],
-            ]);
-        }
+            ->first();
+        $created = ! $review;
 
-        Review::query()->create([
+        $review ??= new Review([
             'reviewer_user_id' => $request->user()->id,
             'reviewable_type' => $target::class,
             'reviewable_id' => $target->getKey(),
             'mode' => $data['reviewable_type'],
+        ]);
+        $review->fill([
             'rating' => $data['rating'],
             'criteria' => $data['criteria'],
             'comment' => trim((string) ($data['comment'] ?? '')) ?: null,
-        ]);
+        ])->save();
 
         if ($target instanceof Driver) {
             $target->update(['rating' => round((float) $target->reviews()->avg('rating'), 2)]);
         }
 
-        return $this->summary($request, $data['reviewable_type'], $target, 201);
+        return $this->summary($request, $data['reviewable_type'], $target, $created ? 201 : 200, true);
     }
 
-    private function summary(Request $request, string $mode, Model $target, int $status = 200): JsonResponse
+    private function summary(Request $request, string $mode, Model $target, int $status = 200, bool $saved = false): JsonResponse
     {
         $reviews = Review::query()
             ->where('reviewable_type', $target::class)
@@ -106,19 +105,20 @@ class ReviewController extends Controller
             ->with('reviewer:id,name,avatar_url')
             ->latest()
             ->get();
-        $hasReviewed = $reviews->contains('reviewer_user_id', $request->user()->id);
+        $myReview = $reviews->firstWhere('reviewer_user_id', $request->user()->id);
+        $hasReviewed = $myReview !== null;
         $canReview = ! $request->user()->isSuperAdminOrMaster()
-            && ! $hasReviewed
             && ! $this->isOwnProfile($request, $mode, $target);
 
         return response()->json([
-            'message' => $status === 201 ? 'Review submitted successfully.' : 'Reviews retrieved successfully.',
+            'message' => $saved ? 'Review saved successfully.' : 'Reviews retrieved successfully.',
             'data' => $reviews,
             'meta' => [
                 'average_rating' => round((float) ($reviews->avg('rating') ?? 0), 2),
                 'total' => $reviews->count(),
                 'has_reviewed' => $hasReviewed,
                 'can_review' => $canReview,
+                'my_review' => $myReview?->toArray(),
             ],
             'errors' => [],
         ], $status);
