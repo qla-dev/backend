@@ -11,7 +11,7 @@
   $buyerEmail = $buyer?->billing_email ?: $buyer?->email ?: null;
   $paymentMode = $paymentMode ?? false;
   $paymentDetails = $paymentDetails ?? null;
-  $trackingNumber = $trackingNumber ?? $shipment?->tracking_number ?? $load?->public_id ?? $load?->id;
+  $trackingNumber = $trackingNumber ?? $shipment?->tracking_number ?? '—';
   $shipmentStatus = $shipmentStatus ?? $shipment?->status ?? $load?->status ?? '—';
   $notes = $notes ?? null;
   $pickupStop = $origin;

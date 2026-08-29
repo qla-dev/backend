@@ -19,7 +19,7 @@ return new class extends Migration
                 ->orderBy('id')
                 ->chunkById(500, function ($records) use ($table): void {
                     $ids = $records
-                        ->filter(fn ($record): bool => preg_match('/^FB-[CRLX]-\d{5}$/', (string) $record->booking_reference) === 1)
+                        ->filter(fn ($record): bool => preg_match('/^FB-[CRLZS]-\d{5}$/', (string) $record->booking_reference) === 1)
                         ->pluck('id');
 
                     if ($ids->isNotEmpty()) {
