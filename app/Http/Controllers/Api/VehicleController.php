@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Vehicle;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 
 class VehicleController extends CrudController
 {
@@ -26,5 +28,23 @@ class VehicleController extends CrudController
     protected function searchColumns(): array
     {
         return ['registration_number', 'vin', 'make', 'model'];
+    }
+
+    protected function applyFilters(Builder $query, Request $request): void
+    {
+        $user = $request->user();
+        if (! $user || $user->role?->name !== 'driver') {
+            return;
+        }
+
+        $query->where(function (Builder $visibility) use ($user): void {
+            $visibility
+                ->where('owner_user_id', $user->id)
+                ->orWhereHas('permittedUsers', function (Builder $permittedUsers) use ($user): void {
+                    $permittedUsers
+                        ->where('users.id', $user->id)
+                        ->where('fleet_access.can_view', true);
+                });
+        });
     }
 }
