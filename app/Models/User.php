@@ -88,6 +88,11 @@ class User extends Authenticatable
         return $this->hasMany(Warehouse::class);
     }
 
+    public function subscription(): HasOne
+    {
+        return $this->hasOne(UserSubscription::class);
+    }
+
     public function customerLoads(): HasMany
     {
         return $this->hasMany(Load::class, 'customer_user_id');

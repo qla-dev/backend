@@ -30,7 +30,7 @@ class CustomerController extends CrudController
 
     protected function relations(): array
     {
-        return ['user.role'];
+        return ['user.role', 'user.subscription.subscriptionPackage'];
     }
 
     protected function rules(bool $updating = false): array

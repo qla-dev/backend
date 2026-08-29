@@ -33,7 +33,7 @@ class CompanyController extends CrudController
 
     protected function relations(): array
     {
-        return ['owner', 'users', 'vehicles', 'warehouses'];
+        return ['owner.subscription.subscriptionPackage', 'users', 'vehicles', 'warehouses'];
     }
 
     protected function applyFilters(Builder $query, Request $request): void

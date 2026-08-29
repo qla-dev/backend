@@ -25,7 +25,7 @@ class DriverController extends CrudController
 
     protected function relations(): array
     {
-        return ['user.role', 'primaryCompany'];
+        return ['user.role', 'user.subscription.subscriptionPackage', 'primaryCompany'];
     }
 
     protected function rules(bool $updating = false): array
