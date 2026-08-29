@@ -75,16 +75,15 @@ class UserSubscriptionController extends Controller
             $user = User::query()->findOrFail($userId);
             $package = SubscriptionPackage::query()->findOrFail($validated['subscription_package_id']);
 
-            $subscription = UserSubscription::query()->updateOrCreate(
-                ['user_id' => $user->id],
-                [
-                    'subscription_package_id' => $package->id,
-                    'active' => $validated['active'] ?? true,
-                    'started_at' => now(),
-                    'expires_at' => $validated['expires_at'] ?? now()->addMonth(),
-                    'remaining_tokens' => $validated['remaining_tokens'] ?? $package->lena_ai_tokens,
-                ]
-            );
+            $subscription = UserSubscription::query()->firstOrNew(['user_id' => $user->id]);
+            $subscription->fill([
+                'subscription_package_id' => $package->id,
+                'active' => $validated['active'] ?? true,
+                'expires_at' => $validated['expires_at'] ?? now()->addMonth(),
+                'remaining_tokens' => $validated['remaining_tokens'] ?? $package->lena_ai_tokens,
+            ]);
+            $subscription->started_at ??= now();
+            $subscription->save();
             $subscription->load('subscriptionPackage');
 
             return response()->json(['message' => 'Subscription assigned successfully.', 'data' => $subscription, 'meta' => [], 'errors' => []], 201);

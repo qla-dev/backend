@@ -30,7 +30,14 @@ class CustomerController extends CrudController
 
     protected function relations(): array
     {
-        return ['user.role', 'user.subscription.subscriptionPackage'];
+        return ['user.role'];
+    }
+
+    protected function relationsForRequest(Request $request): array
+    {
+        return $request->user()?->isSuperAdminOrMaster()
+            ? [...$this->relations(), 'user.subscription.subscriptionPackage']
+            : $this->relations();
     }
 
     protected function rules(bool $updating = false): array

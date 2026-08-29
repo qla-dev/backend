@@ -25,7 +25,14 @@ class DriverController extends CrudController
 
     protected function relations(): array
     {
-        return ['user.role', 'user.subscription.subscriptionPackage', 'primaryCompany'];
+        return ['user.role', 'primaryCompany'];
+    }
+
+    protected function relationsForRequest(Request $request): array
+    {
+        return $request->user()?->isSuperAdminOrMaster()
+            ? [...$this->relations(), 'user.subscription.subscriptionPackage']
+            : $this->relations();
     }
 
     protected function rules(bool $updating = false): array
