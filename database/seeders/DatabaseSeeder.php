@@ -7,7 +7,6 @@ use App\Models\Customer;
 use App\Models\Driver;
 use App\Models\Load;
 use App\Models\Role;
-use App\Models\Shipment;
 use App\Models\SubscriptionPackage;
 use App\Models\User;
 use App\Models\UserSubscription;
