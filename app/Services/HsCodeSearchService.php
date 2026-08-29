@@ -82,13 +82,13 @@ class HsCodeSearchService
                     $score += $this->containsToken($localized, $token) ? 30 : 0;
                     $score += $this->containsToken($allText, $token) ? 12 : 0;
                 }
-                if ($this->isSelectable($item)) {
-                    $score += 5;
-                }
-
                 return ['item' => $item, 'score' => $score];
             })
             ->filter(fn (array $candidate): bool => $candidate['score'] > 0)
+            // Keep equally relevant rows in catalog order. Parent headings and intermediate
+            // labels are stored immediately before their selectable leaves, so preserving that
+            // order gives the picker the hierarchy users need to understand short leaf names
+            // such as "of cotton". Do not boost selectable rows above their context rows.
             ->sort(function (array $left, array $right): int {
                 return $right['score'] <=> $left['score'] ?: $left['item']->id <=> $right['item']->id;
             })
