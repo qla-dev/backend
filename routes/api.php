@@ -80,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('load-scans/bulk', [BulkLoadScanController::class, 'store'])->middleware('throttle:5,1');
     Route::post('load-scans/bulk/text', [BulkLoadScanController::class, 'scanText'])->middleware('throttle:5,1');
     Route::get('loads/tracking-status-counts', [LoadController::class, 'trackingStatusCounts']);
+    Route::get('loads/profile-status-counts', [LoadController::class, 'profileStatusCounts']);
 
     // Customers, independent drivers, and logistics companies can post loads; superadmin/master keep their usual override.
     Route::middleware('role:user,driver,company,superadmin,master')->group(function (): void {

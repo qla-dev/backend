@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\EntityResource;
 use App\Models\Company;
+use App\Models\Customer;
 use App\Models\Load;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,22 @@ use Illuminate\Validation\Rule;
 
 class LoadController extends CrudController
 {
+    public function profileStatusCounts(Request $request): JsonResponse
+    {
+        $request->query->remove('status');
+        $request->query->remove('statuses');
+        $query = Load::query();
+        $this->applyFilters($query, $request);
+        $counts = $query
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->get()
+            ->map(fn (Load $load): array => ['status' => $load->status, 'count' => (int) $load->aggregate])
+            ->values();
+
+        return $this->success($counts, 'Profile load status counts retrieved successfully.');
+    }
+
     public function trackingStatusCounts(Request $request): JsonResponse
     {
         $request->query->set('tracking', 'true');
@@ -140,6 +157,9 @@ class LoadController extends CrudController
             'adr_classes' => ['sometimes', 'string', 'max:500'], 'sensitivity' => ['sometimes', 'string', 'max:500'],
             'urgency' => ['sometimes', 'string', 'max:500'], 'loading_methods' => ['sometimes', 'string', 'max:500'],
             'requirements' => ['sometimes', 'string', 'max:500'],
+            'profile_customer_id' => ['sometimes', 'integer', 'exists:customers,id'],
+            'profile_company_id' => ['sometimes', 'integer', 'exists:companies,id'],
+            'profile_driver_user_id' => ['sometimes', 'integer', 'exists:users,id'],
             // Freight-exchange filter bar: route, cargo nature, equipment, stop windows and assignment.
             'pickup_country' => ['sometimes', 'nullable', 'string', 'max:100'],
             'pickup_city' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -166,6 +186,22 @@ class LoadController extends CrudController
         $this->applyWhereIn($query, 'cargo_type', $request->query('services'));
         $this->applyWhereIn($query, 'incoterms', $request->query('incoterms'));
         $this->applyWhereIn($query, 'currency', $request->query('currencies'));
+
+        if ($request->filled('profile_customer_id')) {
+            $customer = Customer::query()->select(['id', 'user_id'])->findOrFail($request->integer('profile_customer_id'));
+            $query->where(function (Builder $customerLoads) use ($customer): void {
+                $customerLoads->where('consignee_customer_id', $customer->id);
+                if ($customer->user_id) {
+                    $customerLoads->orWhere('customer_user_id', $customer->user_id);
+                }
+            });
+        }
+        if ($request->filled('profile_company_id')) {
+            $query->where('company_id', $request->integer('profile_company_id'));
+        }
+        if ($request->filled('profile_driver_user_id')) {
+            $query->where('assigned_driver_user_id', $request->integer('profile_driver_user_id'));
+        }
 
         if ($trackingSearch = trim((string) $request->query('tracking_search', ''))) {
             $query->where(function (Builder $search) use ($trackingSearch): void {
