@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class OfferController extends CrudController
@@ -151,6 +152,11 @@ class OfferController extends CrudController
         }
 
         $p = $updating ? 'sometimes' : 'required';
+        $isCounter = $request->boolean('is_counter', (bool) $offer?->is_counter);
+        $parentOfferId = $request->input('parent_offer_id') ?? $offer?->parent_offer_id;
+        $parentWarehouseId = $isCounter && $parentOfferId
+            ? Offer::query()->whereKey($parentOfferId)->value('warehouse_id')
+            : null;
 
         return array_merge($rules, [
             'price_basis' => [$p, 'string', 'in:'.implode(',', self::STORAGE_PRICE_BASIS)],
@@ -172,7 +178,15 @@ class OfferController extends CrudController
             'services_included.*' => ['string', 'max:60'],
             'optional_conditions' => ['nullable', 'array'],
             'optional_conditions.*' => ['string', 'max:60'],
-            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            'warehouse_id' => [
+                $p,
+                'integer',
+                Rule::exists('warehouses', 'id')->where(
+                    fn ($query) => $isCounter
+                        ? $query->where('id', $parentWarehouseId ?? 0)
+                        : $query->where('user_id', $request->user()->id)
+                ),
+            ],
             // A storage bid is not a transport mandate, so the licensing and shipment-details
             // confirmations do not apply to it; confirming the quoted terms still does.
             'confirmed_authorized' => ['sometimes', 'boolean'],
