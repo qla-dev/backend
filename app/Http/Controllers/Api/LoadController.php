@@ -15,6 +15,11 @@ use Illuminate\Validation\Rule;
 
 class LoadController extends CrudController
 {
+    protected function configureQuery(Builder $query): void
+    {
+        $query->withAvg('reviews as average_rating', 'rating')->withCount('reviews');
+    }
+
     public function profileStatusCounts(Request $request): JsonResponse
     {
         $request->query->remove('status');

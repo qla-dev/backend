@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasReviews;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Driver extends BaseModel
 {
+    use HasReviews;
+
     protected $appends = ['name', 'email', 'phone', 'country_code', 'is_active'];
 
     protected function casts(): array

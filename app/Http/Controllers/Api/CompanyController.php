@@ -6,6 +6,7 @@ use App\Http\Resources\EntityResource;
 use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,11 @@ use Illuminate\Support\Str;
 
 class CompanyController extends CrudController
 {
+    protected function configureQuery(Builder $query): void
+    {
+        $query->withAvg('reviews as average_rating', 'rating')->withCount('reviews');
+    }
+
     protected function modelClass(): string
     {
         return Company::class;

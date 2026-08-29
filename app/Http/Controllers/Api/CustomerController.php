@@ -18,6 +18,11 @@ use Throwable;
 
 class CustomerController extends CrudController
 {
+    protected function configureQuery(Builder $query): void
+    {
+        $query->withAvg('reviews as average_rating', 'rating')->withCount('reviews');
+    }
+
     protected function modelClass(): string
     {
         return Customer::class;

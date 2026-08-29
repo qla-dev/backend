@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasReviews;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Customer extends BaseModel
 {
+    use HasReviews;
+
     protected $appends = ['name', 'email', 'username', 'phone', 'country_code', 'language', 'is_active'];
 
     protected function casts(): array

@@ -42,10 +42,13 @@ abstract class CrudController extends Controller
         $query->orderByDesc('id');
     }
 
+    protected function configureQuery(Builder $query): void {}
+
     public function index(Request $request): JsonResponse
     {
         $model = $this->modelClass();
         $query = $model::query()->with($this->relationsForRequest($request));
+        $this->configureQuery($query);
         $search = trim((string) $request->query('search', ''));
 
         if ($search !== '' && $this->searchColumns() !== []) {
@@ -87,7 +90,9 @@ abstract class CrudController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         $model = $this->modelClass();
-        $record = $model::query()->with($this->relations())->findOrFail($id);
+        $query = $model::query()->with($this->relations());
+        $this->configureQuery($query);
+        $record = $query->findOrFail($id);
 
         return $this->success((new EntityResource($record))->resolve($request), 'Resource retrieved successfully.');
     }

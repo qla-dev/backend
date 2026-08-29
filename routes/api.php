@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\PaymentInvoiceDocumentController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\RouteStopController;
+use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ShipmentController;
 use App\Http\Controllers\Api\ShipmentInvoiceDocumentController;
 use App\Http\Controllers\Api\SubscriptionPackageController;
@@ -73,6 +74,8 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('reviews', [ReviewController::class, 'index']);
+    Route::post('reviews', [ReviewController::class, 'store'])->middleware('throttle:20,1');
     Route::get('loads/{load}/invoice/{document}', LoadInvoiceDocumentController::class)
         ->where('document', 'predracun|a4-faktura');
     Route::get('shipments/{shipment}/invoice/{document}', ShipmentInvoiceDocumentController::class)
