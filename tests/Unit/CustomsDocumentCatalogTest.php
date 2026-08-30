@@ -47,4 +47,23 @@ class CustomsDocumentCatalogTest extends TestCase
         $this->assertTrue($catalog['DV1']['downloadable']);
         $this->assertFalse($catalog['N380']['downloadable']);
     }
+
+    public function test_it_resolves_matches_and_preserves_manual_documents(): void
+    {
+        $documents = app(CustomsDocumentCatalog::class)->resolve(
+            ['0407 29 90 00'],
+            [
+                ['code' => 'N787', 'label' => 'Old label', 'source' => 'manual', 'downloadable' => true],
+                ['code' => 'DIS', 'label' => 'Duplicate matched document', 'source' => 'manual', 'downloadable' => false],
+            ],
+        );
+        $codes = array_column($documents, 'code');
+
+        $this->assertContains('AGL', $codes);
+        $this->assertContains('N787', $codes);
+        $this->assertSame(1, count(array_filter($codes, fn (string $code): bool => $code === 'DIS')));
+        $manual = collect($documents)->firstWhere('code', 'N787');
+        $this->assertSame('manual', $manual['source']);
+        $this->assertFalse($manual['downloadable']);
+    }
 }

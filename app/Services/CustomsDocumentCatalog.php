@@ -71,6 +71,33 @@ class CustomsDocumentCatalog
             ->all();
     }
 
+    public function resolve(array $codes, array $stored = []): array
+    {
+        $matched = $this->matching($codes);
+        $matchedCodes = array_column($matched, 'code');
+        $manual = collect($stored)
+            ->filter(fn (mixed $document): bool => is_array($document)
+                && ($document['source'] ?? null) === 'manual'
+                && filled($document['code'] ?? null)
+                && ! in_array((string) $document['code'], $matchedCodes, true))
+            ->map(function (array $document): array {
+                $catalogDocument = $this->find((string) $document['code']);
+
+                return $catalogDocument
+                    ? [...$this->present($catalogDocument), 'source' => 'manual']
+                    : [
+                        'code' => (string) $document['code'],
+                        'label' => (string) ($document['label'] ?? $document['code']),
+                        'downloadable' => false,
+                        'source' => 'manual',
+                    ];
+            })
+            ->values()
+            ->all();
+
+        return [...$matched, ...$manual];
+    }
+
     public function find(string $code): ?array
     {
         return $this->all()->first(

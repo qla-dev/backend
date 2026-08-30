@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Models\Concerns\HasReviews;
 use App\Services\TrackingNumberGenerator;
+use App\Services\CustomsDocumentCatalog;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -38,6 +40,25 @@ class Load extends BaseModel
             'storage_start_date' => 'date', 'storage_end_date' => 'date', 'is_storage_ongoing' => 'boolean',
             'requires_customs_bonded' => 'boolean', 'requires_racking' => 'boolean', 'requires_security' => 'boolean', 'requires_food_grade' => 'boolean',
         ];
+    }
+
+    protected function customsDocuments(): Attribute
+    {
+        return Attribute::make(
+            get: function (mixed $value): array {
+                $stored = is_string($value) ? json_decode($value, true) : $value;
+                $codes = collect($this->hs_codes ?? [])
+                    ->map(fn (mixed $item): string => is_array($item) ? (string) ($item['code'] ?? '') : (string) $item)
+                    ->filter()
+                    ->values()
+                    ->all();
+
+                return app(CustomsDocumentCatalog::class)->resolve(
+                    $codes,
+                    is_array($stored) ? $stored : [],
+                );
+            },
+        );
     }
 
     protected static function booted(): void
