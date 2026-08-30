@@ -113,7 +113,7 @@ class LoadController extends CrudController
     protected function relationsForRequest(Request $request): array
     {
         if ($request->boolean('tracking')) {
-            return ['consignee', 'company', 'stops', 'shipment'];
+            return ['consignee', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'shipment'];
         }
 
         return parent::relationsForRequest($request);
