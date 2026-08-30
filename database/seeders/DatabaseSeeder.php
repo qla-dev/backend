@@ -57,9 +57,9 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        $company = Company::query()->updateOrCreate(['slug' => 'freightbook-logistics-hub'], [
+        $company = Company::query()->updateOrCreate(['owner_user_id' => $users['company_demo']->id], [
             'owner_user_id' => $users['company_demo']->id, 'name' => 'Freightbook Logistics Hub', 'email' => 'company_demo@freightbook.test',
-            'country_code' => 'BA', 'city' => 'Sarajevo', 'plan' => 'enterprise', 'status' => 'verified', 'verified_at' => now(),
+            'slug' => 'freightbook-logistics-hub', 'country_code' => 'BA', 'city' => 'Sarajevo', 'plan' => 'enterprise', 'status' => 'verified', 'verified_at' => now(),
         ]);
         $company->users()->syncWithoutDetaching([
             $users['company_demo']->id => ['company_role' => 'admin', 'status' => 'active', 'joined_at' => now()],

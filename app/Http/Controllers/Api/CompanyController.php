@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class CompanyController extends CrudController
 {
@@ -28,7 +29,9 @@ class CompanyController extends CrudController
     {
         $p = $updating ? 'sometimes' : 'required';
 
-        return ['owner_user_id' => [$p, 'integer', 'exists:users,id'], 'name' => [$p, 'string', 'max:255'], 'slug' => [$p, 'string', 'max:255'], 'email' => ['nullable', 'email'], 'phone' => ['nullable', 'string', 'max:50'], 'tax_number' => ['nullable', 'string', 'max:100'], 'vat_number' => ['nullable', 'string', 'max:100'], 'registration_number' => ['nullable', 'string', 'max:100'], 'country_code' => [$p, 'string', 'size:2'], 'city' => ['nullable', 'string', 'max:120'], 'address' => ['nullable', 'string', 'max:255'], 'website' => ['nullable', 'url', 'max:255'], 'logo_url' => ['nullable', 'url', 'max:255'], 'description' => ['nullable', 'string', 'max:3000'], 'warehouse_first' => ['sometimes', 'boolean'], 'plan' => ['sometimes', 'string', 'max:50'], 'status' => ['sometimes', 'string', 'max:50'], 'verified_at' => ['nullable', 'date']];
+        $companyId = $updating ? (int) request()->route('company') : null;
+
+        return ['owner_user_id' => [$p, 'integer', 'exists:users,id', Rule::unique('companies', 'owner_user_id')->ignore($companyId)], 'name' => [$p, 'string', 'max:255'], 'slug' => [$p, 'string', 'max:255'], 'email' => ['nullable', 'email'], 'phone' => ['nullable', 'string', 'max:50'], 'tax_number' => ['nullable', 'string', 'max:100'], 'vat_number' => ['nullable', 'string', 'max:100'], 'registration_number' => ['nullable', 'string', 'max:100'], 'country_code' => [$p, 'string', 'size:2'], 'city' => ['nullable', 'string', 'max:120'], 'address' => ['nullable', 'string', 'max:255'], 'website' => ['nullable', 'url', 'max:255'], 'logo_url' => ['nullable', 'url', 'max:255'], 'description' => ['nullable', 'string', 'max:3000'], 'warehouse_first' => ['sometimes', 'boolean'], 'plan' => ['sometimes', 'string', 'max:50'], 'status' => ['sometimes', 'string', 'max:50'], 'verified_at' => ['nullable', 'date']];
     }
 
     protected function relations(): array
