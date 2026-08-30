@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\CompanyInvitationController;
 use App\Http\Controllers\Api\CompanyMembershipController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\CustomsDocumentController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DispatchChatController;
 use App\Http\Controllers\Api\DocumentController;
@@ -151,6 +152,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('tariffs/catalog', [HsCodeController::class, 'catalog'])->middleware('throttle:60,1');
     Route::get('hs-codes', [HsCodeController::class, 'index'])->middleware('throttle:60,1');
     Route::post('hs-codes/bulk', [HsCodeController::class, 'bulk'])->middleware('throttle:60,1');
+    Route::get('customs-documents', [CustomsDocumentController::class, 'index'])->middleware('throttle:60,1');
+    Route::post('customs-documents/match', [CustomsDocumentController::class, 'match'])->middleware('throttle:60,1');
+    Route::get('customs-documents/{code}/download', [CustomsDocumentController::class, 'download'])
+        ->where('code', '[A-Za-z0-9 ]+');
 
     // Pricing is visible to every role - only managing the catalog/assignments is admin-only below.
     Route::get('subscription-packages', [SubscriptionPackageController::class, 'index']);

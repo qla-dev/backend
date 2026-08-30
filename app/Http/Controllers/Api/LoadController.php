@@ -511,6 +511,9 @@ class LoadController extends CrudController
             // explicitly or it is silently dropped even though the frontend sends it.
             'hs_codes.*.chapterCode' => ['nullable', 'string', 'max:10'], 'hs_codes.*.chapterName' => ['nullable', 'string', 'max:255'],
             'hs_codes.*.headingCode' => ['nullable', 'string', 'max:10'], 'hs_codes.*.headingName' => ['nullable', 'string', 'max:255'],
+            'customs_documents' => ['nullable', 'array', 'max:160'],
+            'customs_documents.*.code' => ['required', 'string', 'max:20'], 'customs_documents.*.label' => ['required', 'string', 'max:500'],
+            'customs_documents.*.source' => ['required', 'in:matched,manual'], 'customs_documents.*.downloadable' => ['required', 'boolean'],
             'weight_kg' => [$updating ? 'sometimes' : 'required_unless:transport_type,warehouse', 'nullable', 'numeric', 'min:0'],
             'length_m' => ['nullable', 'numeric', 'min:0'], 'width_m' => ['nullable', 'numeric', 'min:0'], 'height_m' => ['nullable', 'numeric', 'min:0'],
             'volume_m3' => ['nullable', 'numeric', 'min:0'], 'pallets' => ['nullable', 'integer', 'min:0'], 'quantity_measure' => ['nullable', 'string', 'max:255'],

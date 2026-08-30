@@ -26,7 +26,7 @@ class Load extends BaseModel
     protected function casts(): array
     {
         return [
-            'loading_methods' => 'array', 'body_types' => 'array', 'container_selections' => 'array', 'special_requirements' => 'array', 'characteristics' => 'array', 'contact' => 'array', 'hs_codes' => 'array',
+            'loading_methods' => 'array', 'body_types' => 'array', 'container_selections' => 'array', 'special_requirements' => 'array', 'characteristics' => 'array', 'contact' => 'array', 'hs_codes' => 'array', 'customs_documents' => 'array',
             'handling_requirements' => 'array',
             'is_fragile' => 'boolean', 'requires_adr' => 'boolean', 'requires_tail_lift' => 'boolean',
             'must_be_trackable' => 'boolean', 'is_urgent' => 'boolean', 'is_negotiable' => 'boolean', 'for_storage' => 'boolean', 'published_at' => 'datetime', 'completed_at' => 'datetime',
