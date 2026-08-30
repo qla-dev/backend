@@ -21,7 +21,7 @@ class CustomsDocumentGenerator
         $templatePath = resource_path("customs-document-templates/{$filename}");
         abort_unless(is_file($templatePath), 404);
 
-        $load->loadMissing(['company.owner', 'customer.customer', 'consignee.user', 'stops', 'shipment']);
+        $load->loadMissing(['company.owner', 'customer.customerProfile', 'consignee.user', 'stops', 'shipment']);
         $processor = new TemplateProcessor($templatePath);
         $values = [...$this->sharedValues($load), ...$this->documentValues($filename, $load, $formData)];
 
@@ -48,7 +48,7 @@ class CustomsDocumentGenerator
     private function sharedValues(Load $load): array
     {
         $company = $load->company;
-        $importer = $load->consignee ?: $load->customer?->customer;
+        $importer = $load->consignee ?: $load->customer?->customerProfile;
         $supplier = $company;
         $stops = $load->stops;
         $origin = $stops->first(fn ($stop) => $stop->type === 'pickup') ?: $stops->first();
