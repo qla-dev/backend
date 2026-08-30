@@ -34,14 +34,14 @@ class DocumentController extends CrudController
 
     protected function searchColumns(): array
     {
-        return ['name', 'type'];
+        return ['name', 'type', 'reference'];
     }
 
     protected function rules(bool $u = false): array
     {
         $p = $u ? 'sometimes' : 'required';
 
-        return ['load_id' => ['nullable', 'integer', 'exists:loads,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'], 'user_id' => ['nullable', 'integer', 'exists:users,id'], 'uploaded_by_user_id' => [$p, 'integer', 'exists:users,id'], 'type' => [$p, 'string', 'max:100'], 'name' => [$p, 'string', 'max:255'], 'path' => [$p, 'string', 'max:500'], 'mime_type' => ['nullable', 'string', 'max:120'], 'size_bytes' => ['nullable', 'integer', 'min:0'], 'expires_at' => ['nullable', 'date']];
+        return ['load_id' => ['nullable', 'integer', 'exists:loads,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'], 'user_id' => ['nullable', 'integer', 'exists:users,id'], 'uploaded_by_user_id' => [$p, 'integer', 'exists:users,id'], 'type' => [$p, 'string', 'max:100'], 'name' => [$p, 'string', 'max:255'], 'reference' => ['nullable', 'string', 'max:120'], 'path' => [$p, 'string', 'max:500'], 'mime_type' => ['nullable', 'string', 'max:120'], 'size_bytes' => ['nullable', 'integer', 'min:0'], 'expires_at' => ['nullable', 'date']];
     }
 
     protected function applyFilters(Builder $query, Request $request): void
@@ -52,6 +52,10 @@ class DocumentController extends CrudController
 
         if ($request->filled('vehicle_id')) {
             $query->where('vehicle_id', $request->integer('vehicle_id'));
+        }
+
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->integer('user_id'));
         }
 
         if ($request->filled('type')) {
@@ -79,10 +83,17 @@ class DocumentController extends CrudController
             'file' => ['required', 'file', 'max:25600'],
             'load_id' => ['nullable', 'integer', 'exists:loads,id'],
             'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'type' => ['nullable', 'string', 'max:100'],
             'name' => ['nullable', 'string', 'max:255'],
+            'reference' => ['nullable', 'string', 'max:120'],
             'expires_at' => ['nullable', 'date'],
         ]);
+
+        // A personal document may only ever be filed against the uploader's own account.
+        if (isset($data['user_id']) && (int) $data['user_id'] !== (int) $request->user()->id) {
+            abort(403, 'Personal documents can only be uploaded for your own account.');
+        }
 
         $file = $request->file('file');
         $extension = strtolower((string) ($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin'));
@@ -90,15 +101,19 @@ class DocumentController extends CrudController
         // Archive uploads have no load to file under, so they share a folder of their own.
         $folder = isset($data['load_id'])
             ? "loads/{$data['load_id']}"
-            : (isset($data['vehicle_id']) ? "vehicles/{$data['vehicle_id']}" : 'archive');
+            : (isset($data['vehicle_id'])
+                ? "vehicles/{$data['vehicle_id']}"
+                : (isset($data['user_id']) ? "users/{$data['user_id']}" : 'archive'));
         $file->storeAs("documents/{$folder}", $filename, 'local');
 
         $document = Document::query()->create([
             'load_id' => $data['load_id'] ?? null,
             'vehicle_id' => $data['vehicle_id'] ?? null,
+            'user_id' => $data['user_id'] ?? null,
             'uploaded_by_user_id' => $request->user()->id,
             'type' => ($data['type'] ?? '') ?: 'OTHER',
             'name' => ($data['name'] ?? '') ?: $file->getClientOriginalName(),
+            'reference' => $data['reference'] ?? null,
             'path' => "{$folder}/{$filename}",
             'mime_type' => $file->getClientMimeType() ?: 'application/octet-stream',
             'size_bytes' => $file->getSize(),
