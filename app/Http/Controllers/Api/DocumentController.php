@@ -50,6 +50,10 @@ class DocumentController extends CrudController
             $query->where('load_id', $request->integer('load_id'));
         }
 
+        if ($request->filled('vehicle_id')) {
+            $query->where('vehicle_id', $request->integer('vehicle_id'));
+        }
+
         if ($request->filled('type')) {
             $query->where('type', $request->string('type'));
         }
@@ -84,7 +88,9 @@ class DocumentController extends CrudController
         $extension = strtolower((string) ($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin'));
         $filename = Str::uuid()->toString().'.'.$extension;
         // Archive uploads have no load to file under, so they share a folder of their own.
-        $folder = isset($data['load_id']) ? "loads/{$data['load_id']}" : 'archive';
+        $folder = isset($data['load_id'])
+            ? "loads/{$data['load_id']}"
+            : (isset($data['vehicle_id']) ? "vehicles/{$data['vehicle_id']}" : 'archive');
         $file->storeAs("documents/{$folder}", $filename, 'local');
 
         $document = Document::query()->create([

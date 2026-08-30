@@ -22,7 +22,7 @@ class VehicleController extends CrudController
 
     protected function relations(): array
     {
-        return ['company', 'owner', 'assignedDriver', 'permittedUsers', 'locations'];
+        return ['company', 'owner', 'assignedDriver', 'permittedUsers', 'locations', 'documents'];
     }
 
     protected function searchColumns(): array

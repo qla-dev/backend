@@ -38,6 +38,11 @@ class Vehicle extends BaseModel
         return $this->hasMany(VehicleLocation::class);
     }
 
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
+
     public function loads(): HasMany
     {
         return $this->hasMany(Load::class);
