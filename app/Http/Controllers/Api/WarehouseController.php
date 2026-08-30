@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\EntityResource;
 use App\Models\Company;
+use App\Models\Load;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Warehouse;
