@@ -124,6 +124,13 @@ class CustomsDocumentCatalog
             'label' => (string) ($document['label'] ?? ''),
             'downloadable' => (int) ($document['download'] ?? 0) === 1
                 && $this->templateFilename($document) !== null,
+            'formType' => match ($document['route'] ?? null) {
+                'generate-dis' => 'dis',
+                'generate-osi' => 'osi',
+                'generate-dv1' => 'dv1',
+                'generate-znp' => 'znp',
+                default => null,
+            },
         ];
     }
 

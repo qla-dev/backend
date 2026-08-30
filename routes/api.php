@@ -154,7 +154,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('hs-codes/bulk', [HsCodeController::class, 'bulk'])->middleware('throttle:60,1');
     Route::get('customs-documents', [CustomsDocumentController::class, 'index'])->middleware('throttle:60,1');
     Route::post('customs-documents/match', [CustomsDocumentController::class, 'match'])->middleware('throttle:60,1');
-    Route::get('customs-documents/{code}/download', [CustomsDocumentController::class, 'download'])
+    Route::post('loads/{load}/customs-documents/{code}/download', [CustomsDocumentController::class, 'download'])
         ->where('code', '[A-Za-z0-9 ]+');
 
     // Pricing is visible to every role - only managing the catalog/assignments is admin-only below.

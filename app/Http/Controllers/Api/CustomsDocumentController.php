@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\CustomsDocumentCatalog;
+use App\Services\CustomsDocumentGenerator;
+use App\Models\Load;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -41,17 +43,18 @@ class CustomsDocumentController extends Controller
         ]);
     }
 
-    public function download(string $code, CustomsDocumentCatalog $catalog): BinaryFileResponse
+    public function download(Request $request, Load $load, string $code, CustomsDocumentGenerator $generator): BinaryFileResponse
     {
-        $document = $catalog->find($code);
-        abort_unless($document, 404);
+        $validated = $request->validate([
+            'form_data' => ['sometimes', 'array'],
+            'form_data.*' => ['nullable', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (! is_scalar($value) || mb_strlen((string) $value) > 5000) {
+                    $fail("The {$attribute} field is invalid.");
+                }
+            }],
+        ]);
+        $file = $generator->generate($load, $code, $validated['form_data'] ?? []);
 
-        $filename = $catalog->templateFilename($document);
-        abort_unless($filename, 404);
-
-        $path = resource_path("customs-document-templates/{$filename}");
-        abort_unless(is_file($path), 404);
-
-        return response()->download($path, "{$code}-template.docx");
+        return response()->download($file['path'], $file['name'])->deleteFileAfterSend(true);
     }
 }
