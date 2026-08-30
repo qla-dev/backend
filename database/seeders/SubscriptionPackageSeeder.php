@@ -35,6 +35,18 @@ class SubscriptionPackageSeeder extends Seeder
             ['key' => 'lena_ai', 'title' => 'LenaAI Assistant', 'description' => 'An AI dispatcher that scans documents, drafts loads, and answers logistics questions instantly.', 'icon' => 'Sparkles', 'roles' => ['*']],
         ];
 
+        // The one feature that differs by tier: how many user licences the plan includes. Listed
+        // last so it closes the feature list on every card.
+        $licences = fn (int $count): array => [
+            'key' => 'licences',
+            'title' => $count === 1 ? '1 user licence included' : "{$count} user licences included",
+            'description' => $count === 1
+                ? 'One named user seat on your company workspace.'
+                : "Up to {$count} named user seats on your company workspace.",
+            'icon' => 'IdCard',
+            'roles' => ['*'],
+        ];
+
         $packages = [
             [
                 'name' => 'Starter',
@@ -45,7 +57,7 @@ class SubscriptionPackageSeeder extends Seeder
                 'lena_ai_tokens' => 500,
                 'icon' => 'Rocket',
                 'color' => 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
-                'features' => $features,
+                'features' => [...$features, $licences(1)],
                 'is_popular' => false,
                 'sort_order' => 1,
                 'is_active' => true,
@@ -59,7 +71,7 @@ class SubscriptionPackageSeeder extends Seeder
                 'lena_ai_tokens' => 1500,
                 'icon' => 'Gem',
                 'color' => 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-                'features' => $features,
+                'features' => [...$features, $licences(2)],
                 'is_popular' => true,
                 'sort_order' => 2,
                 'is_active' => true,
@@ -73,7 +85,7 @@ class SubscriptionPackageSeeder extends Seeder
                 'lena_ai_tokens' => 5000,
                 'icon' => 'Building2',
                 'color' => 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                'features' => $features,
+                'features' => [...$features, $licences(4)],
                 'is_popular' => false,
                 'sort_order' => 3,
                 'is_active' => true,
