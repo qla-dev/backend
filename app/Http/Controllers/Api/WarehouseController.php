@@ -337,6 +337,72 @@ class WarehouseController extends CrudController
         ], 'Warehouse overview retrieved successfully.');
     }
 
+    // Everything the warehouse status screen shows for ONE facility: the full record, its
+    // occupancy, and - the part the overview cannot answer - exactly which goods are sitting
+    // inside right now. Stock is the net of the completed inbound/outbound ledger grouped per
+    // load, so a consignment that has already shipped out drops off the list on its own.
+    public function status(Request $request, int $id): JsonResponse
+    {
+        $warehouse = Warehouse::query()->findOrFail($id);
+        $this->authorizeWarehouse($request, $warehouse);
+
+        $net = "SUM(CASE WHEN direction = 'inbound' THEN pallets ELSE -pallets END)";
+        $netCbm = "SUM(CASE WHEN direction = 'inbound' THEN COALESCE(cbm, 0) ELSE -COALESCE(cbm, 0) END)";
+        $netWeight = "SUM(CASE WHEN direction = 'inbound' THEN COALESCE(weight_kg, 0) ELSE -COALESCE(weight_kg, 0) END)";
+        $completed = WarehouseMovement::query()->where('warehouse_id', $warehouse->id)->where('status', 'completed');
+
+        $stock = (clone $completed)
+            ->selectRaw("load_id, customer_name, storage_type, {$net} as pallets, {$netCbm} as cbm, {$netWeight} as weight_kg, MIN(completed_at) as stored_since, MAX(currency) as currency, SUM(CASE WHEN direction = 'inbound' THEN COALESCE(rate, 0) ELSE 0 END) as rate, MAX(description) as description")
+            ->groupBy('load_id', 'customer_name', 'storage_type')
+            ->havingRaw("{$net} > 0")
+            ->orderByDesc('pallets')
+            ->get();
+
+        $loads = Load::query()
+            ->whereIn('id', $stock->pluck('load_id')->filter()->unique()->all())
+            ->get(['id', 'title', 'goods_type', 'cargo_type', 'storage_type', 'storage_start_date', 'storage_end_date', 'is_storage_ongoing', 'weight_kg', 'volume_m3', 'pallets', 'status', 'temperature_min', 'temperature_max'])
+            ->keyBy('id');
+
+        $capacity = max(0, (int) $warehouse->total_capacity_pallets);
+        $occupied = max(0, (int) $stock->sum('pallets'));
+        $today = Carbon::today();
+
+        $movements = WarehouseMovement::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->orderByDesc('scheduled_at')
+            ->limit(25)
+            ->get();
+
+        return $this->success([
+            'warehouse' => $warehouse,
+            'occupancy' => [
+                'total_capacity_pallets' => $capacity,
+                'occupied_pallets' => $occupied,
+                'available_pallets' => max(0, $capacity - $occupied),
+                'occupancy_percent' => $capacity > 0 ? min(100, round(($occupied / $capacity) * 100, 1)) : 0.0,
+            ],
+            'stats' => [
+                'stock_rows' => $stock->count(),
+                'stored_weight_kg' => round((float) $stock->sum('weight_kg'), 2),
+                'stored_cbm' => round((float) $stock->sum('cbm'), 2),
+                'inbound_today' => (clone $completed)->where('direction', 'inbound')->whereDate('scheduled_at', $today)->count(),
+                'outbound_today' => (clone $completed)->where('direction', 'outbound')->whereDate('scheduled_at', $today)->count(),
+                'scheduled_pending' => WarehouseMovement::query()->where('warehouse_id', $warehouse->id)->where('status', 'scheduled')->count(),
+                'storage_revenue' => round((float) (clone $completed)->where('direction', 'inbound')->sum('rate'), 2),
+                'currency' => (clone $completed)->value('currency') ?? 'EUR',
+            ],
+            'by_storage_type' => (clone $completed)
+                ->selectRaw("storage_type, {$net} as net_pallets")
+                ->groupBy('storage_type')
+                ->havingRaw("{$net} > 0")
+                ->orderByDesc('net_pallets')
+                ->get()
+                ->values(),
+            'stock' => $stock->map(fn (WarehouseMovement $row) => $row->toArray() + ['load' => $loads[$row->load_id] ?? null])->values(),
+            'movements' => $movements->values(),
+        ], 'Warehouse status retrieved successfully.');
+    }
+
     public function destroy(Request $request, int $id): JsonResponse
     {
         $warehouse = Warehouse::query()->findOrFail($id);

@@ -107,6 +107,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // protected admins may additionally manage any facility in the network.
     Route::middleware('role:user,driver,company,warehouse,superadmin,master')->group(function (): void {
         Route::get('warehouse/overview', [WarehouseController::class, 'overview']);
+        Route::get('warehouses/{warehouse}/status', [WarehouseController::class, 'status']);
         Route::post('warehouses', [WarehouseController::class, 'store']);
         Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update']);
         Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy']);
