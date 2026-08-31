@@ -29,7 +29,16 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::table('customers')->whereNull('user_id')->delete();
+        // Standalone customers exist only under this schema - they have no user account to be
+        // rebuilt from, so deleting them is destruction, not a reversal. Refuse the rollback and
+        // let a human decide, rather than silently discarding customer records.
+        $standalone = DB::table('customers')->whereNull('user_id')->count();
+        if ($standalone > 0) {
+            throw new RuntimeException(
+                "Rolling back would permanently delete {$standalone} standalone customers (no linked user). "
+                .'Export or attach them to users first, then re-run this rollback.'
+            );
+        }
 
         Schema::table('customers', function (Blueprint $table) {
             $table->dropUnique(['source', 'source_id']);

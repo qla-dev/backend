@@ -142,7 +142,8 @@ def import_rows(connection, source: list[dict[str, Any]], batch_size: int) -> No
     values = [tuple(row[column] for column in SOURCE_COLUMNS) for row in source]
 
     try:
-        connection.start_transaction()
+        if not connection.in_transaction:
+            connection.start_transaction()
         cursor.execute("DELETE FROM hs_code_catalog")
         for batch in chunks(values, batch_size):
             cursor.executemany(insert_sql, batch)

@@ -26,7 +26,15 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::table('drivers')->whereNull('user_id')->delete();
+        // Same reasoning as the standalone customers rollback: a driver with no user account
+        // cannot be reconstructed, so this refuses instead of deleting.
+        $standalone = DB::table('drivers')->whereNull('user_id')->count();
+        if ($standalone > 0) {
+            throw new RuntimeException(
+                "Rolling back would permanently delete {$standalone} standalone drivers (no linked user). "
+                .'Export or attach them to users first, then re-run this rollback.'
+            );
+        }
 
         Schema::table('drivers', function (Blueprint $table) {
             $table->dropColumn(['name', 'email', 'phone', 'country_code', 'profile_authorized_at']);
