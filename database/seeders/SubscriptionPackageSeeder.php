@@ -38,7 +38,8 @@ class SubscriptionPackageSeeder extends Seeder
         // The one feature that differs by tier: how many user licences the plan includes. Listed
         // last so it closes the feature list on every card.
         $licences = fn (int $count): array => [
-            'key' => 'licences',
+            // A key per count, so each variant can carry its own translation.
+            'key' => "licences_{$count}",
             'title' => $count === 1 ? '1 user licence included' : "{$count} user licences included",
             'description' => $count === 1
                 ? 'One named user seat on your company workspace.'
