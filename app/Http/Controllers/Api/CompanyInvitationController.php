@@ -3,10 +3,41 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\CompanyInvitation;
+use App\Models\Role;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class CompanyInvitationController extends CrudController
 {
+    public function availableUsers(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'limit' => ['nullable', 'integer', 'between:1,25'],
+        ]);
+        $search = trim((string) ($data['search'] ?? ''));
+
+        $users = User::query()
+            ->with('role:id,name,label')
+            ->where('is_active', true)
+            ->whereDoesntHave('companies')
+            ->whereHas('role', fn ($query) => $query->whereNotIn('name', [...Role::PROTECTED_NAMES, 'system', 'guest']))
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($scope) use ($search): void {
+                    $scope->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('username', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name')
+            ->limit((int) ($data['limit'] ?? 10))
+            ->get(['id', 'role_id', 'name', 'email', 'username']);
+
+        return response()->json(['message' => 'Available users retrieved.', 'data' => $users, 'meta' => [], 'errors' => []]);
+    }
+
     protected function modelClass(): string
     {
         return CompanyInvitation::class;

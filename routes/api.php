@@ -170,6 +170,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::middleware('role:company,manager,superadmin,master')->group(function (): void {
         Route::get('team-role-options', [RoleController::class, 'teamOptions']);
+        Route::get('company-invitations/available-users', [CompanyInvitationController::class, 'availableUsers']);
         Route::apiResources([
             'company-memberships' => CompanyMembershipController::class,
             'company-invitations' => CompanyInvitationController::class,
