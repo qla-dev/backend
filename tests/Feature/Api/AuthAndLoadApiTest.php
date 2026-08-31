@@ -102,6 +102,7 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertSame('manager', User::query()->where('username', 'manager_demo')->firstOrFail()->role->name);
         $this->assertSame('dispatcher', User::query()->where('username', 'dispatcher_demo')->firstOrFail()->role->name);
         $this->assertSame('customs_officer', User::query()->where('username', 'customs_officer_demo')->firstOrFail()->role->name);
+        $this->assertSame('manager', User::query()->where('username', 'warehouse_manager_demo')->firstOrFail()->role->name);
         $this->assertSame('company', User::query()->where('username', 'company_demo')->firstOrFail()->role->name);
         $this->assertSame('customer_demo', Customer::query()->firstOrFail()->user->username);
         $this->assertSame('driver_demo', Driver::query()->firstOrFail()->user->username);

@@ -40,5 +40,24 @@ class TeamRoleUserSeeder extends Seeder
                 $user->id => ['status' => 'active', 'joined_at' => now()],
             ]);
         }
+
+        $warehouseCompany = Company::query()->where('slug', 'freightbook-warehousing-co')->first();
+        if ($warehouseCompany) {
+            $managerRole = Role::query()->where('name', 'manager')->firstOrFail();
+            $warehouseManager = User::query()->updateOrCreate(['username' => 'warehouse_manager_demo'], [
+                'role_id' => $managerRole->id,
+                'name' => 'Demo Warehouse Manager',
+                'email' => 'warehouse_manager_demo@freightbook.test',
+                'password' => 'demo12345',
+                'language' => 'bs',
+                'country_code' => 'BA',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]);
+
+            $warehouseCompany->users()->syncWithoutDetaching([
+                $warehouseManager->id => ['status' => 'active', 'joined_at' => now()],
+            ]);
+        }
     }
 }
