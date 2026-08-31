@@ -55,7 +55,6 @@ return new class extends Migration
             DB::table('company_user')->insertOrIgnore([
                 'company_id' => $companyId,
                 'user_id' => $userId,
-                'company_role' => 'admin',
                 'status' => 'active',
                 'joined_at' => now(),
                 'created_at' => now(),

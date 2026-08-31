@@ -180,7 +180,7 @@ class WarehouseController extends CrudController
                 'plan' => $data['plan'] ?? 'starter', 'status' => $data['status'] ?? 'pending',
             ]);
             $company->users()->attach($owner->id, [
-                'company_role' => 'admin', 'status' => 'active',
+                'status' => 'active',
                 'invited_by_user_id' => $request->user()->id, 'joined_at' => now(),
             ]);
             Warehouse::query()->create([

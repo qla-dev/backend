@@ -23,7 +23,7 @@ class Company extends BaseModel
 
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class)->withPivot(['company_role', 'status', 'invited_by_user_id', 'joined_at'])->withTimestamps();
+        return $this->belongsToMany(User::class)->withPivot(['status', 'invited_by_user_id', 'joined_at'])->withTimestamps();
     }
 
     public function vehicles(): HasMany

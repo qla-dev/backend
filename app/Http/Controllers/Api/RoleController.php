@@ -7,9 +7,18 @@ use Illuminate\Http\JsonResponse;
 
 class RoleController extends CrudController
 {
+    public function teamOptions(): JsonResponse
+    {
+        $roles = Role::query()->where('is_active', true)
+            ->whereIn('name', ['manager', 'dispatcher', 'customs_officer', 'finance', 'driver'])
+            ->orderBy('label')->get(['id', 'name', 'label']);
+
+        return response()->json(['message' => 'Team roles retrieved.', 'data' => $roles, 'meta' => [], 'errors' => []]);
+    }
+
     public function options(): JsonResponse
     {
-        $roles = Role::query()->where('is_active', true)->whereNotIn('name', [...Role::PROTECTED_NAMES, 'warehouse'])
+        $roles = Role::query()->where('is_active', true)->whereNotIn('name', [...Role::PROTECTED_NAMES, 'warehouse', 'manager', 'dispatcher', 'customs_officer'])
             ->orderBy('label')->get(['id', 'name', 'label']);
 
         return response()->json(['message' => 'Roles retrieved.', 'data' => $roles, 'meta' => [], 'errors' => []]);

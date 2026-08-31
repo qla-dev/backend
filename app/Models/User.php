@@ -65,7 +65,7 @@ class User extends Authenticatable
 
     public function companies(): BelongsToMany
     {
-        return $this->belongsToMany(Company::class)->withPivot(['company_role', 'status', 'invited_by_user_id', 'joined_at'])->withTimestamps();
+        return $this->belongsToMany(Company::class)->withPivot(['status', 'invited_by_user_id', 'joined_at'])->withTimestamps();
     }
 
     public function driver(): HasOne

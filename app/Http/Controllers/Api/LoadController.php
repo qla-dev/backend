@@ -342,7 +342,7 @@ class LoadController extends CrudController
             return;
         }
 
-        if (in_array($role, ['company', 'finance'], true)) {
+        if (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer', 'finance'], true)) {
             $companyIds = $user->companies()->pluck('companies.id');
             $query->where(function (Builder $scope) use ($user, $companyIds): void {
                 $scope->where('customer_user_id', $user->id)->orWhereIn('company_id', $companyIds);
@@ -573,7 +573,7 @@ class LoadController extends CrudController
                 $data['company_id'] = $demoCompanyId;
             }
         }
-        if ($request->user()?->role?->name === 'company' && empty($data['company_id'])) {
+        if (in_array($request->user()?->role?->name, ['company', 'manager', 'dispatcher', 'customs_officer'], true) && empty($data['company_id'])) {
             $ownCompanyId = $request->user()->companies()->value('companies.id');
 
             if ($ownCompanyId) {
@@ -671,7 +671,7 @@ class LoadController extends CrudController
                 // Unchanged: a driver books for themselves immediately, same as before.
                 $companyId = $load->company_id ?? $user->driver?->primary_company_id;
                 $driverUserId = $user->id;
-            } elseif ($role === 'company') {
+            } elseif (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer'], true)) {
                 // A company claims the load for itself now; assigning a driver from their team
                 // is optional at booking time and can be done later instead.
                 $myCompanyIds = $user->companies()->pluck('companies.id');

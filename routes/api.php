@@ -98,14 +98,14 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('loads/profile-status-counts', [LoadController::class, 'profileStatusCounts']);
 
     // Customers, independent drivers, and logistics companies can post loads; superadmin/master keep their usual override.
-    Route::middleware('role:user,driver,company,superadmin,master')->group(function (): void {
+    Route::middleware('role:user,driver,company,manager,dispatcher,customs_officer,superadmin,master')->group(function (): void {
         Route::post('loads', [LoadController::class, 'store']);
         Route::post('loads/bulk', [LoadController::class, 'bulkStore']);
     });
 
     // Warehouses are user-owned facilities. These roles may create and manage their own rows;
     // protected admins may additionally manage any facility in the network.
-    Route::middleware('role:user,driver,company,warehouse,superadmin,master')->group(function (): void {
+    Route::middleware('role:user,driver,company,manager,dispatcher,customs_officer,warehouse,superadmin,master')->group(function (): void {
         Route::get('warehouse/overview', [WarehouseController::class, 'overview']);
         Route::get('warehouses/{warehouse}/status', [WarehouseController::class, 'status']);
         Route::post('warehouses', [WarehouseController::class, 'store']);
@@ -115,7 +115,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     // Instant-booking a posted, non-negotiable load. Drivers book for themselves; companies book
     // for their company (optionally assigning a driver right away); superadmin/master can assign either.
-    Route::middleware('role:driver,company,superadmin,master')->group(function (): void {
+    Route::middleware('role:driver,company,manager,dispatcher,customs_officer,superadmin,master')->group(function (): void {
         Route::post('loads/{load}/book', [LoadController::class, 'book']);
     });
 
@@ -168,7 +168,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('payments/{payment}/invoice', PaymentInvoiceDocumentController::class);
     Route::post('payments', [PaymentController::class, 'store'])->middleware('throttle:20,1');
 
-    Route::middleware('role:company,superadmin,master')->group(function (): void {
+    Route::middleware('role:company,manager,superadmin,master')->group(function (): void {
+        Route::get('team-role-options', [RoleController::class, 'teamOptions']);
         Route::apiResources([
             'company-memberships' => CompanyMembershipController::class,
             'company-invitations' => CompanyInvitationController::class,
@@ -176,7 +177,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ]);
     });
 
-    Route::middleware('role:finance,company,superadmin,master')->group(function (): void {
+    Route::middleware('role:finance,company,manager,superadmin,master')->group(function (): void {
         Route::apiResources([
             'invoices' => InvoiceController::class,
             'invoice-items' => InvoiceItemController::class,
@@ -184,10 +185,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     Route::patch('loads/{load}/status', [LoadController::class, 'updateStatus'])
-        ->middleware('role:user,driver,company,superadmin,master');
+        ->middleware('role:user,driver,company,manager,dispatcher,customs_officer,superadmin,master');
 
     Route::post('loads/{load}/vehicle-return', [VehicleReturnInspectionController::class, 'store'])
-        ->middleware('role:driver,company,superadmin,master');
+        ->middleware('role:driver,company,manager,dispatcher,customs_officer,superadmin,master');
 
     Route::middleware('role:superadmin,master')->group(function (): void {
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);

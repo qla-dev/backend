@@ -134,7 +134,7 @@ class VehicleReturnInspectionController extends Controller
         $role = $user?->role?->name;
         $allowed = $user?->isSuperAdminOrMaster()
             || ($role === 'driver' && (int) $load->assigned_driver_user_id === (int) $user->id)
-            || ($role === 'company' && $user->companies()->whereKey($load->company_id)->exists());
+            || (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer'], true) && $user->companies()->whereKey($load->company_id)->exists());
 
         abort_unless($allowed && (int) $vehicle->id === (int) $load->vehicle_id, 403);
     }
@@ -144,7 +144,7 @@ class VehicleReturnInspectionController extends Controller
         $user = $request->user();
         $role = $user?->role?->name;
         $allowed = $user?->isSuperAdminOrMaster()
-            || ($role === 'company' && $user->companies()->whereKey($vehicle->company_id)->exists())
+            || (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer'], true) && $user->companies()->whereKey($vehicle->company_id)->exists())
             || ($role === 'driver' && (
                 (int) $vehicle->owner_user_id === (int) $user->id
                 || (int) $vehicle->assigned_driver_user_id === (int) $user->id

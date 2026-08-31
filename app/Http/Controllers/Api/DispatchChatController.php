@@ -651,7 +651,7 @@ class DispatchChatController extends Controller
                 $visible->orWhere('customer_user_id', $user->id);
             } elseif ($role === 'driver') {
                 $visible->orWhere('assigned_driver_user_id', $user->id);
-            } elseif (in_array($role, ['company', 'finance'], true)) {
+            } elseif (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer', 'finance'], true)) {
                 $companyIds = $user->companies()->pluck('companies.id');
                 $visible->orWhere('customer_user_id', $user->id)->orWhereIn('company_id', $companyIds);
             }

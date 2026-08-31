@@ -22,7 +22,7 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $roleLabels = ['master' => 'Master', 'superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'finance' => 'Finance & Administration', 'warehouse' => 'Warehouse Company', 'guest' => 'Guest', 'system' => 'AI Assistant'];
+        $roleLabels = ['master' => 'Master', 'superadmin' => 'Superadmin', 'user' => 'Customer', 'driver' => 'Driver', 'company' => 'Logistics Company', 'manager' => 'Manager', 'dispatcher' => 'Dispatcher', 'customs_officer' => 'Customs Officer', 'finance' => 'Finance & Administration', 'warehouse' => 'Warehouse Company', 'guest' => 'Guest', 'system' => 'AI Assistant'];
         $roles = collect($roleLabels)->mapWithKeys(fn (string $label, string $name) => [$name => Role::query()->updateOrCreate(['name' => $name], ['label' => $label, 'permissions' => in_array($name, Role::PROTECTED_NAMES, true) ? ['*'] : [], 'is_active' => ! in_array($name, ['guest', 'system'], true)])]);
 
         $accounts = [
@@ -62,9 +62,9 @@ class DatabaseSeeder extends Seeder
             'slug' => 'freightbook-logistics-hub', 'country_code' => 'BA', 'city' => 'Sarajevo', 'plan' => 'enterprise', 'status' => 'verified', 'verified_at' => now(),
         ]);
         $company->users()->syncWithoutDetaching([
-            $users['company_demo']->id => ['company_role' => 'admin', 'status' => 'active', 'joined_at' => now()],
-            $users['driver_demo']->id => ['company_role' => 'driver', 'status' => 'active', 'invited_by_user_id' => $users['company_demo']->id, 'joined_at' => now()],
-            $users['finance_demo']->id => ['company_role' => 'finance', 'status' => 'active', 'invited_by_user_id' => $users['company_demo']->id, 'joined_at' => now()],
+            $users['company_demo']->id => ['status' => 'active', 'joined_at' => now()],
+            $users['driver_demo']->id => ['status' => 'active', 'invited_by_user_id' => $users['company_demo']->id, 'joined_at' => now()],
+            $users['finance_demo']->id => ['status' => 'active', 'invited_by_user_id' => $users['company_demo']->id, 'joined_at' => now()],
         ]);
 
         Driver::query()->updateOrCreate(['user_id' => $users['driver_demo']->id], ['name' => $users['driver_demo']->name, 'email' => $users['driver_demo']->email, 'profile_authorized_at' => now(), 'primary_company_id' => $company->id, 'license_number' => 'BA-DEMO-001', 'license_country_code' => 'BA', 'license_expires_at' => now()->addYears(3), 'availability_status' => 'available', 'rating' => 4.90]);
@@ -86,7 +86,7 @@ class DatabaseSeeder extends Seeder
             'plan' => 'enterprise', 'status' => 'verified', 'verified_at' => now(), 'warehouse_first' => true,
         ])->save();
         $warehouseCompany->users()->syncWithoutDetaching([
-            $users['warehouse_demo']->id => ['company_role' => 'admin', 'status' => 'active', 'joined_at' => now()],
+            $users['warehouse_demo']->id => ['status' => 'active', 'joined_at' => now()],
         ]);
         $warehouse = Warehouse::query()->updateOrCreate(['user_id' => $users['warehouse_demo']->id, 'name' => 'Freightbook Warehousing Co. - Sarajevo Hub'], [
             'name' => 'Freightbook Warehousing Co. - Sarajevo Hub', 'address' => 'Bulevar Meše Selimovića 16', 'city' => 'Sarajevo', 'country_code' => 'BA',
@@ -113,5 +113,6 @@ class DatabaseSeeder extends Seeder
                 'started_at' => now(), 'expires_at' => now()->addMonth(), 'remaining_tokens' => $proPackage->lena_ai_tokens,
             ]);
         }
+        $this->call(TeamRoleUserSeeder::class);
     }
 }

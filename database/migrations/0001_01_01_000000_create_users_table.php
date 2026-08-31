@@ -75,7 +75,6 @@ return new class extends Migration
             $table->foreignId('company_id')->constrained('companies')->cascadeOnDelete()->cascadeOnUpdate();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete()->cascadeOnUpdate();
             $table->foreignId('invited_by_user_id')->nullable()->constrained('users')->nullOnDelete()->cascadeOnUpdate();
-            $table->string('company_role')->default('member');
             $table->string('status')->default('active');
             $table->timestamp('joined_at')->nullable();
             $table->timestamps();

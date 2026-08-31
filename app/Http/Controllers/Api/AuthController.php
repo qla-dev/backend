@@ -106,7 +106,7 @@ class AuthController extends Controller
             'country_code' => ['nullable', 'string', 'size:2'], 'avatar_url' => ['nullable', 'url'],
             'headline' => ['nullable', 'string', 'max:255'], 'bio' => ['nullable', 'string', 'max:3000'],
             'password' => ['sometimes', 'string', 'min:8'],
-            'role_id' => ['sometimes', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->whereNotIn('name', Role::PROTECTED_NAMES))],
+            'role_id' => ['sometimes', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->whereNotIn('name', [...Role::PROTECTED_NAMES, 'manager', 'dispatcher', 'customs_officer']))],
             'company' => ['sometimes', 'array'],
             'company.id' => ['required_with:company', 'integer', 'exists:companies,id'],
             'company.name' => ['sometimes', 'string', 'max:255'],
@@ -134,7 +134,7 @@ class AuthController extends Controller
                 ->wherePivot('status', 'active')
                 ->first();
             abort_unless(
-                $company && ((int) $company->owner_user_id === (int) $user->id || $company->pivot?->company_role === 'admin'),
+                $company && ((int) $company->owner_user_id === (int) $user->id || $user->role?->name === 'manager'),
                 403,
                 'You are not allowed to edit this company profile.'
             );

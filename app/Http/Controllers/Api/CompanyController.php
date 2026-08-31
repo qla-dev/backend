@@ -91,7 +91,7 @@ class CompanyController extends CrudController
                 'address' => $data['address'] ?? null, 'plan' => $data['plan'] ?? 'starter',
                 'status' => $data['status'] ?? 'pending', 'warehouse_first' => false,
             ]);
-            $company->users()->attach($owner->id, ['company_role' => 'admin', 'status' => 'active', 'invited_by_user_id' => $request->user()->id, 'joined_at' => now()]);
+            $company->users()->attach($owner->id, ['status' => 'active', 'invited_by_user_id' => $request->user()->id, 'joined_at' => now()]);
             return $company->load($this->relations());
         });
 

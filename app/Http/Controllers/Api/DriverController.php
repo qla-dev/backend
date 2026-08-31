@@ -69,7 +69,7 @@ class DriverController extends CrudController
         }
 
         $user = $request->user();
-        if ($user?->role?->name === 'company') {
+        if (in_array($user?->role?->name, ['company', 'manager', 'dispatcher', 'customs_officer'], true)) {
             $companyIds = $user->companies()->pluck('companies.id');
             $query->whereIn('primary_company_id', $companyIds);
         }
@@ -122,7 +122,6 @@ class DriverController extends CrudController
 
             if ($user && ! empty($data['primary_company_id'])) {
                 $user->companies()->attach($data['primary_company_id'], [
-                    'company_role' => 'driver',
                     'status' => 'active',
                     'invited_by_user_id' => $request->user()->id,
                     'joined_at' => now(),

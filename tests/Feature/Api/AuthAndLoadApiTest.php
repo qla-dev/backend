@@ -97,16 +97,12 @@ class AuthAndLoadApiTest extends TestCase
         ]);
     }
 
-    public function test_seeder_creates_all_five_accounts_with_superadmin_first(): void
+    public function test_seeder_creates_demo_accounts_for_every_team_role(): void
     {
-        $this->assertSame('superadmin', Role::query()->orderBy('id')->value('name'));
-        $this->assertSame([
-            'superadmin_demo',
-            'customer_demo',
-            'driver_demo',
-            'company_demo',
-            'finance_demo',
-        ], User::query()->orderBy('id')->pluck('username')->all());
+        $this->assertSame('manager', User::query()->where('username', 'manager_demo')->firstOrFail()->role->name);
+        $this->assertSame('dispatcher', User::query()->where('username', 'dispatcher_demo')->firstOrFail()->role->name);
+        $this->assertSame('customs_officer', User::query()->where('username', 'customs_officer_demo')->firstOrFail()->role->name);
+        $this->assertSame('company', User::query()->where('username', 'company_demo')->firstOrFail()->role->name);
         $this->assertSame('customer_demo', Customer::query()->firstOrFail()->user->username);
         $this->assertSame('driver_demo', Driver::query()->firstOrFail()->user->username);
     }
@@ -789,7 +785,7 @@ class AuthAndLoadApiTest extends TestCase
         $owner = User::query()->where('username', 'manual_company_owner')->firstOrFail();
         $this->assertSame('company', $owner->role->name);
         $this->assertDatabaseHas('companies', ['id' => $companyId, 'owner_user_id' => $owner->id]);
-        $this->assertDatabaseHas('company_user', ['company_id' => $companyId, 'user_id' => $owner->id, 'company_role' => 'admin', 'status' => 'active']);
+        $this->assertDatabaseHas('company_user', ['company_id' => $companyId, 'user_id' => $owner->id, 'status' => 'active']);
     }
 
     public function test_superadmin_can_create_a_driver_with_profile_and_company_membership(): void
@@ -810,7 +806,7 @@ class AuthAndLoadApiTest extends TestCase
         $userId = $response->json('data.user.id');
         $this->assertDatabaseHas('users', ['id' => $userId, 'username' => 'manual_driver', 'is_active' => true]);
         $this->assertDatabaseHas('drivers', ['user_id' => $userId, 'primary_company_id' => $company->id, 'license_number' => 'BA-MANUAL-DRIVER']);
-        $this->assertDatabaseHas('company_user', ['company_id' => $company->id, 'user_id' => $userId, 'company_role' => 'driver', 'status' => 'active']);
+        $this->assertDatabaseHas('company_user', ['company_id' => $company->id, 'user_id' => $userId, 'status' => 'active']);
     }
 
     public function test_superadmin_can_create_a_driver_without_a_user_account(): void
