@@ -17,6 +17,12 @@ class CompanyMembershipController extends CrudController
         }
     }
 
+    protected function applyOrdering(Builder $query, Request $request): void
+    {
+        $query->orderByRaw('CASE WHEN user_id = (SELECT owner_user_id FROM companies WHERE companies.id = company_user.company_id) THEN 0 ELSE 1 END')
+            ->orderByDesc('id');
+    }
+
     protected function modelClass(): string
     {
         return CompanyMembership::class;
