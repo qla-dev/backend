@@ -23,6 +23,7 @@ class CompanyInvitationController extends CrudController
             ->with('role:id,name,label')
             ->where('is_active', true)
             ->whereDoesntHave('companies')
+            ->whereNotIn('email', CompanyInvitation::query()->where('status', 'pending')->select('email'))
             ->whereHas('role', fn ($query) => $query->whereNotIn('name', [...Role::PROTECTED_NAMES, 'system', 'guest']))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($scope) use ($search): void {
@@ -36,6 +37,19 @@ class CompanyInvitationController extends CrudController
             ->get(['id', 'role_id', 'name', 'email', 'username']);
 
         return response()->json(['message' => 'Available users retrieved.', 'data' => $users, 'meta' => [], 'errors' => []]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $companyId = $request->integer('company_id');
+        abort_unless(
+            $request->user()->isSuperAdminOrMaster() || $request->user()->companies()->whereKey($companyId)->exists(),
+            403,
+            'You can only invite users to your own company.'
+        );
+        $request->merge(['invited_by_user_id' => $request->user()->id]);
+
+        return parent::store($request);
     }
 
     protected function modelClass(): string
