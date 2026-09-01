@@ -11,6 +11,7 @@ use App\Models\LoadDraft;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\HsCodeSearchService;
+use App\Services\LenaGuidedAnswerResponder;
 use App\Services\LenaLoadQuestionnaire;
 use App\Services\LoadDraftScanMapper;
 use App\Services\OpenRouterDispatchAssistant;
@@ -26,7 +27,7 @@ class DispatchChatController extends Controller
 {
     use ScopesConversationAccess;
 
-    public function store(Request $request, OpenRouterDispatchAssistant $assistant, LenaLoadQuestionnaire $questionnaire, HsCodeSearchService $hsCodeSearch, OpenRouterLoadScanner $loadScanner): JsonResponse
+    public function store(Request $request, OpenRouterDispatchAssistant $assistant, LenaLoadQuestionnaire $questionnaire, HsCodeSearchService $hsCodeSearch, OpenRouterLoadScanner $loadScanner, LenaGuidedAnswerResponder $stepLabels): JsonResponse
     {
         $validated = $request->validate([
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
@@ -271,9 +272,13 @@ class DispatchChatController extends Controller
                 : ' The load-post canvas is currently off. Never turn it on merely because the user types a load-creation request. The explicit Add a new load action can open it.')
             .($canvasEnabled && $nextLoadStep
                 ? ' The next incomplete questionnaire step is "'.$nextLoadStep['key'].'": ask for '.$nextLoadStep['description'].'. '
+                    // The field is named for the model rather than left to it: given only a worked
+                    // example to adapt, it copied the example's field verbatim and asked for the
+                    // transport type while the buttons below offered body types.
+                    .'Name the field in the question exactly as: "'.$stepLabels->stepLabel($nextLoadStep['key'], $interfaceLang).'" - never the name of any other field, and never the one used in the example wording below. '
                     .($nextLoadStep['hasOptions']
-                        ? 'The application already shows the valid choices for this step as buttons directly below your message, so do not list, name, or restate those specific option values yourself in the question - that is redundant and less intuitive than just pointing at the buttons. Phrase it generically instead, in the style of "Odaberite tip transporta od ponuđenih opcija." (adapt the field name and grammar to this step, and translate naturally into the user\'s language). '
-                        : 'This step is answered by typing a value, not by buttons, so ask for it directly and name the expected unit or format when there is one (e.g. kilograms, a date), in the style of "Unesite težinu tereta u kg." (adapt the field and unit to this step, and translate naturally into the user\'s language). '
+                        ? 'The application already shows the valid choices for this step as buttons directly below your message, so do not list, name, or restate those specific option values yourself in the question - that is redundant and less intuitive than just pointing at the buttons. Phrase it generically instead, in the sentence shape of "Odaberite <field name> od ponuđenih opcija." (translate the shape naturally into the language of the user and keep the field name given above). '
+                        : 'This step is answered by typing a value, not by buttons, so ask for it directly and name the expected unit or format when there is one (e.g. kilograms, a date), in the sentence shape of "Unesite <field name> u kg." (adapt the unit to this step, translate naturally into the language of the user, and keep the field name given above). '
                             .($nextLoadStep['key'] === 'dimensions'
                                 ? 'Explicitly give the expected format and a concrete numeric example, in the style of "Unesite dimenzije tereta u formatu dužina x širina x visina, npr. 2x1.5x1.8." (translate naturally, keep the "npr./z.B./e.g." example). '
                                 : ''))
