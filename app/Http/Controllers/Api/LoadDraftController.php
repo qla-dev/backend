@@ -79,6 +79,16 @@ class LoadDraftController extends CrudController
             'delivery_place_type' => ['nullable', 'string', 'max:100'], 'delivery_city' => ['nullable', 'string', 'max:120'], 'delivery_country_code' => ['nullable', 'string', 'size:2'],
             'delivery_address' => ['nullable', 'string', 'max:255'], 'delivery_port' => ['nullable', 'string', 'max:255'], 'delivery_airport' => ['nullable', 'string', 'max:255'], 'delivery_latitude' => ['nullable', 'numeric', 'between:-90,90'], 'delivery_longitude' => ['nullable', 'numeric', 'between:-180,180'], 'delivery_radius_km' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'delivery_date' => ['nullable', 'date'], 'delivery_date_to' => ['nullable', 'date'], 'delivery_time_from' => ['nullable', 'date_format:H:i'], 'delivery_time_to' => ['nullable', 'date_format:H:i'],
+            // A multi-drop road route's stops beyond the first pickup and the first delivery, which
+            // the flat columns above hold. Shaped like the form's own stop, not like a load_stops row.
+            'extra_stops' => ['nullable', 'array'], 'extra_stops.*.side' => ['required_with:extra_stops', 'in:pickup,delivery'],
+            'extra_stops.*.placeType' => ['nullable', 'string', 'max:100'], 'extra_stops.*.city' => ['nullable', 'string', 'max:120'],
+            'extra_stops.*.postalCode' => ['nullable', 'string', 'max:32'], 'extra_stops.*.country' => ['nullable', 'string', 'size:2'],
+            'extra_stops.*.address' => ['nullable', 'string', 'max:255'], 'extra_stops.*.port' => ['nullable', 'string', 'max:255'],
+            'extra_stops.*.airport' => ['nullable', 'string', 'max:255'], 'extra_stops.*.latitude' => ['nullable', 'string', 'max:32'],
+            'extra_stops.*.longitude' => ['nullable', 'string', 'max:32'], 'extra_stops.*.date' => ['nullable', 'string', 'max:10'],
+            'extra_stops.*.dateTo' => ['nullable', 'string', 'max:10'], 'extra_stops.*.timeFrom' => ['nullable', 'string', 'max:5'],
+            'extra_stops.*.timeTo' => ['nullable', 'string', 'max:5'],
         ];
     }
 }
