@@ -34,7 +34,7 @@ class LoadDraftController extends CrudController
             'department' => ['nullable', 'string', 'max:120'],
             'freight_mode' => ['nullable', 'string', 'max:120'],
             'subdepartment' => ['nullable', 'string', 'max:120'],
-            'transport_type' => ['nullable', 'in:road,air,sea,rail'],
+            'transport_type' => ['nullable', 'in:road,air,sea,rail,warehouse'],
             'cargo_type' => ['nullable', 'string', 'max:100'],
             'goods_type' => ['nullable', 'string', 'max:100'],
             'hs_codes' => ['nullable', 'array', 'max:20'],

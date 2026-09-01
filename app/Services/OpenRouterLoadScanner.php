@@ -16,7 +16,9 @@ class OpenRouterLoadScanner
 
     private const BODY_TYPES = ['Curtain', 'Box', 'Reefer', 'Mega', 'Tautliner', 'Flatbed'];
 
-    private const TRANSPORT_TYPES = ['road', 'air', 'sea'];
+    // 'warehouse' is a storage request rather than a journey - the same posting form files it, and
+    // LenaAI can build one from a storage enquiry the way it builds a transport load from a CMR.
+    private const TRANSPORT_TYPES = ['road', 'air', 'sea', 'warehouse'];
 
     private const LOADING_EQUIPMENT_TYPES = ['Vehicle with ramp', 'Vehicle without ramp', 'Forklift: Yes', 'Forklift: No', 'Other loading/unloading equipment', 'Not specified'];
 
@@ -203,7 +205,7 @@ class OpenRouterLoadScanner
             .'For any identifiable goods, return hsSearchTerms as a short English catalog search phrase (product, material, processing state, intended use) for each distinct product visible in the document, separated by semicolons when there is more than one; try to identify every distinct product, not just the main or first one, so each can get its own tariff code immediately, without waiting for a later message. A single phrase is fine when only one product is shown. Preserve any explicitly printed HS or ten-digit tariff codes in hsCodes. '
             .'Read the pallet or unit count as a plain number when the document states a quantity (e.g. "24 pallets" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
-            .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
+            .'Read the transport type as exactly one of road, air, sea, warehouse when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea, and a request to store, warehouse or hold goods rather than move them means warehouse); otherwise leave it an empty string. '
             .'Read the street address separately from the city when one is given. Preserve explicit pickup or delivery latitude and longitude coordinates when supplied; otherwise return null for them. If a pickup or delivery is a date range, put the start in the date field and the end in the matching "date to" field; read a stated time window into the matching "time from"/"time to" fields as HH:MM, 24-hour format. '
             .'Read loading/unloading equipment only when explicitly stated, choosing exactly one of: Vehicle with ramp, Vehicle without ramp, Forklift: Yes, Forklift: No, Other loading/unloading equipment, Not specified - or an empty string if not stated. '
             .'Read road or air handling characteristics (e.g. ADR, CMR, GDP, TIR, Lift, Express for road; Non-DG, DG, TCG, MED, VAL for air) and any special requirements only when explicitly stated. Read the transport mode (e.g. "Airport to airport") and whether proof of delivery is required only for air/sea shipments when stated. Set requiresTracking to true only when live tracking is explicitly requested. '
@@ -231,7 +233,7 @@ class OpenRouterLoadScanner
             .'For any identifiable goods, return hsSearchTerms as a short English catalog search phrase (product, material, processing state, intended use) for each distinct product stated by the user, separated by semicolons when there is more than one; try to identify every distinct product, not just the main or first one. A single phrase is fine when only one product is mentioned. Preserve any explicitly stated HS or ten-digit tariff codes in hsCodes. '
             .'Read the pallet or unit count as a plain number when a quantity is mentioned (e.g. "24 paleta" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; "hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or an empty string if not stated. '
-            .'Read the transport type as exactly one of road, air, sea when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea); otherwise leave it an empty string. '
+            .'Read the transport type as exactly one of road, air, sea, warehouse when it is stated or clearly implied (e.g. a flight or airport reference means air, a vessel or port reference means sea, and a request to store, warehouse or hold goods rather than move them means warehouse); otherwise leave it an empty string. '
             .'Read the street address separately from the city when one is given. Preserve explicit pickup or delivery latitude and longitude coordinates when supplied; otherwise return null for them. If a pickup or delivery is a date range, put the start in the date field and the end in the matching "date to" field; read a stated time window into the matching "time from"/"time to" fields as HH:MM, 24-hour format. '
             .'Read loading/unloading equipment only when explicitly stated, choosing exactly one of: Vehicle with ramp, Vehicle without ramp, Forklift: Yes, Forklift: No, Other loading/unloading equipment, Not specified - or an empty string if not stated. '
             .'Read road or air handling characteristics (e.g. ADR, CMR, GDP, TIR, Lift, Express for road; Non-DG, DG, TCG, MED, VAL for air) and any special requirements only when explicitly stated. Read the transport mode (e.g. "Airport to airport") and whether proof of delivery is required only for air/sea shipments when stated. Set requiresTracking to true only when live tracking is explicitly requested. '
@@ -692,7 +694,7 @@ class OpenRouterLoadScanner
                 'consigneeCity' => ['type' => 'string'],
                 'consigneeCountryCode' => ['type' => 'string', 'description' => 'Two-letter ISO 3166-1 alpha-2 country code, or empty when unknown.'],
                 'title' => ['type' => 'string'],
-                'transportType' => ['type' => 'string', 'enum' => [...self::TRANSPORT_TYPES, ''], 'description' => 'road, air, or sea, or empty string if not stated.'],
+                'transportType' => ['type' => 'string', 'enum' => [...self::TRANSPORT_TYPES, ''], 'description' => 'road, air, sea, or warehouse (a storage request), or empty string if not stated.'],
                 'cargoType' => ['type' => 'string'],
                 'goodsType' => ['type' => 'string'],
                 'hsSearchTerms' => ['type' => 'string', 'description' => 'One short English catalog search phrase (material, processing state, intended use when known) per distinct product; separate multiple products with semicolons so each gets its own HS code lookup.'],

@@ -100,8 +100,15 @@ class LenaLoadQuestionnaire
 
     private function isSkipped(string $key, array $draft): bool
     {
-        return in_array($key, ['transportMode', 'deliveryProof'], true)
-            && ($draft['transportType'] ?? '') === 'road';
+        $transportType = $draft['transportType'] ?? '';
+
+        // Goods held in a warehouse are not carried anywhere, so nothing about the vehicle or the
+        // journey is asked - only what arrives, where it is stored and for how long.
+        if ($transportType === 'warehouse') {
+            return in_array($key, ['bodyType', 'vehicleType', 'transportMode', 'deliveryProof', 'priceTerms'], true);
+        }
+
+        return in_array($key, ['transportMode', 'deliveryProof'], true) && $transportType === 'road';
     }
 
     private function hasValue(string $key, array $draft): bool
@@ -112,7 +119,7 @@ class LenaLoadQuestionnaire
 
         return match ($key) {
             'title' => $filled('title') && mb_strtolower(trim((string) $draft['title'])) !== 'new load',
-            'transportType' => in_array($draft['transportType'] ?? '', ['road', 'air', 'sea'], true),
+            'transportType' => in_array($draft['transportType'] ?? '', ['road', 'air', 'sea', 'warehouse'], true),
             'goodsType' => $filled('goodsType') || $filled('cargoType'),
             'weight' => $positive('weightKg'),
             'pallets' => $positive('pallets'),
