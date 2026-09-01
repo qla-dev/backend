@@ -49,6 +49,7 @@ use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleLocationController;
 use App\Http\Controllers\Api\VehicleReturnInspectionController;
 use App\Http\Controllers\Api\WarehouseController;
+use App\Http\Controllers\Api\WarehouseMovementController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('health', fn () => response()->json(['message' => 'Freightbook.ai API is healthy.', 'data' => ['status' => 'ok', 'timestamp' => now()->toIso8601String()], 'meta' => [], 'errors' => []]));
@@ -139,6 +140,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     ]);
     Route::apiResource('loads', LoadController::class)->except(['store']);
     Route::apiResource('warehouses', WarehouseController::class)->only(['index', 'show']);
+    // The dock ledger a warehouse account works its day from - see WarehouseMovementController.
+    Route::apiResource('warehouse-movements', WarehouseMovementController::class);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
     Route::apiResource('customers', CustomerController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
