@@ -29,7 +29,7 @@ class DocumentController extends CrudController
 
     protected function relations(): array
     {
-        return ['freightLoad', 'vehicle', 'user', 'uploader'];
+        return ['freightLoad', 'loadDraft', 'vehicle', 'user', 'uploader'];
     }
 
     protected function searchColumns(): array
@@ -41,13 +41,30 @@ class DocumentController extends CrudController
     {
         $p = $u ? 'sometimes' : 'required';
 
-        return ['load_id' => ['nullable', 'integer', 'exists:loads,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'], 'user_id' => ['nullable', 'integer', 'exists:users,id'], 'uploaded_by_user_id' => [$p, 'integer', 'exists:users,id'], 'type' => [$p, 'string', 'max:100'], 'name' => [$p, 'string', 'max:255'], 'reference' => ['nullable', 'string', 'max:120'], 'path' => [$p, 'string', 'max:500'], 'mime_type' => ['nullable', 'string', 'max:120'], 'size_bytes' => ['nullable', 'integer', 'min:0'], 'expires_at' => ['nullable', 'date']];
+        return ['load_id' => ['nullable', 'integer', 'exists:loads,id'], 'load_draft_id' => ['nullable', 'integer', 'exists:load_drafts,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'], 'user_id' => ['nullable', 'integer', 'exists:users,id'], 'uploaded_by_user_id' => [$p, 'integer', 'exists:users,id'], 'type' => [$p, 'string', 'max:100'], 'name' => [$p, 'string', 'max:255'], 'reference' => ['nullable', 'string', 'max:120'], 'path' => [$p, 'string', 'max:500'], 'mime_type' => ['nullable', 'string', 'max:120'], 'size_bytes' => ['nullable', 'integer', 'min:0'], 'expires_at' => ['nullable', 'date']];
     }
 
     protected function applyFilters(Builder $query, Request $request): void
     {
         if ($request->filled('load_id')) {
             $query->where('load_id', $request->integer('load_id'));
+        }
+
+        if ($request->filled('load_draft_id')) {
+            $query->where('load_draft_id', $request->integer('load_draft_id'));
+        }
+
+        // The Documents page splits its list the way the app itself does: paperwork that belongs to
+        // a published load, and paperwork still sitting on an unfinished draft. Archive rows (no
+        // load and no draft) stay with the published side, since that is where a company keeps its
+        // own filing.
+        if ($request->filled('scope')) {
+            $scope = $request->string('scope')->toString();
+            if ($scope === 'draft') {
+                $query->whereNotNull('load_draft_id');
+            } elseif ($scope === 'published') {
+                $query->whereNull('load_draft_id');
+            }
         }
 
         if ($request->filled('vehicle_id')) {
@@ -82,6 +99,7 @@ class DocumentController extends CrudController
         $data = $request->validate([
             'file' => ['required', 'file', 'max:25600'],
             'load_id' => ['nullable', 'integer', 'exists:loads,id'],
+            'load_draft_id' => ['nullable', 'integer', 'exists:load_drafts,id'],
             'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'type' => ['nullable', 'string', 'max:100'],
@@ -98,16 +116,21 @@ class DocumentController extends CrudController
         $file = $request->file('file');
         $extension = strtolower((string) ($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin'));
         $filename = Str::uuid()->toString().'.'.$extension;
-        // Archive uploads have no load to file under, so they share a folder of their own.
+        // Archive uploads have no load to file under, so they share a folder of their own. A
+        // draft's paperwork is stored beside it and moves nowhere when the draft is published - the
+        // row's load_id is what changes, not where the file lives.
         $folder = isset($data['load_id'])
             ? "loads/{$data['load_id']}"
+            : (isset($data['load_draft_id'])
+                ? "drafts/{$data['load_draft_id']}"
             : (isset($data['vehicle_id'])
                 ? "vehicles/{$data['vehicle_id']}"
-                : (isset($data['user_id']) ? "users/{$data['user_id']}" : 'archive'));
+                : (isset($data['user_id']) ? "users/{$data['user_id']}" : 'archive')));
         $file->storeAs("documents/{$folder}", $filename, 'local');
 
         $document = Document::query()->create([
             'load_id' => $data['load_id'] ?? null,
+            'load_draft_id' => $data['load_draft_id'] ?? null,
             'vehicle_id' => $data['vehicle_id'] ?? null,
             'user_id' => $data['user_id'] ?? null,
             'uploaded_by_user_id' => $request->user()->id,

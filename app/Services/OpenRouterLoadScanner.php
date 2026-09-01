@@ -22,6 +22,20 @@ class OpenRouterLoadScanner
 
     private const PRICE_TERMS = ['fixed', 'negotiable'];
 
+    /**
+     * The document type codebook, mirroring frontend/src/components/views/documentTypes.ts.
+     *
+     * A scanned file is filed in the Documents archive under the type the model recognises it as,
+     * so the paperwork that arrives through LenaAI lands in the same drawer it would have been put
+     * in by hand. Anything the model is unsure of falls through to OTHER rather than being guessed.
+     */
+    private const DOCUMENT_TYPES = [
+        'CMR', 'INVOICE', 'PACKING_LIST', 'DELIVERY_NOTE', 'PROOF_OF_DELIVERY', 'CUSTOMS', 'T1',
+        'SDS', 'ADR', 'BILL_OF_LADING', 'AWB', 'RAIL_CONSIGNMENT_NOTE', 'CERTIFICATE_OF_ORIGIN',
+        'INSURANCE', 'WEIGHT_TICKET', 'INSPECTION_REPORT', 'DAMAGE_REPORT', 'CONTRACT',
+        'ORDER_CONFIRMATION', 'OTHER',
+    ];
+
     public function __construct(
         private readonly RelativeLoadDateResolver $relativeDates,
         private readonly HsCodeSearchService $hsCodes,
@@ -142,7 +156,7 @@ class OpenRouterLoadScanner
     {
         // These describe THIS scan, not accumulated draft data, so they must always reflect
         // what was actually just read - never backfilled from an earlier, unrelated scan.
-        $ownFields = ['isDocument', 'confidence', 'warnings'];
+        $ownFields = ['isDocument', 'documentType', 'confidence', 'warnings'];
 
         foreach ($current as $field => $value) {
             if (! array_key_exists($field, $result) || in_array($field, $ownFields, true)) {
@@ -200,6 +214,7 @@ class OpenRouterLoadScanner
             .'Put leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
             .'If the shipper explicitly asks for something to be tracked as its own separate item rather than lumped into notes (e.g. "add this as a new item, not as notes", "dodaj kao novi item, ne kao notes"), add one entry to customFields instead, with a short label in the language they used and its value; do not also duplicate that same fact inside notes. '
             .'Set isDocument to true only when the image really shows a freight/shipping document; otherwise set it to false and do not invent data. '
+            .'Also classify what kind of paperwork the file itself is, and return its code in documentType, choosing exactly one of: CMR (road consignment note), INVOICE, PACKING_LIST, DELIVERY_NOTE, PROOF_OF_DELIVERY, CUSTOMS (customs declaration), T1 (transit document), SDS (safety data sheet), ADR, BILL_OF_LADING, AWB (air waybill), RAIL_CONSIGNMENT_NOTE (CIM/SMGS), CERTIFICATE_OF_ORIGIN, INSURANCE, WEIGHT_TICKET, INSPECTION_REPORT, DAMAGE_REPORT, CONTRACT, ORDER_CONFIRMATION, OTHER. Judge it from the title, form number and layout printed on the file rather than from the goods it lists, and use OTHER when none of the codes clearly fits. '
             .'Return only the fields requested in the JSON schema.';
     }
 
@@ -226,6 +241,7 @@ class OpenRouterLoadScanner
             .'Put leftover information that has no dedicated field (e.g. special handling instructions) in notes - never repeat the pallet count, dates, or body type inside notes since those already have their own fields. '
             .'If the shipper explicitly asks for something to be tracked as its own separate item rather than lumped into notes (e.g. "add this as a new item, not as notes", "dodaj kao novi item, ne kao notes", "dodaj kao zasebnu stavku"), add one entry to customFields instead, with a short label in the language they used and its value; do not also duplicate that same fact inside notes. '
             .'Set isDocument to true whenever the text describes a freight load (even briefly); set it to false only when the text is unrelated to freight/shipping. '
+            .'A typed message is not a filed document, so always return an empty string for documentType. '
             .'Return only the fields requested in the JSON schema.';
     }
 
@@ -397,8 +413,16 @@ class OpenRouterLoadScanner
             $warnings[] = 'The attached photo was not recognized as a freight document.';
         }
 
+        // An unrecognised or missing code is left empty rather than guessed at - the upload then
+        // files itself as OTHER, which is what a person picks when they are unsure too.
+        $documentType = strtoupper($this->stringValue($result['documentType'] ?? ''));
+        if (! in_array($documentType, self::DOCUMENT_TYPES, true)) {
+            $documentType = '';
+        }
+
         return [
             'isDocument' => $isDocument,
+            'documentType' => $documentType,
             'sender' => $this->partyValue($result['sender'] ?? null),
             'receiver' => $this->partyValue($result['receiver'] ?? null),
             'customerCandidates' => $this->customerCandidateValues($result['customerCandidates'] ?? null),
@@ -640,9 +664,10 @@ class OpenRouterLoadScanner
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['isDocument', 'sender', 'receiver', 'customerCandidates', 'consigneeName', 'consigneeTaxNumber', 'consigneeCity', 'consigneeCountryCode', 'title', 'transportType', 'cargoType', 'goodsType', 'hsSearchTerms', 'hsCodes', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupLatitude', 'pickupLongitude', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryLatitude', 'deliveryLongitude', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
+            'required' => ['isDocument', 'documentType', 'sender', 'receiver', 'customerCandidates', 'consigneeName', 'consigneeTaxNumber', 'consigneeCity', 'consigneeCountryCode', 'title', 'transportType', 'cargoType', 'goodsType', 'hsSearchTerms', 'hsCodes', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupLatitude', 'pickupLongitude', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryLatitude', 'deliveryLongitude', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
             'properties' => [
                 'isDocument' => ['type' => 'boolean', 'description' => 'True only when the image shows a freight/shipping document.'],
+                'documentType' => ['type' => 'string', 'description' => 'Which kind of paperwork the file is, as one of the listed codes, or an empty string when unclear.'],
                 'sender' => $this->partySchema('Company sending/issuing the document or shipment. Empty strings when unknown.'),
                 'receiver' => $this->partySchema('Company receiving the document, order or shipment. Empty strings when unknown.'),
                 'customerCandidates' => [

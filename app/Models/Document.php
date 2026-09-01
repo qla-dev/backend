@@ -16,6 +16,12 @@ class Document extends BaseModel
         return $this->belongsTo(Load::class, 'load_id');
     }
 
+    /** Set while the paperwork belongs to a load that has not been published yet. */
+    public function loadDraft(): BelongsTo
+    {
+        return $this->belongsTo(LoadDraft::class, 'load_draft_id');
+    }
+
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
