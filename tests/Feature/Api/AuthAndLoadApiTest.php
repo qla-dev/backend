@@ -45,6 +45,33 @@ class AuthAndLoadApiTest extends TestCase
             ->assertJsonPath('data.username', 'customer_demo');
     }
 
+    public function test_profile_saves_fleet_choice_and_forces_it_off_for_warehouse_and_finance_accounts(): void
+    {
+        $customerToken = $this->postJson('/api/auth/login', [
+            'login' => 'customer_demo',
+            'password' => 'demo12345',
+        ])->json('data.token');
+
+        $this->withToken($customerToken)
+            ->putJson('/api/auth/profile', ['have_fleet' => true])
+            ->assertOk()
+            ->assertJsonPath('data.have_fleet', true);
+        $this->assertDatabaseHas('users', ['username' => 'customer_demo', 'have_fleet' => true]);
+
+        foreach (['warehouse_demo', 'warehouse_manager_demo', 'finance_demo'] as $username) {
+            $token = $this->postJson('/api/auth/login', [
+                'login' => $username,
+                'password' => 'demo12345',
+            ])->json('data.token');
+
+            $this->withToken($token)
+                ->putJson('/api/auth/profile', ['have_fleet' => true])
+                ->assertOk()
+                ->assertJsonPath('data.have_fleet', false);
+            $this->assertDatabaseHas('users', ['username' => $username, 'have_fleet' => false]);
+        }
+    }
+
     public function test_authenticated_user_can_open_shipment_payment_documents(): void
     {
         $token = $this->postJson('/api/auth/login', [

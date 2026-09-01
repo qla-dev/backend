@@ -24,7 +24,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'role_id', 'name', 'email', 'username', 'phone', 'language', 'country_code',
-        'avatar_url', 'headline', 'bio', 'is_active', 'email_verified_at', 'last_login_at', 'password',
+        'avatar_url', 'headline', 'bio', 'have_fleet', 'is_active', 'email_verified_at', 'last_login_at', 'password',
         'google_id', 'apple_id',
     ];
 
@@ -50,6 +50,7 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'have_fleet' => 'boolean',
         ];
     }
 
