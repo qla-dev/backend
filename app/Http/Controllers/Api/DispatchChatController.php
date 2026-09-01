@@ -125,7 +125,7 @@ class DispatchChatController extends Controller
             && ! $this->mentionsBookingReference($latestUserMessage)
             && ! $wasCanvasEnabled
             && ! $detectedLoadCreationRequest
-            && ! in_array($guidedAction, ['add', 'start_add_yes'], true)) {
+            && ! in_array($guidedAction, ['add', 'storage', 'start_add_yes'], true)) {
             foreach ($userMessages->skip(1) as $earlierUserMessage) {
                 $matchedGeneralLoad = $trackingMode
                     ? $this->findVisibleLoadByTrackingNumber($earlierUserMessage->body, $request->user())
@@ -136,7 +136,7 @@ class DispatchChatController extends Controller
             }
         }
         $contextLoad = $load ?? $matchedGeneralLoad;
-        $requestedLoadCanvas = in_array($guidedAction, ['add', 'start_add_yes'], true) || $autoStartFromDocument;
+        $requestedLoadCanvas = in_array($guidedAction, ['add', 'storage', 'start_add_yes'], true) || $autoStartFromDocument;
         $canvasBlockedByExistingLoad = $requestedLoadCanvas && $load;
         $canvasEnabled = $wasCanvasEnabled;
         if ($canvasBlockedByExistingLoad || $guidedAction === 'continue_add_no') {
@@ -200,11 +200,11 @@ class DispatchChatController extends Controller
         // immediately, so it must also carry its LENA_STEP marker or the frontend cannot render
         // the matching option buttons. A genuinely empty new load still pauses at upload_yes/no.
         $startsLoadWithExistingDraft = $hasExistingLoadDraftData
-            && in_array($guidedAction, ['add', 'start_add_yes'], true);
+            && in_array($guidedAction, ['add', 'storage', 'start_add_yes'], true);
         $questionnaireTurn = $canvasEnabled && (
             $startsLoadWithExistingDraft
             || ! in_array($guidedAction, [
-                'add', 'start_add_yes', 'upload_yes', 'tracking', 'booking', 'hs', 'free', 'continue_add_no',
+                'add', 'storage', 'start_add_yes', 'upload_yes', 'tracking', 'booking', 'hs', 'free', 'continue_add_no',
             ], true)
         );
         $origin = $contextLoad?->stops->firstWhere('type', 'pickup')?->city;
@@ -302,7 +302,7 @@ class DispatchChatController extends Controller
                 ? ' The file that was just uploaded was recognised as a '.$scannedDocumentType.'. Confirm the upload by naming that kind of document in the language of the user, not only by its filename - in Bosnian, for example, "Potvrdjujem da je ucitan CMR kroz datoteku image.png." with the correct diacritics - and only then summarise what was read out of it. Never call it a different kind of document than the one named here.'
                 : '')
             .($hasNoEstablishedMode
-                ? ' No mode has been chosen yet in this conversation (no load-post canvas, no specific load, no tracking, HS, or free-chat mode). Reply briefly and naturally to whatever the user just said (a greeting, small talk, or an unclear request), in their language, then end the reply with a new line containing exactly [[LENA_OPTIONS:add,tracking,booking,hs,free]] so the standard mode buttons are offered, the same set shown when starting a brand new chat. Do not describe or list those options in your own words; the application renders them as clickable buttons from the marker alone.'
+                ? ' No mode has been chosen yet in this conversation (no load-post canvas, no specific load, no tracking, HS, or free-chat mode). Reply briefly and naturally to whatever the user just said (a greeting, small talk, or an unclear request), in their language, then end the reply with a new line containing exactly [[LENA_OPTIONS:add,storage,tracking,booking,hs,free]] so the standard mode buttons are offered, the same set shown when starting a brand new chat. Do not describe or list those options in your own words; the application renders them as clickable buttons from the marker alone.'
                 : '')
             .'Never discuss whether you have GPS access and never answer a location question with a generic GPS limitation. For questions about where a load is now, use the latest shipment coordinates or tracking event in the authoritative load record. If no current coordinate exists, state the latest known route point or pickup location without presenting it as a live position. '
             .'If asked about nearby fuel stations, rest stops, tolls, parking, or other amenities and the user has not told you which city or area they currently mean, ask them which city or area first instead of refusing. '
@@ -310,9 +310,14 @@ class DispatchChatController extends Controller
             .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link. '
             .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks where the load is now or for its current or latest location, first answer naturally from the latest available record and then end the reply with a new line containing exactly [[LOAD_MAP]]. When the user asks specifically about pickup, destination, route endpoints, or addresses, first answer naturally and then end the reply with a new line containing exactly [[LOAD_LOCATION]]. When the user asks for the load status, first answer naturally and then end the reply with a new line containing exactly [[LOAD_STATUS]]. When the user asks for a broader route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts these hidden signals into live data cards; never mention the signals or write HTML yourself. '
             .'Whenever you emit or cause the application to show a booking action, always write a complete, natural sentence first in the user\'s language explaining that the direct booking action is available below. The action must never appear without that preceding message.'
+            .($guidedAction === 'storage'
+                // Storage is the same builder as a new load, filed as a request to hold goods
+                // rather than move them - so the mode is decided here and never asked for again.
+                ? ' The user selected "store goods", so this draft is a storage request: its transport type is warehouse and must stay warehouse. Never ask which transport type they want, and never treat this as road, air, sea or rail. Ask only about the goods, where they are to be stored, for how long and under what conditions. '
+                : '')
             .($guidedAction
                 ? ' The user selected the guided LenaAI action "'.$guidedAction.'". Follow it immediately, in the user\'s language. '
-                    .(in_array($guidedAction, ['add', 'start_add_yes'], true)
+                    .(in_array($guidedAction, ['add', 'storage', 'start_add_yes'], true)
                         ? ($hasExistingLoadDraftData
                             ? 'For add or start_add_yes, a document or message was already provided earlier in this conversation and its load data was already extracted into the draft below; never ask whether they have a document to upload. Briefly announce that you are starting the load draft from what they already gave you, then continue directly with the next incomplete questionnaire step described below.'
                             : 'For add or start_add_yes, ask exactly whether they have a document, shipping file or waybill to upload, and end your reply with [[LENA_OPTIONS:upload_yes,upload_no]]. Ask it with exactly this wording, in the language of the user. In Bosnian: "Imate li dokument, datoteku za otpremu ili tovarni list koji želite učitati?". In English: "Do you have a document, shipping file or waybill you would like to upload?". In German: "Möchten Sie ein Dokument, eine Versanddatei oder einen Frachtbrief hochladen?".')
@@ -451,14 +456,14 @@ class DispatchChatController extends Controller
             $reply
         );
         $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
-        if (in_array($guidedAction, ['add', 'start_add_yes'], true) && ! $hasExistingLoadDraftData && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+        if (in_array($guidedAction, ['add', 'storage', 'start_add_yes'], true) && ! $hasExistingLoadDraftData && ! str_contains($reply, '[[LENA_OPTIONS:')) {
             $reply .= "\n[[LENA_OPTIONS:upload_yes,upload_no]]";
         }
         if ($detectedLoadCreationRequest && ! $autoStartFromDocument && ! str_contains($reply, '[[LENA_OPTIONS:')) {
             $reply .= "\n[[LENA_OPTIONS:start_add_yes,start_add_no]]";
         }
         if ($hasNoEstablishedMode && ! str_contains($reply, '[[LENA_OPTIONS:')) {
-            $reply .= "\n[[LENA_OPTIONS:add,tracking,booking,hs,free]]";
+            $reply .= "\n[[LENA_OPTIONS:add,storage,tracking,booking,hs,free]]";
         }
         $hasTextReply = filled($reply);
         if ($hasTextReply && $attachedLoadDetails) {
@@ -865,7 +870,7 @@ class DispatchChatController extends Controller
             return null;
         }
 
-        return preg_match('/^\[\[LENA_ACTION:(add|tracking|booking|hs|free|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no)\]\]$/', trim($message), $match) === 1
+        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no)\]\]$/', trim($message), $match) === 1
             ? $match[1]
             : null;
     }
