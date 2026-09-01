@@ -76,6 +76,10 @@ class DispatchChatController extends Controller
         // is still ambiguous and should keep asking permission first. Skip the "do you want to
         // start?" gate entirely for the document case and open the canvas immediately.
         $autoStartFromDocument = $detectedLoadCreationRequest && $this->messageHasCargoSignal($latestUserMessageModel);
+        // OpenRouterLoadScanner classifies the file itself (CMR, invoice, packing list, ...) as well
+        // as reading the load out of it. Naming that back is what turns "your file was uploaded"
+        // into "your CMR was uploaded", which is the thing the user actually recognises.
+        $scannedDocumentType = $this->scannedDocumentType($latestUserMessageModel);
         // A second (or later) document dropped into an already in-progress draft must be treated as
         // an update, not a restart: OpenRouterLoadScanner::mergeWithCurrent already preserves every
         // field the new document doesn't address, so this only decides how the AI should announce
@@ -281,13 +285,16 @@ class DispatchChatController extends Controller
                 ? ' The latest free-text message appears to request creation or posting of a load. Ask, in the user\'s language, whether they want to start creating the load, and end the reply with [[LENA_OPTIONS:start_add_yes,start_add_no]]. In Bosnian, ask exactly "Želite li da počnemo kreiranje tereta?" Do not say the builder or canvas is already open.'
                 : '')
             .($autoStartFromDocument
-                ? ' A document was just uploaded and its load data was already extracted into the draft below. Never ask whether they have a document to upload and never ask whether they want to start creating the load; that is already decided. Briefly announce, in the user\'s language, that you are starting the load draft from the document they provided, then continue directly with the next incomplete questionnaire step described below.'
+                ? ' A document was just uploaded and its load data was already extracted into the draft below. Never ask whether they have a document to upload and never ask whether they want to start creating the load; that is already decided. Briefly announce, in the language of the user, that you are starting the load draft from '.($scannedDocumentType ? 'the '.$scannedDocumentType.' they attached - name that kind of document instead of calling it "the document"' : 'the document they provided').', then continue directly with the next incomplete questionnaire step described below.'
                 : '')
             .($isMidDraftFileReupload
                 ? ' A new document was just attached to a load draft that already had earlier answers collected. The server already merged the new document\'s data into the draft below without erasing anything from earlier turns. Do not re-explain, re-confirm, or restart any earlier step, and do not describe this as starting over. Say only one short sentence, in the user\'s language, stating that new information from the document was merged into the draft, then continue directly with the next incomplete questionnaire step described below. In Bosnian, that sentence must be exactly "Nove informacije o ovom teretu ažurirane iz dokumenta." In German, use "Neue Informationen zu dieser Ladung wurden aus dem Dokument aktualisiert."'
                 : '')
             .($canvasBlockedByExistingLoad
                 ? ' The user asked to post a new load while an existing load is already in context. Do not open the new-load canvas and do not suggest creating a duplicate. Tell them plainly, in their language, that this load already exists and is already in status '.$statusPlain.'.'
+                : '')
+            .($scannedDocumentType && ($autoStartFromDocument || $isMidDraftFileReupload || $latestMessageHasFileAttachment)
+                ? ' The file that was just uploaded was recognised as a '.$scannedDocumentType.'. Confirm the upload by naming that kind of document in the language of the user, not only by its filename - in Bosnian, for example, "Potvrdjujem da je ucitan CMR kroz datoteku image.png." with the correct diacritics - and only then summarise what was read out of it. Never call it a different kind of document than the one named here.'
                 : '')
             .($hasNoEstablishedMode
                 ? ' No mode has been chosen yet in this conversation (no load-post canvas, no specific load, no tracking, HS, or free-chat mode). Reply briefly and naturally to whatever the user just said (a greeting, small talk, or an unclear request), in their language, then end the reply with a new line containing exactly [[LENA_OPTIONS:add,tracking,booking,hs,free]] so the standard mode buttons are offered, the same set shown when starting a brand new chat. Do not describe or list those options in your own words; the application renders them as clickable buttons from the marker alone.'
@@ -787,6 +794,50 @@ class DispatchChatController extends Controller
     // recognized real freight/cargo content in an attached file or scanned message, regardless of
     // whether the canvas was open when it ran (see attachFile in useLenaAiChat.ts). Reuse that
     // verdict instead of re-guessing it from raw text.
+    /**
+     * The document type the scanner recognised on the newest attachment, as a readable English
+     * name. Null when nothing was attached, or when the scanner was not confident enough to pick a
+     * code - in which case the reply falls back to naming the file, as it did before.
+     */
+    private function scannedDocumentType(?Message $message): ?string
+    {
+        if (! $message) {
+            return null;
+        }
+
+        $names = [
+            'CMR' => 'CMR (road consignment note)',
+            'INVOICE' => 'invoice',
+            'PACKING_LIST' => 'packing list',
+            'DELIVERY_NOTE' => 'delivery note',
+            'PROOF_OF_DELIVERY' => 'proof of delivery (POD)',
+            'CUSTOMS' => 'customs declaration',
+            'T1' => 'T1 transit document',
+            'SDS' => 'safety data sheet (SDS)',
+            'ADR' => 'ADR document',
+            'BILL_OF_LADING' => 'bill of lading (B/L)',
+            'AWB' => 'air waybill (AWB)',
+            'RAIL_CONSIGNMENT_NOTE' => 'rail consignment note (CIM/SMGS)',
+            'CERTIFICATE_OF_ORIGIN' => 'certificate of origin',
+            'INSURANCE' => 'insurance policy',
+            'WEIGHT_TICKET' => 'weight ticket',
+            'INSPECTION_REPORT' => 'inspection report',
+            'DAMAGE_REPORT' => 'damage report',
+            'CONTRACT' => 'contract',
+            'ORDER_CONFIRMATION' => 'order confirmation',
+        ];
+
+        foreach ($message->attachments ?? [] as $attachment) {
+            $loadScan = is_array($attachment) ? ($attachment['loadScan'] ?? null) : null;
+            $code = is_array($loadScan) ? strtoupper((string) ($loadScan['documentType'] ?? '')) : '';
+            if (isset($names[$code])) {
+                return $names[$code];
+            }
+        }
+
+        return null;
+    }
+
     private function messageHasCargoSignal(?Message $message): bool
     {
         if (! $message) {
