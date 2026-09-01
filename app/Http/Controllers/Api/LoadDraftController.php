@@ -81,6 +81,11 @@ class LoadDraftController extends CrudController
             'delivery_date' => ['nullable', 'date'], 'delivery_date_to' => ['nullable', 'date'], 'delivery_time_from' => ['nullable', 'date_format:H:i'], 'delivery_time_to' => ['nullable', 'date_format:H:i'],
             // A multi-drop road route's stops beyond the first pickup and the first delivery, which
             // the flat columns above hold. Shaped like the form's own stop, not like a load_stops row.
+            // A storage request keeps the answers that make it one - see the storage-fields migration.
+            'storage_type' => ['nullable', 'string', 'max:100'], 'storage_start_date' => ['nullable', 'date'], 'storage_end_date' => ['nullable', 'date'],
+            'is_storage_ongoing' => ['nullable', 'boolean'], 'rate_unit' => ['nullable', 'string', 'max:40'],
+            'requires_customs_bonded' => ['nullable', 'boolean'], 'requires_racking' => ['nullable', 'boolean'], 'requires_security' => ['nullable', 'boolean'],
+            'handling_equipment' => ['nullable', 'array'],
             'extra_stops' => ['nullable', 'array'], 'extra_stops.*.side' => ['required_with:extra_stops', 'in:pickup,delivery'],
             'extra_stops.*.placeType' => ['nullable', 'string', 'max:100'], 'extra_stops.*.city' => ['nullable', 'string', 'max:120'],
             'extra_stops.*.postalCode' => ['nullable', 'string', 'max:32'], 'extra_stops.*.country' => ['nullable', 'string', 'size:2'],
