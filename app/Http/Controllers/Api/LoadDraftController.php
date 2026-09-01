@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\LoadDraft;
+use Illuminate\Validation\Rule;
 
 class LoadDraftController extends CrudController
 {
@@ -22,6 +23,13 @@ class LoadDraftController extends CrudController
     // create() untouched, which is exactly the "simple patch" behavior needed here.
     protected function rules(bool $updating = false): array
     {
+        $user = request()->user();
+        $warehouseRule = Rule::exists('warehouses', 'id');
+        if ($user && ! $user->isSuperAdminOrMaster()) {
+            $ownerIds = $user->companies()->pluck('companies.owner_user_id')->push($user->id)->unique();
+            $warehouseRule->where(fn ($query) => $query->whereIn('user_id', $ownerIds));
+        }
+
         return [
             'customer_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'consignee_customer_id' => ['nullable', 'integer', 'exists:customers,id'],
@@ -82,7 +90,7 @@ class LoadDraftController extends CrudController
             // A multi-drop road route's stops beyond the first pickup and the first delivery, which
             // the flat columns above hold. Shaped like the form's own stop, not like a load_stops row.
             // A storage request keeps the answers that make it one - see the storage-fields migration.
-            'storage_type' => ['nullable', 'string', 'max:100'], 'storage_target' => ['nullable', 'string', 'in:own,exchange'], 'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'], 'storage_start_date' => ['nullable', 'date'], 'storage_end_date' => ['nullable', 'date'],
+            'storage_type' => ['nullable', 'string', 'max:100'], 'storage_target' => ['nullable', 'string', 'in:own,exchange'], 'warehouse_id' => ['nullable', 'integer', $warehouseRule], 'storage_start_date' => ['nullable', 'date'], 'storage_end_date' => ['nullable', 'date'],
             'is_storage_ongoing' => ['nullable', 'boolean'], 'rate_unit' => ['nullable', 'string', 'max:40'],
             'requires_customs_bonded' => ['nullable', 'boolean'], 'requires_racking' => ['nullable', 'boolean'], 'requires_security' => ['nullable', 'boolean'],
             'handling_equipment' => ['nullable', 'array'],

@@ -91,6 +91,7 @@ class LenaLoadQuestionnaireTest extends TestCase
             'declaredValue' => 10000,
             'incoterm' => 'EXW',
             'temperatureMin' => 2,
+            'temperatureMax' => 8,
             'requiresTracking' => true,
             'contactName' => 'Test Contact',
             'notes' => 'Call before pickup',

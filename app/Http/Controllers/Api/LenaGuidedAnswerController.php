@@ -13,6 +13,7 @@ use App\Models\Warehouse;
 use App\Services\AiCallLogger;
 use App\Services\LenaGuidedAnswerResponder;
 use App\Services\LenaLoadQuestionnaire;
+use App\Services\LoadDraftScanMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -100,10 +101,13 @@ class LenaGuidedAnswerController extends Controller
             return response()->json(['message' => 'AI dispatcher is not configured.', 'data' => null, 'meta' => [], 'errors' => []], 503);
         }
 
-        $conversation = Conversation::query()->with('messages')->findOrFail($validated['conversation_id']);
+        $conversation = Conversation::query()->with(['messages', 'freightLoadDraft'])->findOrFail($validated['conversation_id']);
         $startedAt = microtime(true);
 
         $draft = $this->latestLoadDraft($conversation->messages);
+        if ($draft === [] && $conversation->freightLoadDraft) {
+            $draft = app(LoadDraftScanMapper::class)->toScan($conversation->freightLoadDraft);
+        }
         if (! $skip) {
             $draft = $this->applyAnswer($draft, $validated['step'], (string) $validated['value'], $user);
         }
@@ -208,6 +212,10 @@ class LenaGuidedAnswerController extends Controller
                 'deliveryLatitude' => $warehouse->latitude,
                 'deliveryLongitude' => $warehouse->longitude,
             ];
+        }
+
+        if ($step === 'storageTarget') {
+            abort_unless(in_array($value, ['own', 'exchange'], true), 422, 'Invalid storage destination.');
         }
 
         return match ($step) {
