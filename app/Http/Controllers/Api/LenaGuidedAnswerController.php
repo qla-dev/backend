@@ -6,8 +6,10 @@ use App\Http\Controllers\Api\Concerns\ScopesConversationAccess;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EntityResource;
 use App\Models\Conversation;
+use App\Models\LoadDraft;
 use App\Models\Message;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\AiCallLogger;
 use App\Services\LenaGuidedAnswerResponder;
 use App\Services\LenaLoadQuestionnaire;
@@ -36,7 +38,7 @@ class LenaGuidedAnswerController extends Controller
     // The steps applyAnswer() actually knows how to write into the draft (pill steps + the
     // regex-masked numeric/date ones). Every other step is skip-only here.
     private const VALUE_CAPABLE_STEPS = [
-        'transportType', 'bodyType', 'vehicleType', 'loadingEquipment', 'characteristics',
+        'storageTarget', 'warehouse', 'transportType', 'bodyType', 'vehicleType', 'loadingEquipment', 'characteristics',
         'specialRequirements', 'transportMode', 'deliveryProof', 'priceTerms', 'terms',
         'requirements', 'contact', 'weight', 'pallets', 'dimensions', 'budget', 'declaredValue',
         'pickupDate', 'deliveryDate',
@@ -68,7 +70,7 @@ class LenaGuidedAnswerController extends Controller
             // temperature) - those are only ever reachable through the universal "later" pill (see
             // questionnaireSuggestions()' withLater([]) default), so they only ever arrive here
             // with skip:true, guarded just below.
-            'step' => ['required', 'string', 'in:title,transportType,goodsType,weight,pallets,bodyType,dimensions,vehicleType,loadingEquipment,characteristics,specialRequirements,transportMode,deliveryProof,pickup,pickupDate,delivery,deliveryDate,budget,priceTerms,declaredValue,terms,temperature,requirements,contact,notes'],
+            'step' => ['required', 'string', 'in:storageTarget,warehouse,title,transportType,goodsType,weight,pallets,bodyType,dimensions,vehicleType,loadingEquipment,characteristics,specialRequirements,transportMode,deliveryProof,pickup,pickupDate,delivery,deliveryDate,budget,priceTerms,declaredValue,terms,temperature,requirements,contact,notes'],
             'value' => ['nullable', 'string'],
             'display_text' => ['required', 'string'],
             'skip' => ['required', 'boolean'],
@@ -106,6 +108,7 @@ class LenaGuidedAnswerController extends Controller
             $draft = $this->applyAnswer($draft, $validated['step'], (string) $validated['value'], $user);
         }
         $draft['isDocument'] = true;
+        $this->persistStorageDraft($conversation, $draft);
 
         $userMessageBody = $skip ? "[[LENA_SKIP:{$validated['step']}]]" : $validated['display_text'];
         $userMessage = Message::query()->create([
@@ -190,7 +193,25 @@ class LenaGuidedAnswerController extends Controller
             return $this->applyDimensions($draft, $value);
         }
 
+        if ($step === 'warehouse') {
+            $warehouse = $this->accessibleWarehouse($user, (int) $value);
+            abort_unless($warehouse, 422, 'The selected warehouse is not available to this account.');
+
+            return [...$draft,
+                'storageTarget' => 'own',
+                'warehouseId' => $warehouse->id,
+                'warehouseName' => $warehouse->name,
+                'deliveryPlaceType' => 'Warehouse',
+                'deliveryCity' => (string) ($warehouse->city ?? ''),
+                'deliveryCountryCode' => (string) ($warehouse->country_code ?? ''),
+                'deliveryAddress' => (string) ($warehouse->address ?? ''),
+                'deliveryLatitude' => $warehouse->latitude,
+                'deliveryLongitude' => $warehouse->longitude,
+            ];
+        }
+
         return match ($step) {
+            'storageTarget' => [...$draft, 'storageTarget' => $value, 'warehouseId' => $value === 'exchange' ? null : ($draft['warehouseId'] ?? null)],
             'transportType' => [...$draft, 'transportType' => $value],
             'bodyType' => [...$draft, 'bodyType' => $value],
             'vehicleType' => [...$draft, 'vehicleType' => $value],
@@ -208,6 +229,42 @@ class LenaGuidedAnswerController extends Controller
             'deliveryDate' => [...$draft, 'deliveryDate' => $this->parseGuidedDate($value) ?? $draft['deliveryDate'] ?? null],
             default => $draft,
         };
+    }
+
+    private function accessibleWarehouse(?User $user, int $warehouseId): ?Warehouse
+    {
+        if (! $user || $warehouseId < 1) {
+            return null;
+        }
+
+        $query = Warehouse::query()->whereKey($warehouseId);
+        if (! $user->isSuperAdminOrMaster()) {
+            $ownerIds = $user->companies()->pluck('companies.owner_user_id')->push($user->id)->unique();
+            $query->whereIn('user_id', $ownerIds);
+        }
+
+        return $query->first();
+    }
+
+    private function persistStorageDraft(Conversation $conversation, array $draft): void
+    {
+        if (! $conversation->load_draft_id) {
+            $conversation->update(['load_draft_id' => LoadDraft::query()->create()->id]);
+        }
+
+        $fields = [
+            'transport_type' => $draft['transportType'] ?? null,
+            'storage_target' => $draft['storageTarget'] ?? null,
+            'warehouse_id' => $draft['warehouseId'] ?? null,
+            'delivery_place_type' => $draft['deliveryPlaceType'] ?? null,
+            'delivery_city' => $draft['deliveryCity'] ?? null,
+            'delivery_country_code' => $draft['deliveryCountryCode'] ?? null,
+            'delivery_address' => $draft['deliveryAddress'] ?? null,
+            'delivery_latitude' => $draft['deliveryLatitude'] ?? null,
+            'delivery_longitude' => $draft['deliveryLongitude'] ?? null,
+        ];
+
+        LoadDraft::query()->whereKey($conversation->load_draft_id)->update($fields);
     }
 
     // "05.12.2026" (DD.MM.YYYY, matching the frontend mask) -> "2026-12-05" (the Y-m-d format

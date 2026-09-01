@@ -215,10 +215,13 @@ class WarehouseController extends CrudController
             ->whereIn('name', Role::PROTECTED_NAMES)
             ->exists();
 
+        $ownerIds = $isNetworkView
+            ? collect()
+            : $user->companies()->pluck('companies.owner_user_id')->push($user->id)->unique();
         $warehouses = Warehouse::query()
             // Admin/master use the same operations dashboard as warehouse companies, but across
             // the complete network. A warehouse account remains strictly scoped to its own rows.
-            ->when(! $isNetworkView, fn (Builder $query) => $query->where('user_id', $user->id))
+            ->when(! $isNetworkView, fn (Builder $query) => $query->whereIn('user_id', $ownerIds))
             ->orderBy('name')
             ->orderBy('id')
             ->get();

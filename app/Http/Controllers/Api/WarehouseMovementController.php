@@ -6,6 +6,7 @@ use App\Models\Role;
 use App\Models\Warehouse;
 use App\Models\WarehouseMovement;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
@@ -70,7 +71,8 @@ class WarehouseMovementController extends CrudController
             ->exists();
 
         if (! $isNetworkView) {
-            $query->whereIn('warehouse_id', Warehouse::query()->where('user_id', $user?->id)->pluck('id'));
+            $ownerIds = $user->companies()->pluck('companies.owner_user_id')->push($user->id)->unique();
+            $query->whereIn('warehouse_id', Warehouse::query()->whereIn('user_id', $ownerIds)->pluck('id'));
         }
 
         if ($request->filled('warehouse_id')) {
@@ -99,5 +101,21 @@ class WarehouseMovementController extends CrudController
     protected function applyOrdering(Builder $query, Request $request): void
     {
         $query->orderBy('scheduled_at')->orderBy('id');
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $isNetworkView = $user?->isSuperAdminOrMaster() ?? false;
+        if (! $isNetworkView) {
+            $ownerIds = $user->companies()->pluck('companies.owner_user_id')->push($user->id)->unique();
+            abort_unless(
+                Warehouse::query()->whereKey($request->integer('warehouse_id'))->whereIn('user_id', $ownerIds)->exists(),
+                403,
+                'You cannot create movements for this warehouse.',
+            );
+        }
+
+        return parent::store($request);
     }
 }

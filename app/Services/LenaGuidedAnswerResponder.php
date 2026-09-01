@@ -18,6 +18,8 @@ class LenaGuidedAnswerResponder
     // identically in both the "spasila sam {label} kao ..." confirmation and the "unesite {label}" /
     // "odaberite {label}" next-question sentence.
     private const STEP_LABELS = [
+        'storageTarget' => ['bs' => 'odredište skladištenja', 'de' => 'das Lagerziel', 'en' => 'the storage destination'],
+        'warehouse' => ['bs' => 'skladište za prijem', 'de' => 'das Empfangslager', 'en' => 'the receiving warehouse'],
         'title' => ['bs' => 'naslov', 'de' => 'den Titel', 'en' => 'a title'],
         'transportType' => ['bs' => 'tip transporta', 'de' => 'die Transportart', 'en' => 'the transport type'],
         'goodsType' => ['bs' => 'vrstu robe', 'de' => 'die Warenart', 'en' => 'the goods type'],
@@ -85,7 +87,7 @@ class LenaGuidedAnswerResponder
         // as their pill label (e.g. "Zračni", "Fiksna cijena") - lower-casing it here matches how
         // it reads mid-sentence. Every other step's value is either an English catalog term
         // (Curtain, ADR, Cargo Van) or a real name (contact), both of which must keep their casing.
-        $value = in_array($step, ['transportType', 'priceTerms'], true)
+        $value = in_array($step, ['transportType', 'storageTarget', 'priceTerms'], true)
             ? mb_strtolower(mb_substr($answeredValue, 0, 1)).mb_substr($answeredValue, 1)
             : $answeredValue;
 

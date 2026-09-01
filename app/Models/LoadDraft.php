@@ -27,4 +27,9 @@ class LoadDraft extends BaseModel
     {
         return $this->belongsTo(Customer::class, 'consignee_customer_id');
     }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
 }

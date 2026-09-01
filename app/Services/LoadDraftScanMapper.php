@@ -8,7 +8,7 @@ class LoadDraftScanMapper
 {
     public function toScan(LoadDraft $draft): array
     {
-        $draft->loadMissing('consignee');
+        $draft->loadMissing(['consignee', 'warehouse']);
         $contact = is_array($draft->contact) ? $draft->contact : [];
 
         return [
@@ -23,6 +23,9 @@ class LoadDraftScanMapper
             'consignee' => $draft->consignee?->toArray(),
             'title' => (string) ($draft->title ?? ''),
             'transportType' => (string) ($draft->transport_type ?? ''),
+            'storageTarget' => (string) ($draft->storage_target ?? ''),
+            'warehouseId' => $draft->warehouse_id ? (int) $draft->warehouse_id : null,
+            'warehouseName' => (string) ($draft->warehouse?->name ?? ''),
             'cargoType' => (string) ($draft->cargo_type ?? ''),
             'goodsType' => (string) ($draft->goods_type ?? ''),
             'hsSearchTerms' => '',

@@ -14,6 +14,8 @@ class LenaLoadQuestionnaire
     // steps as a direct "enter this value" ask instead. Descriptions here were trimmed to match:
     // they used to spell out the exact option words, which is what caused the restating.
     private const STEPS = [
+        'storageTarget' => ['description' => 'whether the goods go to one of the user\'s own warehouses or to the warehouse exchange', 'options' => true],
+        'warehouse' => ['description' => 'the user\'s warehouse that will receive the goods', 'options' => true],
         'title' => ['description' => 'a short load title', 'options' => false],
         'transportType' => ['description' => 'the transport type', 'options' => true],
         'goodsType' => ['description' => 'the goods or cargo type', 'options' => false],
@@ -105,7 +107,12 @@ class LenaLoadQuestionnaire
         // Goods held in a warehouse are not carried anywhere, so nothing about the vehicle or the
         // journey is asked - only what arrives, where it is stored and for how long.
         if ($transportType === 'warehouse') {
-            return in_array($key, ['bodyType', 'vehicleType', 'transportMode', 'deliveryProof', 'priceTerms'], true);
+            return in_array($key, ['bodyType', 'vehicleType', 'transportMode', 'deliveryProof', 'priceTerms'], true)
+                || ($key === 'warehouse' && ($draft['storageTarget'] ?? '') === 'exchange');
+        }
+
+        if (in_array($key, ['storageTarget', 'warehouse'], true)) {
+            return true;
         }
 
         return in_array($key, ['transportMode', 'deliveryProof'], true) && $transportType === 'road';
@@ -118,6 +125,8 @@ class LenaLoadQuestionnaire
         $true = fn (string $field): bool => ($draft[$field] ?? false) === true;
 
         return match ($key) {
+            'storageTarget' => in_array($draft['storageTarget'] ?? '', ['own', 'exchange'], true),
+            'warehouse' => ($draft['storageTarget'] ?? '') === 'exchange' || $positive('warehouseId'),
             'title' => $filled('title') && mb_strtolower(trim((string) $draft['title'])) !== 'new load',
             'transportType' => in_array($draft['transportType'] ?? '', ['road', 'air', 'sea', 'warehouse'], true),
             'goodsType' => $filled('goodsType') || $filled('cargoType'),

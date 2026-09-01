@@ -16,6 +16,25 @@ class LenaLoadQuestionnaireTest extends TestCase
         $this->assertSame('title', $next['key']);
     }
 
+    public function test_storage_flow_chooses_destination_and_owned_warehouse_before_load_fields(): void
+    {
+        $questionnaire = new LenaLoadQuestionnaire;
+
+        $target = $questionnaire->nextStep(['transportType' => 'warehouse'], collect(), 99);
+        $warehouse = $questionnaire->nextStep([
+            'transportType' => 'warehouse',
+            'storageTarget' => 'own',
+        ], collect(), 99);
+        $exchange = $questionnaire->nextStep([
+            'transportType' => 'warehouse',
+            'storageTarget' => 'exchange',
+        ], collect(), 99);
+
+        $this->assertSame('storageTarget', $target['key']);
+        $this->assertSame('warehouse', $warehouse['key']);
+        $this->assertSame('title', $exchange['key']);
+    }
+
     public function test_it_follows_scan_field_order_and_accepts_explicit_none(): void
     {
         $draft = [

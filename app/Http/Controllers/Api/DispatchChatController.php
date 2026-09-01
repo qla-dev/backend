@@ -156,6 +156,11 @@ class DispatchChatController extends Controller
         if ($canvasEnabled && ! $conversation->load_draft_id) {
             $conversation->update(['load_draft_id' => LoadDraft::query()->create()->id]);
         }
+        $storageMode = $guidedAction === 'storage' || $activeGuidedMode === 'storage';
+        if ($canvasEnabled && $storageMode && $conversation->load_draft_id) {
+            LoadDraft::query()->whereKey($conversation->load_draft_id)->update(['transport_type' => 'warehouse']);
+            $conversation->load('freightLoadDraft');
+        }
         // The canvas just turned on from a confirmation (start_add_yes/add), not from a document
         // upload - the user may already have described cargo in plain text before confirming (e.g.
         // "100kg jabuka"), which was never scanned because scanning only ever ran while the canvas
@@ -189,6 +194,9 @@ class DispatchChatController extends Controller
         $loadDraft = $this->latestLoadDraft($conversation->messages);
         if ($loadDraft === [] && $conversation->freightLoadDraft) {
             $loadDraft = app(LoadDraftScanMapper::class)->toScan($conversation->freightLoadDraft);
+        }
+        if ($canvasEnabled && $storageMode) {
+            $loadDraft['transportType'] = 'warehouse';
         }
         // The scanner already flags isDocument=true whenever it recognized real freight/cargo
         // content (document or free text), so reuse that instead of guessing from field presence.
@@ -310,7 +318,7 @@ class DispatchChatController extends Controller
             .'When a link is genuinely useful, include the full https:// URL as plain text so it can be rendered as a clickable link. '
             .'Keep replies concise and professional. Do not write longer replies as one solid block. When a reply contains more than two sentences or covers multiple ideas, organize it into short paragraphs separated by a blank line. When a current load record is available and the user asks where the load is now or for its current or latest location, first answer naturally from the latest available record and then end the reply with a new line containing exactly [[LOAD_MAP]]. When the user asks specifically about pickup, destination, route endpoints, or addresses, first answer naturally and then end the reply with a new line containing exactly [[LOAD_LOCATION]]. When the user asks for the load status, first answer naturally and then end the reply with a new line containing exactly [[LOAD_STATUS]]. When the user asks for a broader route overview, route stops, load details, or a structured load summary, first write a useful introductory sentence in the user\'s language, then end the reply with a new line containing exactly [[LOAD_DETAILS]]. The application converts these hidden signals into live data cards; never mention the signals or write HTML yourself. '
             .'Whenever you emit or cause the application to show a booking action, always write a complete, natural sentence first in the user\'s language explaining that the direct booking action is available below. The action must never appear without that preceding message.'
-            .($guidedAction === 'storage'
+            .($storageMode
                 // Storage is the same builder as a new load, filed as a request to hold goods
                 // rather than move them - so the mode is decided here and never asked for again.
                 ? ' The user selected "store goods", so this draft is a storage request: its transport type is warehouse and must stay warehouse. Never ask which transport type they want, and never treat this as road, air, sea or rail. Ask only about the goods, where they are to be stored, for how long and under what conditions. '
@@ -879,7 +887,7 @@ class DispatchChatController extends Controller
     {
         foreach ($userMessages as $message) {
             $action = $this->guidedAction($message->body);
-            if (in_array($action, ['add', 'tracking', 'booking', 'hs', 'free'], true)) {
+            if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free'], true)) {
                 return $action;
             }
         }
