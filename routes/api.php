@@ -49,6 +49,7 @@ use App\Http\Controllers\Api\UserSubscriptionController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleLocationController;
 use App\Http\Controllers\Api\VehicleReturnInspectionController;
+use App\Http\Controllers\Api\VesselController;
 use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\WarehouseMovementController;
 use Illuminate\Support\Facades\Route;
@@ -197,6 +198,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::middleware('role:superadmin,master')->group(function (): void {
         Route::get('aircraft', [AircraftController::class, 'index'])->middleware('throttle:30,1');
+        Route::get('vessels', [VesselController::class, 'index'])->middleware('throttle:30,1');
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
         Route::post('warehouses/onboard', [WarehouseController::class, 'onboard']);

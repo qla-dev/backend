@@ -52,6 +52,12 @@ return [
         'python_binary' => env('FUELO_PYTHON_BINARY', 'python3'),
     ],
 
+    'vessel_stream' => [
+        'api_key' => env('AISSTREAM_API_KEY'),
+        'url' => env('AISSTREAM_URL', 'wss://stream.aisstream.io/v0/stream'),
+        'node_binary' => env('AISSTREAM_NODE_BINARY', 'node'),
+    ],
+
     'google' => [
         'client_ids' => array_values(array_unique(array_filter([
             ...array_map('trim', explode(',', (string) env('GOOGLE_CLIENT_IDS', ''))),
