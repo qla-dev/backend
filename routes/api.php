@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AiCallLogController;
+use App\Http\Controllers\Api\AircraftController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BulkLoadScanController;
 use App\Http\Controllers\Api\CompanyController;
@@ -195,6 +196,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->middleware('role:driver,company,manager,dispatcher,customs_officer,superadmin,master');
 
     Route::middleware('role:superadmin,master')->group(function (): void {
+        Route::get('aircraft', [AircraftController::class, 'index'])->middleware('throttle:30,1');
         Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
         Route::post('warehouses/onboard', [WarehouseController::class, 'onboard']);
