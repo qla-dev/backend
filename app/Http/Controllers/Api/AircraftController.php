@@ -108,6 +108,7 @@ class AircraftController extends Controller
                             'lon' => (float) $row[2],
                             'altitude' => is_numeric($row[3] ?? null) ? (float) $row[3] : null,
                             'timestamp' => $timestamp,
+                            'on_ground' => ($row[3] ?? null) === 'ground',
                         ];
                     }
                 }
@@ -117,14 +118,35 @@ class AircraftController extends Controller
                 }
 
                 usort($points, fn (array $left, array $right) => $left['timestamp'] <=> $right['timestamp']);
+                $lastAirborneIndex = null;
+                for ($index = count($points) - 1; $index >= 0; $index--) {
+                    if (! $points[$index]['on_ground']) {
+                        $lastAirborneIndex = $index;
+                        break;
+                    }
+                }
+                if ($lastAirborneIndex === null) {
+                    return [];
+                }
+
+                // Only retain the most recent flight. The nearest ground report before
+                // the last airborne point is its departure boundary; older legs are discarded.
+                $flightStartIndex = 0;
+                for ($index = $lastAirborneIndex - 1; $index >= 0; $index--) {
+                    if ($points[$index]['on_ground']) {
+                        $flightStartIndex = $index;
+                        break;
+                    }
+                }
+                $flightEndIndex = min(count($points) - 1, $lastAirborneIndex + 1);
+                $points = array_slice($points, $flightStartIndex, $flightEndIndex - $flightStartIndex + 1);
+
                 $segments = [];
                 $segment = [];
                 $previous = null;
                 foreach ($points as $point) {
-                    $isGap = $previous !== null && (
-                        $point['timestamp'] - $previous['timestamp'] > 300
-                        || abs($point['lon'] - $previous['lon']) > 180
-                    );
+                    unset($point['on_ground']);
+                    $isGap = $previous !== null && abs($point['lon'] - $previous['lon']) > 180;
                     if ($isGap && count($segment) > 1) {
                         $segments[] = $segment;
                         $segment = [];
