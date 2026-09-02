@@ -63,6 +63,97 @@ class AircraftController extends Controller
         ]);
     }
 
+    public function trace(string $hex): JsonResponse
+    {
+        $hex = strtolower(ltrim(trim($hex), '~'));
+        if (! preg_match('/^[0-9a-f]{6}$/', $hex)) {
+            return response()->json([
+                'message' => 'The aircraft identifier is invalid.',
+                'data' => ['segments' => []], 'meta' => [], 'errors' => [],
+            ], 422);
+        }
+
+        try {
+            $segments = Cache::remember("aircraft-trace:{$hex}", now()->addSeconds(30), function () use ($hex): array {
+                $client = Http::withHeaders([
+                    'Accept' => 'application/json',
+                    'Referer' => 'https://adsb.lol/',
+                ])->timeout(15)->retry(2, 200, null, false);
+                $points = [];
+                $successfulResponses = 0;
+
+                foreach (['full', 'recent'] as $scope) {
+                    $url = sprintf(
+                        'https://adsb.lol/data/traces/%s/trace_%s_%s.json',
+                        substr($hex, -2),
+                        $scope,
+                        $hex,
+                    );
+                    $response = $client->get($url);
+                    if (! $response->successful() || ! is_array($response->json())) {
+                        continue;
+                    }
+                    $successfulResponses++;
+                    $payload = $response->json();
+                    $baseTimestamp = (float) ($payload['timestamp'] ?? 0);
+
+                    foreach ($payload['trace'] ?? [] as $row) {
+                        if (! is_array($row) || ! is_numeric($row[1] ?? null) || ! is_numeric($row[2] ?? null)) {
+                            continue;
+                        }
+                        $timestamp = $baseTimestamp + (float) ($row[0] ?? 0);
+                        $key = sprintf('%0.2f:%0.5f:%0.5f', $timestamp, (float) $row[1], (float) $row[2]);
+                        $points[$key] = [
+                            'lat' => (float) $row[1],
+                            'lon' => (float) $row[2],
+                            'altitude' => is_numeric($row[3] ?? null) ? (float) $row[3] : null,
+                            'timestamp' => $timestamp,
+                        ];
+                    }
+                }
+
+                if ($successfulResponses === 0) {
+                    throw new RuntimeException('The aircraft path is temporarily unavailable.');
+                }
+
+                usort($points, fn (array $left, array $right) => $left['timestamp'] <=> $right['timestamp']);
+                $segments = [];
+                $segment = [];
+                $previous = null;
+                foreach ($points as $point) {
+                    $isGap = $previous !== null && (
+                        $point['timestamp'] - $previous['timestamp'] > 300
+                        || abs($point['lon'] - $previous['lon']) > 180
+                    );
+                    if ($isGap && count($segment) > 1) {
+                        $segments[] = $segment;
+                        $segment = [];
+                    }
+                    $segment[] = $point;
+                    $previous = $point;
+                }
+                if (count($segment) > 1) {
+                    $segments[] = $segment;
+                }
+
+                return $segments;
+            });
+        } catch (\Throwable $error) {
+            report($error);
+            return response()->json([
+                'message' => 'The aircraft path is temporarily unavailable.',
+                'data' => ['segments' => []], 'meta' => [], 'errors' => [],
+            ], 502);
+        }
+
+        return response()->json([
+            'message' => 'Aircraft path retrieved.',
+            'data' => ['segments' => $segments],
+            'meta' => ['segments' => count($segments), 'points' => array_sum(array_map('count', $segments))],
+            'errors' => [],
+        ]);
+    }
+
     /** @return array{float, float, float, float} */
     private function resolveBounds(Request $request): array
     {
