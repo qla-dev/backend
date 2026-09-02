@@ -55,7 +55,6 @@ return [
     'vessel_stream' => [
         'api_key' => env('AISSTREAM_API_KEY'),
         'url' => env('AISSTREAM_URL', 'wss://stream.aisstream.io/v0/stream'),
-        'node_binary' => env('AISSTREAM_NODE_BINARY', 'node'),
     ],
 
     'google' => [
