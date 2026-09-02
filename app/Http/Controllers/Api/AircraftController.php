@@ -39,7 +39,7 @@ class AircraftController extends Controller
             return response()->json([
                 'message' => 'Live aircraft data is temporarily unavailable.',
                 'data' => [],
-                'meta' => ['attribution' => 'ADSB.lol', 'source_url' => 'https://adsb.lol/'],
+                'meta' => [],
                 'errors' => [],
             ], 502);
         }
@@ -59,8 +59,6 @@ class AircraftController extends Controller
                 'count' => $aircraft->count(),
                 'now' => $payload['now'] ?? null,
                 'total' => $payload['total'] ?? $aircraft->count(),
-                'attribution' => 'ADSB.lol',
-                'source_url' => 'https://adsb.lol/',
             ],
             'errors' => [],
         ]);
