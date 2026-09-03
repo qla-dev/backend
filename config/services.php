@@ -57,6 +57,10 @@ return [
         'url' => env('AISSTREAM_URL', 'wss://stream.aisstream.io/v0/stream'),
     ],
 
+    'open_waters' => [
+        'url' => 'https://ais.openwaters.io',
+    ],
+
     'google' => [
         'client_ids' => array_values(array_unique(array_filter([
             ...array_map('trim', explode(',', (string) env('GOOGLE_CLIENT_IDS', ''))),

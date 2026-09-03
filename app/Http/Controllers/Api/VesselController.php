@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\Contracts\VesselSnapshotClient;
 use App\Services\Contracts\VesselStreamClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -10,7 +11,7 @@ use Illuminate\Support\Facades\Cache;
 
 class VesselController extends Controller
 {
-    public function index(Request $request, VesselStreamClient $stream): JsonResponse
+    public function index(Request $request, VesselSnapshotClient $primary, VesselStreamClient $fallback): JsonResponse
     {
         $validated = $request->validate([
             'south' => ['required', 'numeric', 'between:-90,90'],
@@ -23,20 +24,37 @@ class VesselController extends Controller
         $search = trim((string) ($validated['search'] ?? ''));
         $searchedMmsi = preg_match('/^\d{9}$/', $search) === 1 ? $search : null;
 
+        $primaryFailed = false;
         try {
-            // AISStream can search a vessel globally by MMSI without subscribing to the
-            // extremely high-volume world feed. A slightly longer capture gives a live
-            // position report time to arrive for the requested vessel.
-            $updates = $searchedMmsi !== null
-                ? $stream->capture(-90, -180, 90, 180, 8.0, [$searchedMmsi])
-                : $stream->capture($south, $west, $north, $east);
+            $updates = $primary->capture(
+                $south,
+                $west,
+                $north,
+                $east,
+                $searchedMmsi !== null ? [$searchedMmsi] : [],
+            );
         } catch (\Throwable $error) {
             report($error);
+            $primaryFailed = true;
+            $updates = [];
+        }
 
-            return response()->json([
-                'message' => $error->getMessage(), 'data' => [],
-                'meta' => ['configured' => (bool) config('services.vessel_stream.api_key')], 'errors' => [],
-            ], config('services.vessel_stream.api_key') ? 502 : 503);
+        if ($updates === []) {
+            try {
+                // AISStream is deliberately secondary: use a narrow MMSI subscription for
+                // global lookups, or the current map bounds for ordinary viewport loading.
+                $updates = $searchedMmsi !== null
+                    ? $fallback->capture(-90, -180, 90, 180, 8.0, [$searchedMmsi])
+                    : $fallback->capture($south, $west, $north, $east);
+            } catch (\Throwable $error) {
+                report($error);
+                if ($primaryFailed) {
+                    return response()->json([
+                        'message' => 'Live vessel providers are currently unavailable.', 'data' => [],
+                        'meta' => ['configured' => true], 'errors' => [],
+                    ], 502);
+                }
+            }
         }
 
         $stored = Cache::get('live-vessels', []);
@@ -47,7 +65,7 @@ class VesselController extends Controller
                 $stored[$key] = array_merge($stored[$key] ?? [], $update);
             }
         }
-        $cutoff = now()->subMinutes(15);
+        $cutoff = now()->subMinutes(30);
         $stored = array_filter($stored, fn (array $row) => isset($row['updated_at']) && $cutoff->lessThanOrEqualTo($row['updated_at']));
         Cache::put('live-vessels', $stored, now()->addMinutes(20));
 
@@ -76,7 +94,14 @@ class VesselController extends Controller
 
         return response()->json([
             'message' => 'Live vessels retrieved.', 'data' => $vessels,
-            'meta' => ['count' => $vessels->count(), 'configured' => true, 'global_search' => $search !== ''], 'errors' => [],
+            'meta' => [
+                'count' => $vessels->count(),
+                'configured' => true,
+                'global_search' => $search !== '',
+                'primary_provider' => 'open_waters',
+                'fallback_provider' => 'aisstream',
+            ],
+            'errors' => [],
         ]);
     }
 }
