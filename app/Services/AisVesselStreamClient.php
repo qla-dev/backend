@@ -2,17 +2,23 @@
 
 namespace App\Services;
 
-use App\Services\Contracts\VesselStreamClient;
 use Amp\CancelledException;
 use Amp\TimeoutCancellation;
+use App\Services\Contracts\VesselStreamClient;
 use RuntimeException;
 
 use function Amp\Websocket\Client\connect;
 
 class AisVesselStreamClient implements VesselStreamClient
 {
-    public function capture(float $south, float $west, float $north, float $east, float $seconds = 2.5): array
-    {
+    public function capture(
+        float $south,
+        float $west,
+        float $north,
+        float $east,
+        float $seconds = 2.5,
+        array $mmsis = [],
+    ): array {
         $apiKey = trim((string) config('services.vessel_stream.api_key'));
         if ($apiKey === '') {
             throw new RuntimeException('Vessel live-data API key is not configured.');
@@ -28,7 +34,7 @@ class AisVesselStreamClient implements VesselStreamClient
             ? [[[$south, $west], [$north, $east]]]
             : [[[$south, $west], [$north, 180]], [[$south, -180], [$north, $east]]];
 
-        $connection->sendText((string) json_encode([
+        $subscription = [
             'APIKey' => $apiKey,
             'BoundingBoxes' => $boundingBoxes,
             'FilterMessageTypes' => [
@@ -39,7 +45,16 @@ class AisVesselStreamClient implements VesselStreamClient
                 'ShipStaticData',
                 'StaticDataReport',
             ],
-        ], JSON_THROW_ON_ERROR));
+        ];
+        $mmsis = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $mmsi): string => trim((string) $mmsi),
+            $mmsis,
+        ), static fn (string $mmsi): bool => preg_match('/^\d{9}$/', $mmsi) === 1)));
+        if ($mmsis !== []) {
+            $subscription['FiltersShipMMSI'] = array_slice($mmsis, 0, 50);
+        }
+
+        $connection->sendText((string) json_encode($subscription, JSON_THROW_ON_ERROR));
 
         $vessels = [];
         $confirmed = false;
@@ -56,6 +71,7 @@ class AisVesselStreamClient implements VesselStreamClient
                 }
                 if (($payload['MessageType'] ?? '') === 'SubscriptionConfirmation') {
                     $confirmed = true;
+
                     continue;
                 }
 
