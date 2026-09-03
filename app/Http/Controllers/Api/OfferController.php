@@ -23,7 +23,13 @@ class OfferController extends CrudController
 
     protected function relations(): array
     {
-        return ['freightLoad.stops', 'company', 'driver', 'creator', 'vehicle', 'warehouse', 'parentOffer'];
+        return [
+            'freightLoad.stops',
+            'company' => fn ($query) => $query
+                ->withAvg('reviews as average_rating', 'rating')
+                ->withCount(['reviews', 'vehicles']),
+            'driver', 'creator', 'vehicle', 'warehouse', 'parentOffer',
+        ];
     }
 
     protected function applyFilters(Builder $query, Request $request): void
