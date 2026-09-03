@@ -6,6 +6,7 @@ use App\Http\Resources\EntityResource;
 use App\Models\Load;
 use App\Models\Offer;
 use App\Models\User;
+use App\Services\ShipmentWorkspaceCreator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,7 +59,7 @@ class OfferController extends CrudController
         $confirmed = $u ? ['sometimes', 'boolean'] : [$p, 'accepted'];
 
         return [
-            'load_id' => [$p, 'integer', 'exists:loads,id'], 'request_type' => ['sometimes', Rule::in(['price_offer', 'reservation_request'])], 'company_id' => ['nullable', 'integer', 'exists:companies,id'], 'driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'amount' => [$p, 'numeric', 'min:0'], 'currency' => ['sometimes', 'string', 'size:3'], 'status' => ['sometimes', Rule::in(['pending', 'accepted', 'rejected', 'withdrawn', 'expired', 'cancelled'])], 'valid_until' => [$p, 'date'], 'message' => ['nullable', 'string'],
+            'load_id' => [$p, 'integer', 'exists:loads,id'], 'request_type' => ['sometimes', Rule::in(['price_offer', 'reservation_request'])], 'company_id' => ['nullable', 'integer', 'exists:companies,id'], 'driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'amount' => [$p, 'numeric', 'min:0'], 'currency' => ['sometimes', 'string', 'size:3'], 'status' => ['sometimes', Rule::in(['pending', 'accepted', 'not_selected', 'rejected', 'withdrawn', 'expired', 'cancelled'])], 'valid_until' => [$p, 'date'], 'message' => ['nullable', 'string'],
             'price_basis' => [$p, 'string', 'in:'.implode(',', self::TRANSPORT_PRICE_BASIS)],
             'vat' => [$p, 'string', 'in:included,excluded'],
             'payment_terms' => [$p, 'string', 'max:30'],
@@ -120,6 +121,7 @@ class OfferController extends CrudController
 
         $offer = DB::transaction(function () use ($data) {
             $load = Load::query()->lockForUpdate()->findOrFail($data['load_id']);
+            abort_unless($load->status === 'posted', 409, 'This load no longer accepts offers.');
             $this->validateBidFloor($load, (float) $data['amount'], $data['price_basis'] !== 'best_bid');
 
             return Offer::query()->create($data);
@@ -175,20 +177,22 @@ class OfferController extends CrudController
         return $this->success((new EntityResource($offer))->resolve($request), 'Offer updated successfully.');
     }
 
-    public function approve(Request $request, int $id): JsonResponse
+    public function approve(Request $request, int $id, ShipmentWorkspaceCreator $workspaceCreator): JsonResponse
     {
         $data = $request->validate(['driver_user_id' => ['nullable', 'integer', 'exists:users,id']]);
 
-        $offer = DB::transaction(function () use ($request, $id, $data) {
-            $offer = Offer::query()->with('freightLoad')->lockForUpdate()->findOrFail($id);
+        [$offer, $workspace] = DB::transaction(function () use ($request, $id, $data, $workspaceCreator) {
+            $offer = Offer::query()->lockForUpdate()->findOrFail($id);
+            $load = Load::query()->with('shipment')->lockForUpdate()->findOrFail($offer->load_id);
             $user = $request->user();
             abort_unless(
-                $user->isSuperAdminOrMaster() || (int) $offer->freightLoad->customer_user_id === (int) $user->id,
+                $user->isSuperAdminOrMaster() || (int) $load->customer_user_id === (int) $user->id,
                 403,
                 'Only the load owner can approve this request.'
             );
             abort_unless($offer->status === 'pending', 409, 'This request has already been decided.');
-            abort_unless($offer->freightLoad->status === 'posted', 409, 'This load is no longer open for reservations.');
+            abort_unless($load->status === 'posted', 409, 'This load is no longer open for offers or reservations.');
+            abort_unless(! $load->shipmentWorkspace()->exists(), 409, 'A provider has already been selected for this load.');
 
             $driverId = $data['driver_user_id'] ?? $offer->driver_user_id;
             $isDriver = ! $driverId || User::query()->whereKey($driverId)->whereHas('role', fn ($query) => $query->where('name', 'driver'))->exists();
@@ -196,19 +200,25 @@ class OfferController extends CrudController
                 throw ValidationException::withMessages(['driver_user_id' => 'Select a user with the driver role.']);
             }
 
-            Offer::query()->where('load_id', $offer->load_id)->whereKeyNot($offer->id)->where('status', 'pending')->update(['status' => 'rejected']);
+            Offer::query()->where('load_id', $offer->load_id)->whereKeyNot($offer->id)->where('status', 'pending')->update(['status' => 'not_selected']);
             $offer->update(['driver_user_id' => $driverId, 'status' => 'accepted']);
-            $offer->freightLoad->update([
+            $workspace = $workspaceCreator->create($load, $offer->fresh(), $user);
+            $load->update([
                 'assigned_driver_user_id' => $driverId,
-                'company_id' => $offer->company_id ?? $offer->freightLoad->company_id,
-                'pre_delivery_status' => $offer->request_type === 'reservation_request' ? 'accepted' : 'booking_confirmed',
+                'company_id' => $offer->company_id ?? $load->company_id,
+                'status' => 'booked',
+                'pre_delivery_status' => null,
                 'booking_status' => 'confirmed',
+                'booking_reference' => $workspace->reference,
             ]);
 
-            return $offer->fresh($this->relations());
+            return [$offer->fresh($this->relations()), $workspace];
         });
 
-        return $this->success((new EntityResource($offer))->resolve($request), 'Reservation accepted and booking confirmed.');
+        return $this->success(array_merge(
+            (new EntityResource($offer))->resolve($request),
+            ['shipment_workspace' => (new EntityResource($workspace->load(['shipment', 'conversation'])))->resolve($request)]
+        ), 'Provider accepted, booking confirmed, and Shipment Workspace created.');
     }
 
     /**

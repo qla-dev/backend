@@ -11,6 +11,7 @@ use App\Models\LoadStop;
 use App\Models\Offer;
 use App\Models\Role;
 use App\Models\Shipment;
+use App\Models\ShipmentWorkspace;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -608,7 +609,7 @@ class AuthAndLoadApiTest extends TestCase
     public function test_superadmin_can_approve_an_offer_and_assign_its_driver(): void
     {
         $load = Load::query()->firstOrFail();
-        $load->update(['status' => 'posted', 'pre_delivery_status' => 'open_for_reservations']);
+        $load->update(['status' => 'posted', 'is_negotiable' => true, 'pre_delivery_status' => 'open_for_reservations']);
         $driver = User::query()->where('username', 'driver_demo')->firstOrFail();
         $offer = Offer::query()->create([
             'load_id' => $load->id,
@@ -628,11 +629,15 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseHas('loads', [
             'id' => $load->id,
             'assigned_driver_user_id' => $driver->id,
-            'status' => 'posted',
-            'pre_delivery_status' => 'booking_confirmed',
+            'status' => 'booked',
+            'pre_delivery_status' => null,
             'booking_status' => 'confirmed',
         ]);
         $this->assertDatabaseHas('offers', ['id' => $offer->id, 'status' => 'accepted']);
+        $workspace = ShipmentWorkspace::query()->where('load_id', $load->id)->firstOrFail();
+        $this->assertSame($offer->id, $workspace->accepted_offer_id);
+        $this->assertSame('1250.00', $workspace->agreed_amount);
+        $this->assertNotNull($workspace->conversation_id);
     }
 
     public function test_load_owner_can_accept_a_reservation_request_and_other_requests_are_rejected(): void
@@ -662,11 +667,20 @@ class AuthAndLoadApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'accepted');
 
-        $this->assertDatabaseHas('offers', ['id' => $other->id, 'status' => 'rejected']);
+        $this->assertDatabaseHas('offers', ['id' => $other->id, 'status' => 'not_selected']);
         $this->assertDatabaseHas('loads', [
             'id' => $load->id, 'assigned_driver_user_id' => $driver->id,
-            'pre_delivery_status' => 'accepted', 'booking_status' => 'confirmed',
+            'status' => 'booked', 'pre_delivery_status' => null, 'booking_status' => 'confirmed',
         ]);
+        $this->assertDatabaseHas('shipment_workspace', [
+            'load_id' => $load->id,
+            'accepted_offer_id' => $selected->id,
+            'status' => 'booked',
+        ]);
+
+        $this->withToken($token)->postJson("/api/offers/{$other->id}/approve")
+            ->assertStatus(409);
+        $this->assertSame(1, ShipmentWorkspace::query()->where('load_id', $load->id)->count());
     }
 
     public function test_only_superadmin_can_change_load_status_and_timestamp_is_recorded(): void

@@ -108,7 +108,7 @@ class LoadController extends CrudController
 
     protected function relations(): array
     {
-        return ['customer.role', 'consignee.user.role', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'offers', 'shipment.events', 'routes.stops', 'notes.author', 'documents'];
+        return ['customer.role', 'consignee.user.role', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'offers', 'shipment.events', 'shipmentWorkspace', 'routes.stops', 'notes.author', 'documents'];
     }
 
     protected function relationsForRequest(Request $request): array
@@ -688,13 +688,7 @@ class LoadController extends CrudController
 
         $data = $request->validate([
             'status' => ['sometimes', 'required_without_all:pre_delivery_status,booking_status', Rule::in(Load::STATUSES)],
-            'pre_delivery_status' => [
-                'sometimes',
-                'required_without_all:status,booking_status',
-                Rule::in($load->is_negotiable
-                    ? Load::NEGOTIABLE_PRE_DELIVERY_STATUSES
-                    : Load::FIXED_PRE_DELIVERY_STATUSES),
-            ],
+            'pre_delivery_status' => ['sometimes', 'required_without_all:status,booking_status', Rule::in(Load::PRE_DELIVERY_STATUSES)],
             'booking_status' => ['sometimes', 'required_without_all:status,pre_delivery_status', Rule::in(Load::BOOKING_STATUSES)],
         ]);
 
@@ -732,7 +726,7 @@ class LoadController extends CrudController
             $load = Load::query()->lockForUpdate()->findOrFail($load->id);
             abort_if($load->is_negotiable, 422, 'This load accepts offers instead of direct booking.');
             abort_unless(
-                $load->status === 'posted' && ! in_array($load->pre_delivery_status, ['reservation_selected', 'booking_confirmed'], true),
+                $load->status === 'posted',
                 409,
                 'This load is no longer accepting reservation requests.'
             );
@@ -805,8 +799,6 @@ class LoadController extends CrudController
                 'confirmed_details_match' => true,
                 'confirmed_terms' => true,
             ]);
-
-            $load->update(['pre_delivery_status' => 'pending_customer_approval']);
 
             return $offer;
         });

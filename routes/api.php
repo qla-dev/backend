@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\RouteStopController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ShipmentController;
+use App\Http\Controllers\Api\ShipmentWorkspaceController;
 use App\Http\Controllers\Api\ShipmentInvoiceDocumentController;
 use App\Http\Controllers\Api\SubscriptionPackageController;
 use App\Http\Controllers\Api\TrackingEventController;
@@ -197,6 +198,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::post('offers/{offer}/approve', [OfferController::class, 'approve'])
         ->middleware('role:user,superadmin,master');
+    Route::get('shipment-workspaces', [ShipmentWorkspaceController::class, 'index']);
+    Route::get('shipment-workspaces/{shipmentWorkspace}', [ShipmentWorkspaceController::class, 'show']);
+    Route::patch('shipment-workspaces/{shipmentWorkspace}', [ShipmentWorkspaceController::class, 'update']);
 
     Route::middleware('role:superadmin,master')->group(function (): void {
         Route::get('aircraft', [AircraftController::class, 'index'])->middleware('throttle:30,1');

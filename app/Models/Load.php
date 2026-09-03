@@ -16,6 +16,7 @@ class Load extends BaseModel
 
     public const STATUSES = [
         'posted',
+        'booked',
         'opened',
         'sent',
         'in_delivery',
@@ -25,33 +26,7 @@ class Load extends BaseModel
         'cancelled',
     ];
 
-    public const NEGOTIABLE_PRE_DELIVERY_STATUSES = [
-        'published',
-        'open_for_reservations',
-        'reservation_selected',
-        'booking_confirmed',
-        'in_execution',
-        'completed',
-        'cancelled',
-        'expired',
-    ];
-
-    public const FIXED_PRE_DELIVERY_STATUSES = [
-        'pending_customer_approval',
-        'accepted',
-        'rejected',
-        'withdrawn',
-        'expired',
-        'cancelled',
-    ];
-
-    public const PRE_DELIVERY_STATUSES = [
-        ...self::NEGOTIABLE_PRE_DELIVERY_STATUSES,
-        'pending_customer_approval',
-        'accepted',
-        'rejected',
-        'withdrawn',
-    ];
+    public const PRE_DELIVERY_STATUSES = ['published', 'open_for_reservations', 'reservation_selected', 'booking_confirmed'];
 
     public const BOOKING_STATUSES = ['confirmed', 'in_execution', 'completed', 'cancelled'];
 
@@ -96,10 +71,6 @@ class Load extends BaseModel
         static::creating(function (Load $load): void {
             $load->status_change ??= [$load->status => now()->toIso8601String()];
 
-            if ($load->status === 'posted') {
-                $load->pre_delivery_status ??= 'open_for_reservations';
-            }
-
         });
 
         // A tracking number belongs to every load, regardless of whether it was published
@@ -116,6 +87,7 @@ class Load extends BaseModel
                 $history[$load->status] = now()->toIso8601String();
                 $load->status_change = $history;
                 $load->booking_status = match ($load->status) {
+                    'booked' => 'confirmed',
                     'in_delivery' => 'in_execution',
                     'finished' => 'completed',
                     'cancelled' => 'cancelled',
@@ -168,6 +140,11 @@ class Load extends BaseModel
     public function shipment(): HasOne
     {
         return $this->hasOne(Shipment::class);
+    }
+
+    public function shipmentWorkspace(): HasOne
+    {
+        return $this->hasOne(ShipmentWorkspace::class);
     }
 
     public function notes(): HasMany
