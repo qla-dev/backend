@@ -114,7 +114,9 @@ class LoadController extends CrudController
     protected function relationsForRequest(Request $request): array
     {
         if ($request->boolean('tracking')) {
-            return ['consignee', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'shipment'];
+            // The workspace comes along so a booked shipment can show how many operational tasks
+            // are still open without the tracking list fetching every workspace one by one.
+            return ['consignee', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'shipment', 'shipmentWorkspace'];
         }
 
         return parent::relationsForRequest($request);
