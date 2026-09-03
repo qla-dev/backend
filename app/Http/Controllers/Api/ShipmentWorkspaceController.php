@@ -47,6 +47,7 @@ class ShipmentWorkspaceController extends Controller
             'operational_checklist' => ['sometimes', 'array'],
             'operational_checklist.*.key' => ['required_with:operational_checklist', 'string', 'max:100'],
             'operational_checklist.*.status' => ['required_with:operational_checklist', 'in:pending,in_progress,completed,blocked'],
+            'operational_checklist.*.due_date' => ['nullable', 'date'],
             'operational_checklist.*.completed_at' => ['nullable', 'date'],
             'operational_checklist.*.completed_by_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'cancellation_reason' => ['nullable', 'string', 'max:2000', 'required_if:status,cancelled'],
