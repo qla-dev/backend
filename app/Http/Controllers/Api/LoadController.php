@@ -688,7 +688,13 @@ class LoadController extends CrudController
 
         $data = $request->validate([
             'status' => ['sometimes', 'required_without_all:pre_delivery_status,booking_status', Rule::in(Load::STATUSES)],
-            'pre_delivery_status' => ['sometimes', 'required_without_all:status,booking_status', Rule::in(Load::PRE_DELIVERY_STATUSES)],
+            'pre_delivery_status' => [
+                'sometimes',
+                'required_without_all:status,booking_status',
+                Rule::in($load->is_negotiable
+                    ? Load::NEGOTIABLE_PRE_DELIVERY_STATUSES
+                    : Load::FIXED_PRE_DELIVERY_STATUSES),
+            ],
             'booking_status' => ['sometimes', 'required_without_all:status,pre_delivery_status', Rule::in(Load::BOOKING_STATUSES)],
         ]);
 
@@ -800,7 +806,7 @@ class LoadController extends CrudController
                 'confirmed_terms' => true,
             ]);
 
-            $load->update(['pre_delivery_status' => 'open_for_reservations']);
+            $load->update(['pre_delivery_status' => 'pending_customer_approval']);
 
             return $offer;
         });

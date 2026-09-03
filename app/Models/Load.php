@@ -25,7 +25,33 @@ class Load extends BaseModel
         'cancelled',
     ];
 
-    public const PRE_DELIVERY_STATUSES = ['published', 'open_for_reservations', 'reservation_selected', 'booking_confirmed'];
+    public const NEGOTIABLE_PRE_DELIVERY_STATUSES = [
+        'published',
+        'open_for_reservations',
+        'reservation_selected',
+        'booking_confirmed',
+        'in_execution',
+        'completed',
+        'cancelled',
+        'expired',
+    ];
+
+    public const FIXED_PRE_DELIVERY_STATUSES = [
+        'pending_customer_approval',
+        'accepted',
+        'rejected',
+        'withdrawn',
+        'expired',
+        'cancelled',
+    ];
+
+    public const PRE_DELIVERY_STATUSES = [
+        ...self::NEGOTIABLE_PRE_DELIVERY_STATUSES,
+        'pending_customer_approval',
+        'accepted',
+        'rejected',
+        'withdrawn',
+    ];
 
     public const BOOKING_STATUSES = ['confirmed', 'in_execution', 'completed', 'cancelled'];
 

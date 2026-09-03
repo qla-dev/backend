@@ -201,7 +201,7 @@ class OfferController extends CrudController
             $offer->freightLoad->update([
                 'assigned_driver_user_id' => $driverId,
                 'company_id' => $offer->company_id ?? $offer->freightLoad->company_id,
-                'pre_delivery_status' => 'booking_confirmed',
+                'pre_delivery_status' => $offer->request_type === 'reservation_request' ? 'accepted' : 'booking_confirmed',
                 'booking_status' => 'confirmed',
             ]);
 

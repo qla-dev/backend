@@ -665,7 +665,7 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertDatabaseHas('offers', ['id' => $other->id, 'status' => 'rejected']);
         $this->assertDatabaseHas('loads', [
             'id' => $load->id, 'assigned_driver_user_id' => $driver->id,
-            'pre_delivery_status' => 'booking_confirmed', 'booking_status' => 'confirmed',
+            'pre_delivery_status' => 'accepted', 'booking_status' => 'confirmed',
         ]);
     }
 
