@@ -6,6 +6,7 @@ use App\Http\Resources\EntityResource;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Load;
+use App\Models\Offer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -177,11 +178,22 @@ class LoadController extends CrudController
             'delivery_date_from' => ['sometimes', 'date'],
             'delivery_date_to' => ['sometimes', 'date', 'after_or_equal:delivery_date_from'],
             'assignment' => ['sometimes', 'string', 'max:200'],
+            'owner_only' => ['sometimes', Rule::in(['true', 'false', '1', '0', 1, 0, true, false])],
         ]);
         $status = trim((string) $request->query('status', ''));
 
+        if ($request->boolean('owner_only')) {
+            abort_unless($request->user(), 401);
+            $query->where('customer_user_id', $request->user()->id);
+        }
+
         if ($status !== '') {
             $query->where('status', $status);
+            if ($status === 'posted' && ! $request->boolean('owner_only')) {
+                $query->where(fn (Builder $available) => $available
+                    ->whereNull('pre_delivery_status')
+                    ->orWhereNotIn('pre_delivery_status', ['reservation_selected', 'booking_confirmed']));
+            }
         } elseif ($request->boolean('tracking')) {
             $query->where('status', '!=', 'posted');
         }
@@ -658,29 +670,29 @@ class LoadController extends CrudController
             'driver_user_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
-        $updated = DB::transaction(function () use ($request, $load, $role, $data) {
+        $offer = DB::transaction(function () use ($request, $load, $role, $data) {
             $load = Load::query()->lockForUpdate()->findOrFail($load->id);
             abort_if($load->is_negotiable, 422, 'This load accepts offers instead of direct booking.');
-            abort_unless($load->status === 'posted' && ! $load->assigned_driver_user_id, 409, 'This load is no longer available.');
+            abort_unless(
+                $load->status === 'posted' && ! in_array($load->pre_delivery_status, ['reservation_selected', 'booking_confirmed'], true),
+                409,
+                'This load is no longer accepting reservation requests.'
+            );
 
             $user = $request->user();
             $companyId = null;
             $driverUserId = null;
 
             if ($role === 'driver') {
-                // Unchanged: a driver books for themselves immediately, same as before.
                 $companyId = $load->company_id ?? $user->driver?->primary_company_id;
                 $driverUserId = $user->id;
             } elseif (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer'], true)) {
-                // A company claims the load for itself now; assigning a driver from their team
-                // is optional at booking time and can be done later instead.
                 $myCompanyIds = $user->companies()->pluck('companies.id');
                 abort_if($myCompanyIds->isEmpty(), 422, 'You are not linked to a company.');
                 $companyId = $data['company_id'] ?? $myCompanyIds->first();
                 abort_unless($myCompanyIds->contains($companyId), 403, 'You can only book for your own company.');
                 $driverUserId = $this->resolveCompanyDriver($companyId, $data['driver_user_id'] ?? null);
             } elseif ($user->isSuperAdminOrMaster()) {
-                // Superadmin/master can dedicate the load to any company and/or any driver, or neither.
                 $companyId = $data['company_id'] ?? null;
                 $driverUserId = $companyId
                     ? $this->resolveCompanyDriver($companyId, $data['driver_user_id'] ?? null)
@@ -689,17 +701,55 @@ class LoadController extends CrudController
                 abort(403, 'You are not allowed to book loads.');
             }
 
-            $load->update([
-                'assigned_driver_user_id' => $driverUserId,
+            abort_if(Offer::query()
+                ->where('load_id', $load->id)
+                ->where('created_by_user_id', $user->id)
+                ->where('request_type', 'reservation_request')
+                ->where('status', 'pending')
+                ->exists(), 409, 'You already have a pending reservation request for this load.');
+
+            $load->loadMissing('stops');
+            $pickup = $load->stops->firstWhere('type', 'pickup');
+            $delivery = $load->stops->where('type', 'delivery')->last();
+            $deliveryAt = $delivery?->window_ends_at ?? $delivery?->window_starts_at;
+            $paymentTerms = $load->payment_due_days
+                ? $load->payment_due_days.' days'
+                : str_replace('_', ' ', (string) $load->payment_terms);
+
+            $offer = Offer::query()->create([
+                'load_id' => $load->id,
+                'request_type' => 'reservation_request',
                 'company_id' => $companyId,
-                'status' => 'sent',
+                'driver_user_id' => $driverUserId,
+                'created_by_user_id' => $user->id,
+                'amount' => $load->budget ?? 0,
+                'currency' => $load->currency,
+                'status' => 'pending',
+                'valid_until' => $pickup?->window_starts_at ?? now()->addDays(3),
+                'price_basis' => 'fixed_total',
+                'vat' => 'excluded',
+                'payment_terms' => $paymentTerms,
+                'equipment_type' => collect($load->body_types)->filter()->first() ?? $load->vehicle_type,
+                'vehicle_availability' => 'available',
+                'available_date' => $pickup?->window_starts_at,
+                'exact_loading_date' => $pickup?->window_starts_at,
+                'estimated_delivery_date' => $deliveryAt,
+                'estimated_transit_days' => $pickup?->window_starts_at && $deliveryAt
+                    ? max(0, $pickup->window_starts_at->startOfDay()->diffInDays($deliveryAt->startOfDay()))
+                    : null,
+                'can_perform_as_required' => true,
+                'confirmed_authorized' => true,
+                'confirmed_details_match' => true,
+                'confirmed_terms' => true,
             ]);
 
-            return $load;
-        });
-        $updated->load($this->relations());
+            $load->update(['pre_delivery_status' => 'open_for_reservations']);
 
-        return $this->success((new EntityResource($updated))->resolve($request), 'Load booked successfully.');
+            return $offer;
+        });
+        $offer->load(['freightLoad.stops', 'company', 'driver', 'creator']);
+
+        return $this->success((new EntityResource($offer))->resolve($request), 'Reservation request submitted.', status: 201);
     }
 
     private function resolveCompanyDriver(int $companyId, ?int $driverUserId): ?int

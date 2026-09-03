@@ -6,6 +6,7 @@ use App\Http\Resources\EntityResource;
 use App\Models\Load;
 use App\Models\Offer;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,27 @@ class OfferController extends CrudController
         return ['freightLoad.stops', 'company', 'driver', 'creator', 'vehicle', 'warehouse', 'parentOffer'];
     }
 
+    protected function applyFilters(Builder $query, Request $request): void
+    {
+        $user = $request->user();
+        if (! $user || $user->isSuperAdminOrMaster()) {
+            return;
+        }
+
+        $companyIds = $user->companies()->pluck('companies.id');
+        $query->where(function (Builder $visible) use ($user, $companyIds): void {
+            $visible->where('created_by_user_id', $user->id)
+                ->orWhereHas('freightLoad', fn (Builder $loads) => $loads->where('customer_user_id', $user->id))
+                ->orWhereHas('parentOffer', fn (Builder $parents) => $parents
+                    ->where('created_by_user_id', $user->id)
+                    ->orWhereIn('company_id', $companyIds));
+
+            if ($companyIds->isNotEmpty()) {
+                $visible->orWhereIn('company_id', $companyIds);
+            }
+        });
+    }
+
     /** What a transport bid may be priced on. */
     private const TRANSPORT_PRICE_BASIS = ['fixed_total', 'best_bid', 'per_km', 'per_ton', 'per_pallet'];
 
@@ -36,7 +58,7 @@ class OfferController extends CrudController
         $confirmed = $u ? ['sometimes', 'boolean'] : [$p, 'accepted'];
 
         return [
-            'load_id' => [$p, 'integer', 'exists:loads,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'], 'driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'amount' => [$p, 'numeric', 'min:0'], 'currency' => ['sometimes', 'string', 'size:3'], 'status' => ['sometimes', 'string', 'max:50'], 'valid_until' => [$p, 'date'], 'message' => ['nullable', 'string'],
+            'load_id' => [$p, 'integer', 'exists:loads,id'], 'request_type' => ['sometimes', Rule::in(['price_offer', 'reservation_request'])], 'company_id' => ['nullable', 'integer', 'exists:companies,id'], 'driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'amount' => [$p, 'numeric', 'min:0'], 'currency' => ['sometimes', 'string', 'size:3'], 'status' => ['sometimes', Rule::in(['pending', 'accepted', 'rejected', 'withdrawn', 'expired', 'cancelled'])], 'valid_until' => [$p, 'date'], 'message' => ['nullable', 'string'],
             'price_basis' => [$p, 'string', 'in:'.implode(',', self::TRANSPORT_PRICE_BASIS)],
             'vat' => [$p, 'string', 'in:included,excluded'],
             'payment_terms' => [$p, 'string', 'max:30'],
@@ -68,6 +90,7 @@ class OfferController extends CrudController
 
     public function store(Request $request): JsonResponse
     {
+        $request->merge(['created_by_user_id' => $request->user()->id, 'request_type' => 'price_offer', 'status' => 'pending']);
         $data = $request->validate($this->rulesForRequest($request, false));
         $this->validateBestBidPaymentTerms($data['price_basis'], $data['payment_terms']);
 
@@ -84,7 +107,26 @@ class OfferController extends CrudController
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate($this->rulesForRequest($request, true, Offer::query()->find($id)));
+        $existing = Offer::query()->with('freightLoad')->findOrFail($id);
+        $user = $request->user();
+        $isOwner = (int) $existing->freightLoad->customer_user_id === (int) $user->id;
+        $isCreator = (int) $existing->created_by_user_id === (int) $user->id;
+        abort_unless($user->isSuperAdminOrMaster() || $isOwner || $isCreator, 403, 'You cannot update this offer.');
+
+        if ($request->has('status')) {
+            $nextStatus = (string) $request->input('status');
+            abort_unless(
+                $user->isSuperAdminOrMaster()
+                    || ($isOwner && $nextStatus === 'rejected')
+                    || ($isCreator && in_array($nextStatus, ['withdrawn', 'cancelled'], true)),
+                403,
+                'This offer status transition is not allowed.'
+            );
+        } else {
+            abort_unless($isCreator || $user->isSuperAdminOrMaster(), 403, 'Only the offer creator can edit it.');
+        }
+
+        $data = $request->validate($this->rulesForRequest($request, true, $existing));
 
         $offer = DB::transaction(function () use ($id, $data) {
             $offer = Offer::query()->lockForUpdate()->findOrFail($id);
@@ -113,11 +155,19 @@ class OfferController extends CrudController
     {
         $data = $request->validate(['driver_user_id' => ['nullable', 'integer', 'exists:users,id']]);
 
-        $offer = DB::transaction(function () use ($id, $data) {
+        $offer = DB::transaction(function () use ($request, $id, $data) {
             $offer = Offer::query()->with('freightLoad')->lockForUpdate()->findOrFail($id);
-            $driverId = $data['driver_user_id'] ?? $offer->driver_user_id;
-            $isDriver = $driverId && User::query()->whereKey($driverId)->whereHas('role', fn ($query) => $query->where('name', 'driver'))->exists();
+            $user = $request->user();
+            abort_unless(
+                $user->isSuperAdminOrMaster() || (int) $offer->freightLoad->customer_user_id === (int) $user->id,
+                403,
+                'Only the load owner can approve this request.'
+            );
+            abort_unless($offer->status === 'pending', 409, 'This request has already been decided.');
+            abort_unless($offer->freightLoad->status === 'posted', 409, 'This load is no longer open for reservations.');
 
+            $driverId = $data['driver_user_id'] ?? $offer->driver_user_id;
+            $isDriver = ! $driverId || User::query()->whereKey($driverId)->whereHas('role', fn ($query) => $query->where('name', 'driver'))->exists();
             if (! $isDriver) {
                 throw ValidationException::withMessages(['driver_user_id' => 'Select a user with the driver role.']);
             }
@@ -127,13 +177,14 @@ class OfferController extends CrudController
             $offer->freightLoad->update([
                 'assigned_driver_user_id' => $driverId,
                 'company_id' => $offer->company_id ?? $offer->freightLoad->company_id,
-                'status' => 'sent',
+                'pre_delivery_status' => 'booking_confirmed',
+                'booking_status' => 'confirmed',
             ]);
 
             return $offer->fresh($this->relations());
         });
 
-        return $this->success((new EntityResource($offer))->resolve($request), 'Offer approved and driver assigned.');
+        return $this->success((new EntityResource($offer))->resolve($request), 'Reservation accepted and booking confirmed.');
     }
 
     /**

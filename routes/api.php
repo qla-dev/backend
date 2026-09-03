@@ -116,8 +116,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy']);
     });
 
-    // Instant-booking a posted, non-negotiable load. Drivers book for themselves; companies book
-    // for their company (optionally assigning a driver right away); superadmin/master can assign either.
+    // Fixed-price booking creates a reservation request; the load owner approves it separately.
     Route::middleware('role:driver,company,manager,dispatcher,customs_officer,superadmin,master')->group(function (): void {
         Route::post('loads/{load}/book', [LoadController::class, 'book']);
     });
@@ -196,11 +195,13 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('loads/{load}/vehicle-return', [VehicleReturnInspectionController::class, 'store'])
         ->middleware('role:driver,company,manager,dispatcher,customs_officer,superadmin,master');
 
+    Route::post('offers/{offer}/approve', [OfferController::class, 'approve'])
+        ->middleware('role:user,superadmin,master');
+
     Route::middleware('role:superadmin,master')->group(function (): void {
         Route::get('aircraft', [AircraftController::class, 'index'])->middleware('throttle:30,1');
         Route::get('aircraft/{hex}/trace', [AircraftController::class, 'trace'])->middleware('throttle:30,1');
         Route::get('vessels', [VesselController::class, 'index'])->middleware('throttle:30,1');
-        Route::post('offers/{offer}/approve', [OfferController::class, 'approve']);
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
         Route::post('warehouses/onboard', [WarehouseController::class, 'onboard']);
         Route::post('customers/{customer}/authorize', [CustomerController::class, 'authorizeCustomer']);

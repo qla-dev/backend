@@ -25,6 +25,10 @@ class Load extends BaseModel
         'cancelled',
     ];
 
+    public const PRE_DELIVERY_STATUSES = ['published', 'open_for_reservations', 'reservation_selected', 'booking_confirmed'];
+
+    public const BOOKING_STATUSES = ['confirmed', 'in_execution', 'completed', 'cancelled'];
+
     protected function casts(): array
     {
         return [
@@ -66,6 +70,10 @@ class Load extends BaseModel
         static::creating(function (Load $load): void {
             $load->status_change ??= [$load->status => now()->toIso8601String()];
 
+            if ($load->status === 'posted') {
+                $load->pre_delivery_status ??= 'open_for_reservations';
+            }
+
         });
 
         // A tracking number belongs to every load, regardless of whether it was published
@@ -81,6 +89,12 @@ class Load extends BaseModel
                 $history = $load->status_change ?? [];
                 $history[$load->status] = now()->toIso8601String();
                 $load->status_change = $history;
+                $load->booking_status = match ($load->status) {
+                    'in_delivery' => 'in_execution',
+                    'finished' => 'completed',
+                    'cancelled' => 'cancelled',
+                    default => $load->booking_status,
+                };
             }
         });
     }
