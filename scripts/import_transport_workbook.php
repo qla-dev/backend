@@ -2,6 +2,8 @@
 
 use App\Models\Customer;
 use App\Models\Load;
+use App\Models\Company;
+use App\Models\User;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +16,36 @@ $app->make(Kernel::class)->bootstrap();
 
 $apply = in_array('--apply', $argv, true);
 $verbose = in_array('--verbose', $argv, true);
+$createMissingConsignees = in_array('--create-missing-consignees', $argv, true);
+$argument = static function (string $name) use ($argv): ?string {
+    $prefix = "--{$name}=";
+    foreach ($argv as $value) {
+        if (str_starts_with($value, $prefix)) {
+            return substr($value, strlen($prefix));
+        }
+    }
+
+    return null;
+};
+
+$customerUsername = trim((string) $argument('customer-username'));
+$companySlug = trim((string) $argument('company-slug'));
+if ($customerUsername === '' || $companySlug === '') {
+    fwrite(STDERR, 'Required options: --customer-username=... --company-slug=...'.PHP_EOL);
+    exit(2);
+}
+
+$customerUser = User::query()->where('username', $customerUsername)->first();
+$company = Company::query()->where('slug', $companySlug)->first();
+if (! $customerUser || ! $company) {
+    fwrite(STDERR, 'The requested customer user or company does not exist.'.PHP_EOL);
+    exit(2);
+}
+if ((int) $company->owner_user_id !== (int) $customerUser->id) {
+    fwrite(STDERR, 'The requested user is not the owner of the requested company.'.PHP_EOL);
+    exit(2);
+}
+
 $rawInput = preg_replace('/^\xEF\xBB\xBF/', '', stream_get_contents(STDIN)) ?? '';
 $rows = json_decode($rawInput, true, flags: JSON_THROW_ON_ERROR);
 
@@ -23,69 +55,42 @@ $normalize = static function (?string $value): string {
     return trim(preg_replace('/\s+/', ' ', preg_replace('/[^A-Z0-9]+/', ' ', $value) ?? '') ?? '');
 };
 
-// Mappings verified by hand against the live customers table.
-$customerIds = [
-    'ALCOOP' => 36140,
-    'ALFA SPED' => 5249,
-    'ALUSAR' => 24628,
-    'AMANI' => 15798,
-    'AVIOR' => 35471,
-    'BEPRO' => 27289,
-    'CENTROTAX CILEK' => 1888,
-    'COMFORT' => 3533,
-    'COMFORT FACTORY' => 3533,
-    'COPAL' => 15727,
-    'DMV DOO' => 11903,
-    'DREAM SAT' => 6265,
-    'ESSOPHARM' => 7270,
-    'EURO VVD' => 32939,
-    'FARED CO O S P D MAKSUZ' => 244,
-    'FORESTER' => 622,
-    'INGFOREST' => 1463,
-    'INVEL DOO' => 14538,
-    'IRFAX LOG' => 2705,
-    'KALEA' => 935,
-    'KISS' => 8858,
-    'KOMEL ELECTRONICS' => 14590,
-    'LMV DOO' => 16172,
-    'LOKO' => 18329,
-    'LUKS' => 32563,
-    'LUKS DOO' => 32563,
-    'MDD TRADE' => 10842,
-    'MEDIC MARKET' => 33666,
-    'MIHAJLOVIC DOO' => 25912,
-    'MOBILAND' => 29202,
-    'MOBILAND BILJANA' => 29202,
-    'NEXEN DOO' => 30416,
-    'OPTINOVA' => 14773,
-    'OPTOVISION' => 25682,
-    'PLAROLA' => 17102,
-    'PROFMEDIA' => 12263,
-    'R S' => 14471,
-    'RIS' => 20087,
-    'SAPLAST' => 569,
-    'SIDRA DOO' => 28287,
-    'SMARVET' => 22514,
-    'TARGET' => 16872,
-    'TEHNOPLAST' => 12457,
-    'VITACARE' => 36677,
-    'VRHPOLJE PROMET' => 10427,
-    'WILLONA' => 2771,
-    'WINGS MEDIA' => 14395,
-    'ZADA PHARM' => 6171,
-    'ZIDNI PANELI' => 33393,
-    'ZIDNI PANELI DOO' => 33393,
-    'ZIDNI PANELI DOO BIH' => 33393,
+// The old recovery script embedded database IDs from a previous installation.
+// Resolve every consignee against the restored directory instead, with only
+// explicit naming aliases where the workbook uses a known alternate label.
+$customerAliases = [
+    'COMFORT FACTORY' => 'COMFORT',
+    'LUKS' => 'LUKS DOO',
+    'MOBILAND BILJANA' => 'MOBILAND',
+    'ZIDNI PANELI' => 'ZIDNI PANELI DOO',
+    'ZIDNI PANELI DOO BIH' => 'ZIDNI PANELI DOO',
 ];
 
-$missingCustomerIds = collect($customerIds)->values()->unique()->reject(
-    fn (int $id): bool => Customer::query()->whereKey($id)->exists()
-)->values()->all();
-
-if ($missingCustomerIds !== []) {
-    fwrite(STDERR, 'Mapped customer IDs no longer exist: '.implode(', ', $missingCustomerIds).PHP_EOL);
-    exit(2);
-}
+// These are stable IDs from the deklarant export, not auto-increment IDs from
+// this application's database. They survive a database restoration safely.
+$customerSourceIds = [
+    'ALCOOP' => 36139, 'ALFA SPED' => 5248, 'ALUSAR' => 24627, 'AMANI' => 15797,
+    'AVIOR' => 35470, 'BEPRO' => 27288, 'CENTROTAX CILEK' => 1887, 'COMFORT' => 3532,
+    'COMFORT FACTORY' => 3532, 'COPAL' => 15726, 'DMV DOO' => 11902,
+    'DREAM SAT' => 6264, 'ESSOPHARM' => 7269, 'EURO VVD' => 32938,
+    'FARED CO O S P D MAKSUZ' => 243, 'FORESTER' => 621, 'INGFOREST' => 1462,
+    'INVEL DOO' => 14537, 'IRFAX LOG' => 2704, 'KALEA' => 934, 'KISS' => 8857,
+    'KOMEL ELECTRONICS' => 14589, 'LMV DOO' => 16171, 'LOKO' => 18328,
+    'LUKS' => 32562, 'LUKS DOO' => 32562, 'MDD TRADE' => 10841,
+    'MEDIC MARKET' => 33665, 'MIHAJLOVIC DOO' => 25911, 'MOBILAND' => 29201,
+    'MOBILAND BILJANA' => 29201, 'NEXEN DOO' => 30415, 'OPTINOVA' => 14772,
+    'OPTOVISION' => 25681, 'PLAROLA' => 17101, 'PROFMEDIA' => 12262,
+    'R S' => 14470, 'RIS' => 20086, 'SAPLAST' => 568, 'SIDRA DOO' => 28286,
+    'SMARVET' => 22513, 'TARGET' => 16871, 'TEHNOPLAST' => 12456,
+    'VITACARE' => 36676, 'VRHPOLJE PROMET' => 10426, 'WILLONA' => 2770,
+    'WINGS MEDIA' => 14394, 'ZADA PHARM' => 6170, 'ZIDNI PANELI' => 33392,
+    'ZIDNI PANELI DOO' => 33392, 'ZIDNI PANELI DOO BIH' => 33392,
+];
+$customerIdsBySource = Customer::query()
+    ->where('source', 'deklarant')
+    ->whereIn('source_id', array_values(array_unique($customerSourceIds)))
+    ->pluck('id', 'source_id')
+    ->all();
 
 // Consignee labels absent from the map are resolved against the live customers
 // table, but only on an exact normalized name match. Anything less certain is
@@ -215,23 +220,46 @@ $text = static fn (?string $value): ?string => ($trimmed = trim((string) $value)
 
 $created = 0;
 $updated = 0;
+$createdConsignees = 0;
+$createdCustomerIds = [];
 $skipped = [];
 $resolvedByName = [];
 $imported = [];
 
 DB::transaction(function () use (
-    $rows, $apply, $normalize, $customerIds, $exactIndex, $suggest, $parseDate, $parseNumber,
-    $measure, $countryCode, $isPlace, $text,
-    &$created, &$updated, &$skipped, &$resolvedByName, &$imported
+    $rows, $apply, $normalize, $customerAliases, $customerSourceIds, $customerIdsBySource, $exactIndex, $suggest, $parseDate, $parseNumber,
+    $measure, $countryCode, $isPlace, $text, $customerUser, $company, $verbose, $createMissingConsignees,
+    &$created, &$updated, &$createdConsignees, &$createdCustomerIds, &$skipped, &$resolvedByName, &$imported
 ): void {
     foreach ($rows as $row) {
         $label = trim((string) ($row['consignee'] ?? ''));
         $key = $normalize($label);
-        $customerId = $customerIds[$key] ?? null;
+        $lookupKey = $customerAliases[$key] ?? $key;
+        $sourceId = $customerSourceIds[$key] ?? $customerSourceIds[$lookupKey] ?? null;
+        $customerId = $sourceId !== null ? ($customerIdsBySource[$sourceId] ?? null) : ($exactIndex[$lookupKey] ?? null);
 
-        if ($customerId === null && ($exactIndex[$key] ?? null) !== null) {
-            $customerId = $exactIndex[$key];
+        if ($customerId !== null) {
             $resolvedByName[$label] = $customerId;
+        }
+
+        if ($customerId === null && $createMissingConsignees) {
+            if ($apply) {
+                if (! isset($createdCustomerIds[$key])) {
+                    $customer = Customer::query()->firstOrCreate(
+                        ['source' => 'transport-workbook', 'name' => $label],
+                        ['company_name' => $label, 'customer_type' => 'business', 'status' => 'active']
+                    );
+                    $createdCustomerIds[$key] = $customer->id;
+                    if ($customer->wasRecentlyCreated) {
+                        $createdConsignees++;
+                    }
+                }
+                $customerId = $createdCustomerIds[$key];
+            } else {
+                // A non-persisted marker is enough for validation; it is never
+                // assigned to a model unless --apply is present.
+                $customerId = -1;
+            }
         }
 
         if ($customerId === null) {
@@ -240,7 +268,7 @@ DB::transaction(function () use (
                 'consignee' => $label,
                 'sheet' => $row['sheet'] ?? null,
                 'source_row' => $row['source_row'] ?? null,
-                'suggestions' => $suggest($label),
+                'suggestions' => $verbose ? $suggest($label) : [],
             ];
             continue;
         }
@@ -339,9 +367,9 @@ DB::transaction(function () use (
         ]];
 
         $attributes = [
-            'customer_user_id' => 4,
+            'customer_user_id' => $customerUser->id,
             'consignee_customer_id' => $customerId,
-            'company_id' => 1,
+            'company_id' => $company->id,
             'title' => $booking.' · '.$label,
             'booking_reference' => $booking,
             'insurance' => $insuranceText ?: null,
@@ -395,27 +423,47 @@ DB::transaction(function () use (
             $imported[] = [
                 'booking' => $booking, 'sheet' => $sheet, 'customer_id' => $customerId,
                 'consignee' => $label, 'transport_type' => $transportType, 'status' => $status,
-                'weight_kg' => $attributes['weight_kg'], 'volume_m3' => $volume, 'marker' => $marker,
+                'weight_kg' => $attributes['weight_kg'], 'volume_m3' => $volume,
+                'distance_km' => $row['distance_km'] ?? null, 'marker' => $marker,
             ];
             continue;
         }
 
         $load = Load::query()->where('internal_comments', $marker)->first();
         if ($load) {
-            $load->update($attributes);
-            $load->stops()->delete();
+            // Recovery is insert-only. Re-runs leave existing operational data
+            // untouched instead of rewriting the load or deleting its stops.
             $updated++;
-        } else {
-            $load = Load::query()->create(['public_id' => (string) Str::uuid(), ...$attributes]);
-            $created++;
+            continue;
         }
+
+        $load = Load::query()->create(['public_id' => (string) Str::uuid(), ...$attributes]);
+        $created++;
 
         $origin = trim((string) ($row['departure'] ?? ''));
         $destination = trim((string) ($row['arrival'] ?? ''));
+        $pickupStop = null;
+        $deliveryStop = null;
         if ($isPlace($origin) && $isPlace($destination)) {
-            $load->stops()->createMany([
-                ['type' => 'pickup', 'position' => 1, 'city' => $origin, 'country_code' => $countryCode($origin), 'window_starts_at' => $etd ?? $date],
-                ['type' => 'delivery', 'position' => 2, 'city' => $destination, 'country_code' => $countryCode($destination), 'window_starts_at' => $eta],
+            $pickupStop = $load->stops()->create(
+                ['type' => 'pickup', 'position' => 1, 'city' => $origin, 'country_code' => $countryCode($origin), 'window_starts_at' => $etd ?? $date]
+            );
+            $deliveryStop = $load->stops()->create(
+                ['type' => 'delivery', 'position' => 2, 'city' => $destination, 'country_code' => $countryCode($destination), 'window_starts_at' => $eta]
+            );
+        }
+
+        $route = $load->routes()->create([
+            'route_code' => 'IMPORT-'.strtoupper(substr(hash('sha256', $marker), 0, 24)),
+            'status' => $status === 'finished' ? 'completed' : 'planned',
+            'distance_km' => isset($row['distance_km']) ? (float) $row['distance_km'] : null,
+            'starts_at' => $etd ?? $date,
+            'ends_at' => $eta ?? $atd,
+        ]);
+        if ($pickupStop && $deliveryStop) {
+            $route->stops()->createMany([
+                ['load_stop_id' => $pickupStop->id, 'position' => 1, 'name' => $origin, 'estimated_at' => $etd ?? $date],
+                ['load_stop_id' => $deliveryStop->id, 'position' => 2, 'name' => $destination, 'estimated_at' => $eta],
             ]);
         }
 
@@ -432,6 +480,7 @@ $summary = [
     'importable_rows' => count($imported),
     'created' => $created,
     'updated' => $updated,
+    'created_consignees' => $createdConsignees,
     'resolved_by_exact_name' => $resolvedByName,
     'skipped_rows' => count($skipped),
     'skipped_by_consignee' => collect($skipped)->groupBy('consignee')->map->count()->sortKeys()->all(),

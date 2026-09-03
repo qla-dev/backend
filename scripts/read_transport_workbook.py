@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import unicodedata
@@ -68,6 +69,63 @@ REQUIRED = ("booking", "consignee", "date")
 # Consecutive blank rows that end a sheet scan.
 BLANK_RUN_LIMIT = 200
 
+# Canonical coordinates for the locations and transport codes used by the
+# workbook. Distances are stored in kilometres and are deliberately left null
+# when the source does not identify both endpoints (for example, "EXW").
+LOCATION_COORDINATES = {
+    "ATHENS": (37.9838, 23.7275),
+    "BANJA LUKA": (44.7722, 17.1910),
+    "BEOGRAD": (44.7866, 20.4489),
+    "BG": (44.7866, 20.4489),
+    "BIJELJINA": (44.7569, 19.2164),
+    "BRCKO": (44.8728, 18.8083),
+    "CHINA": (35.8617, 104.1954),
+    "CNNGB": (29.8683, 121.5440),
+    "CNTAO": (36.0671, 120.3826),
+    "DE": (51.1657, 10.4515),
+    "DUBRVONIK": (42.6507, 18.0944),
+    "FOZHOU": (26.0745, 119.2965),
+    "FUZU": (26.0745, 119.2965),
+    "GRADACAC": (44.8785, 18.4276),
+    "GUANGZHOU": (23.1291, 113.2644),
+    "HRRJK": (45.3271, 14.4422),
+    "ISTANBUL": (41.0082, 28.9784),
+    "KLJUC": (44.5325, 16.7768),
+    "KRUSEVAC": (43.5800, 21.3339),
+    "LUKAVAC": (44.5425, 18.5262),
+    "MODLNICZKA": (50.1290, 19.8640),
+    "MUNDRA": (22.8395, 69.7213),
+    "NANSHA": (22.7945, 113.5440),
+    "NAVA SHEVA": (18.9497, 72.9510),
+    "NHAVA SHEVA": (18.9497, 72.9510),
+    "NEW YORK": (40.7128, -74.0060),
+    "NINGBO": (29.8683, 121.5440),
+    "NOVGRAD": (45.0464, 16.3778),
+    "NOVI SAD": (45.2671, 19.8335),
+    "NY": (40.7128, -74.0060),
+    "PEK": (40.0799, 116.6031),
+    "PETROVO": (44.6280, 18.3590),
+    "PLOCE": (43.0560, 17.4310),
+    "PODGORICA": (42.4304, 19.2594),
+    "QINGDAO": (36.0671, 120.3826),
+    "RIJEKA": (45.3271, 14.4422),
+    "SANISKI MOST": (44.7667, 16.6670),
+    "SANSKI MOST": (44.7667, 16.6670),
+    "SARAJEVO": (43.8563, 18.4131),
+    "SHANDONG": (36.3427, 118.1498),
+    "SHANGAHI": (31.2304, 121.4737),
+    "SHANGHAI": (31.2304, 121.4737),
+    "SHENZHEN": (22.5431, 114.0579),
+    "SHUNDE": (22.8050, 113.2930),
+    "SJJ": (43.8246, 18.3315),
+    "TIANJIN": (39.0842, 117.2009),
+    "TUZLA": (44.5384, 18.6671),
+    "TZ": (44.5384, 18.6671),
+    "USA": (39.8283, -98.5795),
+    "YANTIAN": (22.5560, 114.2370),
+    "YANTINA": (22.5560, 114.2370),
+}
+
 
 def norm(value: Any) -> str:
     text = unicodedata.normalize("NFKD", str(value if value is not None else ""))
@@ -95,6 +153,30 @@ def day_key(value: Any) -> str:
         return f"{match.group(3)}-{int(match.group(2)):02d}-{int(match.group(1)):02d}"
     match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", text)
     return f"{match.group(1)}-{match.group(2)}-{match.group(3)}" if match else text
+
+
+def coordinates(value: Any) -> tuple[float, float] | None:
+    key = norm(value)
+    # A slash sometimes identifies two possible endpoints, so it is not safe
+    # to silently pick one of them.
+    if not key or "/" in str(value):
+        return None
+    return LOCATION_COORDINATES.get(key)
+
+
+def distance_km(departure: Any, arrival: Any) -> float | None:
+    start = coordinates(departure)
+    end = coordinates(arrival)
+    if start is None or end is None:
+        return None
+
+    lat1, lon1 = map(math.radians, start)
+    lat2, lon2 = map(math.radians, end)
+    delta_lat = lat2 - lat1
+    delta_lon = lon2 - lon1
+    haversine = math.sin(delta_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
+
+    return round(6371.0088 * 2 * math.asin(math.sqrt(haversine)), 2)
 
 
 def header_row(worksheet) -> int | None:
@@ -141,6 +223,7 @@ def read_sheet(worksheet, key: str) -> list[dict[str, Any]]:
         row["sheet"] = key
         row["source_row"] = index
         row["date_key"] = day_key(raw["date"])
+        row["distance_km"] = distance_km(raw["departure"], raw["arrival"])
         rows.append(row)
     return rows
 
