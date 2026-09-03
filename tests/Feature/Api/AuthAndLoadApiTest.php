@@ -678,6 +678,12 @@ class AuthAndLoadApiTest extends TestCase
             'status' => 'booked',
         ]);
 
+        $workspace = ShipmentWorkspace::query()->where('load_id', $load->id)->firstOrFail();
+        $this->withToken($token)->patchJson("/api/shipment-workspaces/{$workspace->id}", ['offer_status' => 'cancelled'])
+            ->assertOk()
+            ->assertJsonPath('data.accepted_offer.status', 'cancelled');
+        $this->assertDatabaseHas('offers', ['id' => $selected->id, 'status' => 'cancelled']);
+
         $this->withToken($token)->postJson("/api/offers/{$other->id}/approve")
             ->assertStatus(409);
         $this->assertSame(1, ShipmentWorkspace::query()->where('load_id', $load->id)->count());

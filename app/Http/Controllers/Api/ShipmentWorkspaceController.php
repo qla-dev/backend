@@ -39,6 +39,11 @@ class ShipmentWorkspaceController extends Controller
         $record = $this->visibleQuery($request)->findOrFail($shipmentWorkspace->id);
         $data = $request->validate([
             'status' => ['sometimes', Rule::in(ShipmentWorkspace::STATUSES)],
+            'offer_status' => ['sometimes', Rule::in([
+                'published', 'open_for_reservations', 'reservation_selected', 'booking_confirmed',
+                'preparation', 'ready_for_pickup', 'in_execution', 'completed', 'cancelled', 'expired',
+                'pending_customer_approval', 'accepted', 'rejected', 'withdrawn', 'not_selected',
+            ])],
             'operational_checklist' => ['sometimes', 'array'],
             'operational_checklist.*.key' => ['required_with:operational_checklist', 'string', 'max:100'],
             'operational_checklist.*.status' => ['required_with:operational_checklist', 'in:pending,in_progress,completed,blocked'],
@@ -52,6 +57,12 @@ class ShipmentWorkspaceController extends Controller
         $isProvider = (int) $record->provider_user_id === (int) $user->id
             || ($record->provider_company_id && $user->companies()->whereKey($record->provider_company_id)->exists());
         $isAdmin = $user->isSuperAdminOrMaster();
+
+        if (array_key_exists('offer_status', $data)) {
+            abort_unless($isCustomer || $isProvider || $isAdmin, 403, 'Only workspace participants can update the accepted offer status.');
+            $record->acceptedOffer()->update(['status' => $data['offer_status']]);
+            unset($data['offer_status']);
+        }
 
         if (array_key_exists('operational_checklist', $data)) {
             abort_unless($isProvider || $isAdmin, 403, 'Only the selected provider can update the operational checklist.');
