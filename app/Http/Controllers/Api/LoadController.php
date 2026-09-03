@@ -755,7 +755,12 @@ class LoadController extends CrudController
 
             abort_if(Offer::query()
                 ->where('load_id', $load->id)
-                ->where('created_by_user_id', $user->id)
+                ->where(function (Builder $sameRequester) use ($user, $companyId): void {
+                    $sameRequester->where('created_by_user_id', $user->id);
+                    if ($companyId) {
+                        $sameRequester->orWhere('company_id', $companyId);
+                    }
+                })
                 ->where('request_type', 'reservation_request')
                 ->where('status', 'pending')
                 ->exists(), 409, 'You already have a pending reservation request for this load.');
