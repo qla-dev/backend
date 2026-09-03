@@ -53,7 +53,7 @@ def parse_env(path: Path) -> dict[str, str]:
 
 
 def connect(env: dict[str, str]):
-    if env.get("DB_CONNECTION", "sqlite") != "mysql":
+    if env.get("DB_CONNECTION", "mysql") != "mysql":
         raise RuntimeError("This importer currently requires DB_CONNECTION=mysql.")
     return mysql.connector.connect(
         host=env.get("DB_HOST", "127.0.0.1"),

@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasReviews;
-use App\Services\TrackingNumberGenerator;
 use App\Services\CustomsDocumentCatalog;
+use App\Services\TrackingNumberGenerator;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;

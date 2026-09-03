@@ -244,10 +244,18 @@ class LoadController extends CrudController
         foreach ($this->csv($request->query('characteristics')) as $characteristic) {
             $query->whereJsonContains('characteristics', $characteristic);
         }
-        if ($request->filled('tracking_date_from')) $query->whereDate('updated_at', '>=', $request->query('tracking_date_from'));
-        if ($request->filled('tracking_date_to')) $query->whereDate('updated_at', '<=', $request->query('tracking_date_to'));
-        if ($request->has('tracking_requires_adr')) $query->where('requires_adr', $request->boolean('tracking_requires_adr'));
-        if ($request->has('tracking_is_urgent')) $query->where('is_urgent', $request->boolean('tracking_is_urgent'));
+        if ($request->filled('tracking_date_from')) {
+            $query->whereDate('updated_at', '>=', $request->query('tracking_date_from'));
+        }
+        if ($request->filled('tracking_date_to')) {
+            $query->whereDate('updated_at', '<=', $request->query('tracking_date_to'));
+        }
+        if ($request->has('tracking_requires_adr')) {
+            $query->where('requires_adr', $request->boolean('tracking_requires_adr'));
+        }
+        if ($request->has('tracking_is_urgent')) {
+            $query->where('is_urgent', $request->boolean('tracking_is_urgent'));
+        }
 
         if ($request->has('for_storage')) {
             $query->where('for_storage', $request->boolean('for_storage'));
@@ -270,10 +278,18 @@ class LoadController extends CrudController
         ] as $parameter => $column) {
             $this->applyNumericRange($query, $request, $parameter, $column);
         }
-        if ($request->filled('temperature_min')) $query->where('temperature_max', '>=', $request->query('temperature_min'));
-        if ($request->filled('temperature_max')) $query->where('temperature_min', '<=', $request->query('temperature_max'));
-        if ($request->filled('storage_start_from')) $query->whereDate('storage_start_date', '>=', $request->query('storage_start_from'));
-        if ($request->filled('storage_start_to')) $query->whereDate('storage_start_date', '<=', $request->query('storage_start_to'));
+        if ($request->filled('temperature_min')) {
+            $query->where('temperature_max', '>=', $request->query('temperature_min'));
+        }
+        if ($request->filled('temperature_max')) {
+            $query->where('temperature_min', '<=', $request->query('temperature_max'));
+        }
+        if ($request->filled('storage_start_from')) {
+            $query->whereDate('storage_start_date', '>=', $request->query('storage_start_from'));
+        }
+        if ($request->filled('storage_start_to')) {
+            $query->whereDate('storage_start_date', '<=', $request->query('storage_start_to'));
+        }
 
         $this->applyWhereIn($query, 'goods_type', $request->query('goods_types'));
         $this->applyWhereIn($query, 'payment_terms', $request->query('payment_terms'));
@@ -281,15 +297,24 @@ class LoadController extends CrudController
         if ($request->filled('price_terms')) {
             $terms = $this->csv($request->query('price_terms'));
             $query->where(function (Builder $scope) use ($terms): void {
-                if (in_array('negotiable', $terms, true)) $scope->orWhere('is_negotiable', true);
-                if (in_array('fixed', $terms, true)) $scope->orWhere('is_negotiable', false);
+                if (in_array('negotiable', $terms, true)) {
+                    $scope->orWhere('is_negotiable', true);
+                }
+                if (in_array('fixed', $terms, true)) {
+                    $scope->orWhere('is_negotiable', false);
+                }
             });
         }
-        if ($request->filled('sensitivity')) $query->where('is_fragile', true);
+        if ($request->filled('sensitivity')) {
+            $query->where('is_fragile', true);
+        }
         if ($request->filled('adr_classes')) {
             $classes = $this->csv($request->query('adr_classes'));
-            if ($classes === ['None']) $query->where('requires_adr', false);
-            elseif (! in_array('None', $classes, true)) $query->where('requires_adr', true);
+            if ($classes === ['None']) {
+                $query->where('requires_adr', false);
+            } elseif (! in_array('None', $classes, true)) {
+                $query->where('requires_adr', true);
+            }
         }
         if ($request->filled('urgency')) {
             $urgency = $this->csv($request->query('urgency'));
@@ -311,6 +336,7 @@ class LoadController extends CrudController
             };
             if ($column) {
                 $query->where($column, true);
+
                 continue;
             }
             if ($requirement === 'forklift') {
@@ -381,13 +407,19 @@ class LoadController extends CrudController
 
     private function applyNumericRange(Builder $query, Request $request, string $parameter, string $column): void
     {
-        if ($request->filled("{$parameter}_min")) $query->where($column, '>=', $request->query("{$parameter}_min"));
-        if ($request->filled("{$parameter}_max")) $query->where($column, '<=', $request->query("{$parameter}_max"));
+        if ($request->filled("{$parameter}_min")) {
+            $query->where($column, '>=', $request->query("{$parameter}_min"));
+        }
+        if ($request->filled("{$parameter}_max")) {
+            $query->where($column, '<=', $request->query("{$parameter}_max"));
+        }
     }
 
     private function applyLocationFilter(Builder $query, string $type, string $value): void
     {
-        if ($value === '') return;
+        if ($value === '') {
+            return;
+        }
         $query->whereHas('stops', fn (Builder $stops) => $stops->where('type', $type)->where(function (Builder $location) use ($value): void {
             $location->where('city', 'like', "%{$value}%")->orWhere('country_code', 'like', "%{$value}%")->orWhere('address', 'like', "%{$value}%");
         }));
@@ -396,7 +428,9 @@ class LoadController extends CrudController
     private function applyWhereIn(Builder $query, string $column, mixed $value): void
     {
         $values = $this->csv($value);
-        if ($values !== []) $query->whereIn($column, $values);
+        if ($values !== []) {
+            $query->whereIn($column, $values);
+        }
     }
 
     /**
@@ -417,7 +451,9 @@ class LoadController extends CrudController
 
             $from = $request->query("{$type}_date_from");
             $to = $request->query("{$type}_date_to");
-            if (! $request->filled("{$type}_date_from") && ! $request->filled("{$type}_date_to")) continue;
+            if (! $request->filled("{$type}_date_from") && ! $request->filled("{$type}_date_to")) {
+                continue;
+            }
 
             $query->whereHas('stops', function (Builder $stops) use ($type, $from, $to): void {
                 $stops->where('type', $type);
@@ -439,7 +475,9 @@ class LoadController extends CrudController
     private function applyCargoFlagFilters(Builder $query, Request $request): void
     {
         $flags = $this->csv($request->query('cargo_flags'));
-        if ($flags === []) return;
+        if ($flags === []) {
+            return;
+        }
 
         $query->where(function (Builder $group) use ($flags): void {
             foreach ($flags as $flag) {
@@ -452,7 +490,7 @@ class LoadController extends CrudController
                         'oversized' => $scope->where('oog_in_gauge', false)->orWhereNotNull('oog_length_m')->orWhereNotNull('oog_weight_kg'),
                         'high_value' => $scope->whereNotNull('declared_value')->where('declared_value', '>', 0),
                         'general' => $scope->whereNull('requires_adr')->orWhere('requires_adr', false),
-                        default => $scope->where('goods_type', 'like', '%' . str_replace('_', ' ', $flag) . '%'),
+                        default => $scope->where('goods_type', 'like', '%'.str_replace('_', ' ', $flag).'%'),
                     };
                 });
             }
@@ -466,7 +504,9 @@ class LoadController extends CrudController
     private function applyEquipmentFilters(Builder $query, Request $request): void
     {
         $equipment = $this->csv($request->query('equipment_types'));
-        if ($equipment === []) return;
+        if ($equipment === []) {
+            return;
+        }
 
         $query->where(function (Builder $group) use ($equipment): void {
             foreach ($equipment as $item) {
@@ -480,7 +520,9 @@ class LoadController extends CrudController
     private function applyAssignmentFilters(Builder $query, Request $request): void
     {
         $assignment = $this->csv($request->query('assignment'));
-        if ($assignment === []) return;
+        if ($assignment === []) {
+            return;
+        }
         $userId = $request->user()?->id;
 
         $query->where(function (Builder $group) use ($assignment, $userId): void {
@@ -601,6 +643,7 @@ class LoadController extends CrudController
             if ($stops !== []) {
                 $load->stops()->createMany($stops);
             }
+
             return $load;
         });
         $load->load($this->relations());
@@ -644,19 +687,28 @@ class LoadController extends CrudController
         ], true);
 
         $data = $request->validate([
-            'status' => ['required', Rule::in(Load::STATUSES)],
+            'status' => ['sometimes', 'required_without_all:pre_delivery_status,booking_status', Rule::in(Load::STATUSES)],
+            'pre_delivery_status' => ['sometimes', 'required_without_all:status,booking_status', Rule::in(Load::PRE_DELIVERY_STATUSES)],
+            'booking_status' => ['sometimes', 'required_without_all:status,pre_delivery_status', Rule::in(Load::BOOKING_STATUSES)],
         ]);
+
+        if (array_key_exists('pre_delivery_status', $data)) {
+            abort_unless($load->status === 'posted', 409, 'Pre-delivery status is available only while the load is posted.');
+        }
+        if (array_key_exists('pre_delivery_status', $data) || array_key_exists('booking_status', $data)) {
+            abort_unless($user?->isSuperAdminOrMaster(), 403, 'Only an administrator can change booking substates directly.');
+        }
 
         $isReceivingCustomer = $role === 'user'
             && (int) $load->customer_user_id === (int) $user->id
-            && $data['status'] === 'received';
+            && ($data['status'] ?? null) === 'received';
         abort_unless($canManageStatus || $isReceivingCustomer, 403, 'You cannot update this load status.');
-        abort_if($data['status'] === 'received' && ! $isReceivingCustomer, 403, 'Only the customer can mark the load as received.');
+        abort_if(($data['status'] ?? null) === 'received' && ! $isReceivingCustomer, 403, 'Only the customer can mark the load as received.');
         abort_if($isReceivingCustomer && $load->status !== 'in_delivery', 409, 'The load can be received only while it is in delivery.');
         abort_if($isReceivingCustomer && ! $load->reviews()->where('reviewer_user_id', $user->id)->exists(), 422, 'Post your review before marking the load as received.');
-        abort_if($data['status'] === 'finished', 422, 'Complete the vehicle return inspection before finishing the load.');
+        abort_if(($data['status'] ?? null) === 'finished', 422, 'Complete the vehicle return inspection before finishing the load.');
 
-        $load->update(['status' => $data['status']]);
+        $load->update($data);
         $load->load($this->relations());
 
         return $this->success((new EntityResource($load))->resolve($request), 'Load status updated successfully.');

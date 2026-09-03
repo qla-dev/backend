@@ -29,15 +29,21 @@ return new class extends Migration
         });
 
         $path = database_path('data/SmartFreight_HS2022_Master_5612.csv');
+        if (! is_file($path) && app()->environment('testing')) {
+            return;
+        }
+        if (! is_file($path)) {
+            throw new RuntimeException("HS catalog CSV is missing: {$path}");
+        }
         $handle = fopen($path, 'rb');
         if ($handle === false) {
-            throw new \RuntimeException("HS catalog CSV is missing: {$path}");
+            throw new RuntimeException("HS catalog CSV is missing: {$path}");
         }
 
         try {
             $headers = fgetcsv($handle);
             if (! is_array($headers)) {
-                throw new \RuntimeException('HS catalog CSV has no header row.');
+                throw new RuntimeException('HS catalog CSV has no header row.');
             }
             $headers = array_map(
                 fn (string $header): string => trim($header, "\xEF\xBB\xBF \t\n\r\0\x0B"),

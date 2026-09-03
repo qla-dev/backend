@@ -15,6 +15,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         $violations = [
             'users.role_id -> roles.id' => DB::table('users')
                 ->leftJoin('roles', 'users.role_id', '=', 'roles.id')
@@ -65,6 +69,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         foreach ([
             ['company_user', 'fk_company_user_invited_by_user'],
             ['company_user', 'fk_company_user_user'],

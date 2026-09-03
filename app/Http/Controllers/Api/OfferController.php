@@ -90,7 +90,31 @@ class OfferController extends CrudController
 
     public function store(Request $request): JsonResponse
     {
-        $request->merge(['created_by_user_id' => $request->user()->id, 'request_type' => 'price_offer', 'status' => 'pending']);
+        $user = $request->user();
+        $role = $user->role?->name;
+        abort_unless(in_array($role, ['user', 'driver', 'company', 'manager', 'dispatcher', 'customs_officer', 'warehouse', 'superadmin', 'master'], true), 403);
+
+        $identity = ['created_by_user_id' => $user->id, 'request_type' => 'price_offer', 'status' => 'pending'];
+        if ($role === 'driver') {
+            $identity['driver_user_id'] = $user->id;
+            $identity['company_id'] = $user->driver?->primary_company_id;
+        } elseif (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer'], true)) {
+            $companyIds = $user->companies()->pluck('companies.id');
+            abort_if($companyIds->isEmpty(), 422, 'You are not linked to a company.');
+            $companyId = $request->integer('company_id') ?: (int) $companyIds->first();
+            abort_unless($companyIds->contains($companyId), 403, 'You can submit offers only for your own company.');
+            $identity['company_id'] = $companyId;
+            if ($request->filled('driver_user_id')) {
+                abort_unless($user->companies()->whereKey($companyId)->whereHas('users', fn (Builder $members) => $members->whereKey($request->integer('driver_user_id')))->exists(), 422, 'The selected driver is not part of this company.');
+            }
+        }
+
+        if ($role === 'user') {
+            $parent = $request->filled('parent_offer_id') ? Offer::query()->with('freightLoad')->find($request->integer('parent_offer_id')) : null;
+            abort_unless($request->boolean('is_counter') && $parent && (int) $parent->freightLoad->customer_user_id === (int) $user->id, 403, 'Customers can only counter offers on their own loads.');
+        }
+
+        $request->merge($identity);
         $data = $request->validate($this->rulesForRequest($request, false));
         $this->validateBestBidPaymentTerms($data['price_basis'], $data['payment_terms']);
 

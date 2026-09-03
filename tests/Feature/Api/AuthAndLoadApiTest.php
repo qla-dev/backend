@@ -423,7 +423,7 @@ class AuthAndLoadApiTest extends TestCase
     public function test_customer_cannot_book_a_load_under_another_customers_identity(): void
     {
         $otherCustomer = User::query()->create([
-            'role_id' => \App\Models\Role::query()->where('name', 'user')->value('id'),
+            'role_id' => Role::query()->where('name', 'user')->value('id'),
             'name' => 'Other Customer', 'email' => 'other.customer@example.com', 'username' => 'other_customer',
             'password' => Hash::make('secure-pass-123'), 'is_active' => true,
         ]);
@@ -443,7 +443,7 @@ class AuthAndLoadApiTest extends TestCase
     public function test_customer_only_sees_their_own_loads_in_the_listing(): void
     {
         $otherCustomer = User::query()->create([
-            'role_id' => \App\Models\Role::query()->where('name', 'user')->value('id'),
+            'role_id' => Role::query()->where('name', 'user')->value('id'),
             'name' => 'Other Customer', 'email' => 'other.customer2@example.com', 'username' => 'other_customer2',
             'password' => Hash::make('secure-pass-123'), 'is_active' => true,
         ]);
@@ -460,7 +460,7 @@ class AuthAndLoadApiTest extends TestCase
         $this->assertNotContains('Someone elses cargo', collect($response->json('data'))->pluck('title')->all());
     }
 
-    public function test_driver_can_instantly_book_a_posted_non_negotiable_load(): void
+    public function test_fixed_price_load_accepts_multiple_reservation_requests_without_auto_assignment(): void
     {
         $load = Load::query()->create([
             'customer_user_id' => User::query()->where('username', 'customer_demo')->value('id'),
@@ -473,11 +473,21 @@ class AuthAndLoadApiTest extends TestCase
         $token = $this->postJson('/api/auth/login', ['login' => 'driver_demo', 'password' => 'demo12345'])->json('data.token');
 
         $this->withToken($token)->postJson("/api/loads/{$load->id}/book")
-            ->assertOk()
-            ->assertJsonPath('data.status', 'sent')
-            ->assertJsonPath('data.assigned_driver_user_id', $driver->id);
+            ->assertCreated()
+            ->assertJsonPath('data.request_type', 'reservation_request')
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.driver_user_id', $driver->id);
 
-        $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => $driver->id, 'status' => 'sent']);
+        $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => null, 'status' => 'posted']);
+
+        $this->flushHeaders();
+        $this->app['auth']->forgetGuards();
+        $companyToken = $this->postJson('/api/auth/login', ['login' => 'company_demo', 'password' => 'demo12345'])->json('data.token');
+        $this->withToken($companyToken)->postJson("/api/loads/{$load->id}/book")
+            ->assertCreated()
+            ->assertJsonPath('data.request_type', 'reservation_request');
+
+        $this->assertSame(2, Offer::query()->where('load_id', $load->id)->where('status', 'pending')->count());
     }
 
     public function test_driver_cannot_instantly_book_a_negotiable_load(): void
@@ -598,6 +608,7 @@ class AuthAndLoadApiTest extends TestCase
     public function test_superadmin_can_approve_an_offer_and_assign_its_driver(): void
     {
         $load = Load::query()->firstOrFail();
+        $load->update(['status' => 'posted', 'pre_delivery_status' => 'open_for_reservations']);
         $driver = User::query()->where('username', 'driver_demo')->firstOrFail();
         $offer = Offer::query()->create([
             'load_id' => $load->id,
@@ -614,8 +625,48 @@ class AuthAndLoadApiTest extends TestCase
             'driver_user_id' => $driver->id,
         ])->assertOk()->assertJsonPath('data.status', 'accepted');
 
-        $this->assertDatabaseHas('loads', ['id' => $load->id, 'assigned_driver_user_id' => $driver->id, 'status' => 'sent']);
+        $this->assertDatabaseHas('loads', [
+            'id' => $load->id,
+            'assigned_driver_user_id' => $driver->id,
+            'status' => 'posted',
+            'pre_delivery_status' => 'booking_confirmed',
+            'booking_status' => 'confirmed',
+        ]);
         $this->assertDatabaseHas('offers', ['id' => $offer->id, 'status' => 'accepted']);
+    }
+
+    public function test_load_owner_can_accept_a_reservation_request_and_other_requests_are_rejected(): void
+    {
+        $customer = User::query()->where('username', 'customer_demo')->firstOrFail();
+        $driver = User::query()->where('username', 'driver_demo')->firstOrFail();
+        $load = Load::query()->create([
+            'customer_user_id' => $customer->id,
+            'public_id' => '00000000-0000-4000-8000-000000000090',
+            'title' => 'Owner approval cargo', 'status' => 'posted', 'transport_type' => 'road',
+            'cargo_type' => 'FTL', 'weight_kg' => 1000, 'currency' => 'EUR', 'budget' => 1500,
+            'is_negotiable' => false,
+        ]);
+        $selected = Offer::query()->create([
+            'load_id' => $load->id, 'request_type' => 'reservation_request',
+            'driver_user_id' => $driver->id, 'created_by_user_id' => $driver->id,
+            'amount' => 1500, 'currency' => 'EUR', 'status' => 'pending',
+        ]);
+        $other = Offer::query()->create([
+            'load_id' => $load->id, 'request_type' => 'reservation_request',
+            'created_by_user_id' => User::query()->where('username', 'company_demo')->value('id'),
+            'amount' => 1500, 'currency' => 'EUR', 'status' => 'pending',
+        ]);
+        $token = $this->postJson('/api/auth/login', ['login' => 'customer_demo', 'password' => 'demo12345'])->json('data.token');
+
+        $this->withToken($token)->postJson("/api/offers/{$selected->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'accepted');
+
+        $this->assertDatabaseHas('offers', ['id' => $other->id, 'status' => 'rejected']);
+        $this->assertDatabaseHas('loads', [
+            'id' => $load->id, 'assigned_driver_user_id' => $driver->id,
+            'pre_delivery_status' => 'booking_confirmed', 'booking_status' => 'confirmed',
+        ]);
     }
 
     public function test_only_superadmin_can_change_load_status_and_timestamp_is_recorded(): void
