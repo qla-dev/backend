@@ -34,14 +34,14 @@ class DocumentController extends CrudController
 
     protected function searchColumns(): array
     {
-        return ['name', 'type', 'reference'];
+        return ['name', 'type', 'reference', 'comment'];
     }
 
     protected function rules(bool $u = false): array
     {
         $p = $u ? 'sometimes' : 'required';
 
-        return ['load_id' => ['nullable', 'integer', 'exists:loads,id'], 'load_draft_id' => ['nullable', 'integer', 'exists:load_drafts,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'], 'user_id' => ['nullable', 'integer', 'exists:users,id'], 'uploaded_by_user_id' => [$p, 'integer', 'exists:users,id'], 'type' => [$p, 'string', 'max:100'], 'name' => [$p, 'string', 'max:255'], 'reference' => ['nullable', 'string', 'max:120'], 'path' => [$p, 'string', 'max:500'], 'mime_type' => ['nullable', 'string', 'max:120'], 'size_bytes' => ['nullable', 'integer', 'min:0'], 'expires_at' => ['nullable', 'date']];
+        return ['load_id' => ['nullable', 'integer', 'exists:loads,id'], 'load_draft_id' => ['nullable', 'integer', 'exists:load_drafts,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'], 'user_id' => ['nullable', 'integer', 'exists:users,id'], 'uploaded_by_user_id' => [$p, 'integer', 'exists:users,id'], 'type' => [$p, 'string', 'max:100'], 'name' => [$p, 'string', 'max:255'], 'reference' => ['nullable', 'string', 'max:120'], 'comment' => ['nullable', 'string', 'max:2000'], 'path' => [$p, 'string', 'max:500'], 'mime_type' => ['nullable', 'string', 'max:120'], 'size_bytes' => ['nullable', 'integer', 'min:0'], 'expires_at' => ['nullable', 'date']];
     }
 
     protected function applyFilters(Builder $query, Request $request): void
@@ -105,6 +105,7 @@ class DocumentController extends CrudController
             'type' => ['nullable', 'string', 'max:100'],
             'name' => ['nullable', 'string', 'max:255'],
             'reference' => ['nullable', 'string', 'max:120'],
+            'comment' => ['nullable', 'string', 'max:2000'],
             'expires_at' => ['nullable', 'date'],
         ]);
 
@@ -137,6 +138,7 @@ class DocumentController extends CrudController
             'type' => ($data['type'] ?? '') ?: 'OTHER',
             'name' => ($data['name'] ?? '') ?: $file->getClientOriginalName(),
             'reference' => $data['reference'] ?? null,
+            'comment' => $data['comment'] ?? null,
             'path' => "{$folder}/{$filename}",
             'mime_type' => $file->getClientMimeType() ?: 'application/octet-stream',
             'size_bytes' => $file->getSize(),
