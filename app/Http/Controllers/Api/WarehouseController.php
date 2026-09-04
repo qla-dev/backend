@@ -296,10 +296,18 @@ class WarehouseController extends CrudController
 
         $names = $warehouses->pluck('name', 'id');
         $today = Carbon::today();
-        $todaysMovements = WarehouseMovement::query()
+        $todaysMovementCounts = WarehouseMovement::query()
             ->whereIn('warehouse_id', $scopeIds)
             ->whereDate('scheduled_at', $today)
-            ->orderBy('scheduled_at')
+            ->selectRaw('direction, COUNT(*) as aggregate')
+            ->groupBy('direction')
+            ->pluck('aggregate', 'direction');
+        // Keep the overview compact and useful even when today's dock is empty. The complete,
+        // filterable ledger remains under My docks; this panel is only its five newest entries.
+        $latestDockMovements = WarehouseMovement::query()
+            ->whereIn('warehouse_id', $scopeIds)
+            ->orderByDesc('id')
+            ->limit(5)
             ->get()
             ->map(fn (WarehouseMovement $movement) => $movement->toArray() + ['warehouse_name' => $names[$movement->warehouse_id] ?? null]);
 
@@ -328,13 +336,13 @@ class WarehouseController extends CrudController
                 'occupied_pallets' => $occupiedPallets,
                 'available_pallets' => max(0, $totalCapacity - $occupiedPallets),
                 'total_capacity_pallets' => $totalCapacity,
-                'inbound_today' => $todaysMovements->where('direction', 'inbound')->count(),
-                'outbound_today' => $todaysMovements->where('direction', 'outbound')->count(),
+                'inbound_today' => (int) ($todaysMovementCounts['inbound'] ?? 0),
+                'outbound_today' => (int) ($todaysMovementCounts['outbound'] ?? 0),
                 'storage_revenue' => round((float) $storageRevenue, 2),
                 'total_revenue' => round((float) $totalRevenue, 2),
                 'currency' => WarehouseMovement::query()->whereIn('warehouse_id', $scopeIds)->value('currency') ?? 'EUR',
             ],
-            'dock_schedule' => $todaysMovements->values(),
+            'dock_schedule' => $latestDockMovements->values(),
             'inventory_summary' => $netByStorageType->values(),
             'recent_arrivals' => $recentArrivals->values(),
             'top_customers' => $netByCustomer->take(5)->values(),
