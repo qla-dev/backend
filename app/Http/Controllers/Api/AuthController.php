@@ -106,6 +106,7 @@ class AuthController extends Controller
             'country_code' => ['nullable', 'string', 'size:2'], 'avatar_url' => ['nullable', 'url'],
             'headline' => ['nullable', 'string', 'max:255'], 'bio' => ['nullable', 'string', 'max:3000'],
             'have_fleet' => ['sometimes', 'boolean'],
+            'have_warehouse' => ['sometimes', 'boolean'],
             'password' => ['sometimes', 'string', 'min:8'],
             'role_id' => ['sometimes', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->whereNotIn('name', [...Role::PROTECTED_NAMES, 'manager', 'dispatcher', 'customs_officer']))],
             'company' => ['sometimes', 'array'],
@@ -133,6 +134,9 @@ class AuthController extends Controller
             && $user->companies()->where('warehouse_first', true)->exists();
         if ($roleName === 'finance' || $roleName === 'warehouse' || $isWarehouseCompanyAccount) {
             $data['have_fleet'] = false;
+        }
+        if ($roleName === 'finance') {
+            $data['have_warehouse'] = false;
         }
         $company = null;
         if (is_array($companyData)) {
