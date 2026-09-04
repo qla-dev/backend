@@ -124,6 +124,12 @@ class ShipmentWorkspaceCreator
             default => ['assign_driver_and_vehicle', 'confirm_pickup_time', 'vehicle_registrations', 'cmr_and_documents', 'confirm_pickup', 'tracking_and_status_updates', 'proof_of_delivery'],
         };
 
-        return array_map(fn (string $key): array => ['key' => $key, 'status' => 'pending', 'completed_at' => null, 'completed_by_user_id' => null], $items);
+        return array_map(fn (string $key): array => [
+            'key' => $key,
+            'status' => 'pending',
+            'action_value' => null,
+            'completed_at' => null,
+            'completed_by_user_id' => null,
+        ], $items);
     }
 }
