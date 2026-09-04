@@ -160,7 +160,7 @@ class LoadController extends CrudController
             'pallets_min' => ['sometimes', 'integer', 'min:0'], 'pallets_max' => ['sometimes', 'integer', 'min:0'],
             'volume_min' => ['sometimes', 'numeric', 'min:0'], 'volume_max' => ['sometimes', 'numeric', 'min:0'],
             'storage_start_from' => ['sometimes', 'date'], 'storage_start_to' => ['sometimes', 'date', 'after_or_equal:storage_start_from'],
-            'goods_types' => ['sometimes', 'string', 'max:1000'], 'payment_terms' => ['sometimes', 'string', 'max:500'],
+            'goods_types' => ['sometimes', 'string', 'max:1000'], 'hs_sections' => ['sometimes', 'string', 'max:200'], 'payment_terms' => ['sometimes', 'string', 'max:500'],
             'storage_types' => ['sometimes', 'string', 'max:1000'], 'price_terms' => ['sometimes', 'string', 'max:100'],
             'adr_classes' => ['sometimes', 'string', 'max:500'], 'sensitivity' => ['sometimes', 'string', 'max:500'],
             'urgency' => ['sometimes', 'string', 'max:500'], 'loading_methods' => ['sometimes', 'string', 'max:500'],
@@ -294,6 +294,27 @@ class LoadController extends CrudController
         }
 
         $this->applyWhereIn($query, 'goods_type', $request->query('goods_types'));
+        if ($request->filled('hs_sections')) {
+            $sectionEnds = [5, 14, 15, 24, 27, 38, 40, 43, 46, 49, 63, 67, 70, 71, 83, 85, 89, 92, 93, 96, 99];
+            $sectionIndexes = collect($this->csv($request->query('hs_sections')))
+                ->filter(fn (string $value): bool => ctype_digit($value) && isset($sectionEnds[(int) $value]))
+                ->map(fn (string $value): int => (int) $value)
+                ->unique()
+                ->values();
+
+            if ($sectionIndexes->isNotEmpty()) {
+                $query->where(function (Builder $sections) use ($sectionEnds, $sectionIndexes): void {
+                    foreach ($sectionIndexes as $sectionIndex) {
+                        $firstChapter = $sectionIndex === 0 ? 1 : $sectionEnds[$sectionIndex - 1] + 1;
+                        for ($chapter = $firstChapter; $chapter <= $sectionEnds[$sectionIndex]; $chapter++) {
+                            $sections->orWhereJsonContains('hs_codes', [
+                                'chapterCode' => str_pad((string) $chapter, 2, '0', STR_PAD_LEFT),
+                            ]);
+                        }
+                    }
+                });
+            }
+        }
         $this->applyWhereIn($query, 'payment_terms', $request->query('payment_terms'));
         $this->applyWhereIn($query, 'storage_type', $request->query('storage_types'));
         if ($request->filled('price_terms')) {
@@ -549,9 +570,12 @@ class LoadController extends CrudController
         return array_values(array_filter(array_map('trim', explode(',', (string) $value)), fn (string $item): bool => $item !== ''));
     }
 
-    protected function rules(bool $updating = false): array
+    protected function rules(bool $updating = false, array $payload = []): array
     {
         $p = $updating ? 'sometimes' : 'required';
+        // A storage request is not a trip: its only stop is the warehouse the goods are held in, so
+        // it carries one. Everything that is actually transported still has to name both ends of it.
+        $minStops = ($payload['transport_type'] ?? 'road') === 'warehouse' ? 1 : 2;
 
         return [
             'customer_user_id' => ['sometimes', 'integer', 'exists:users,id'], 'consignee_customer_id' => ['nullable', 'integer', 'exists:customers,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'],
@@ -603,7 +627,7 @@ class LoadController extends CrudController
             'oog_in_gauge' => ['nullable', 'string', 'max:20'], 'oog_length_m' => ['nullable', 'numeric', 'min:0'], 'oog_width_m' => ['nullable', 'numeric', 'min:0'], 'oog_height_m' => ['nullable', 'numeric', 'min:0'], 'oog_weight_kg' => ['nullable', 'numeric', 'min:0'],
             'contact' => ['nullable', 'array'], 'notes' => ['nullable', 'string'], 'internal_comments' => ['nullable', 'string'],
             'external_comments' => ['nullable', 'string'], 'published_at' => ['nullable', 'date'], 'completed_at' => ['nullable', 'date'],
-            'stops' => ['sometimes', 'array', 'min:2'], 'stops.*.type' => ['required_with:stops', 'in:pickup,waypoint,delivery'],
+            'stops' => ['sometimes', 'array', "min:{$minStops}"], 'stops.*.type' => ['required_with:stops', 'in:pickup,waypoint,delivery'],
             'stops.*.position' => ['required_with:stops', 'integer', 'min:1'], 'stops.*.place_type' => ['nullable', 'string', 'max:100'], 'stops.*.port' => ['nullable', 'string', 'max:255'], 'stops.*.airport' => ['nullable', 'string', 'max:255'],
             'stops.*.city' => ['required_with:stops', 'string', 'max:120'], 'stops.*.country_code' => ['required_with:stops', 'string', 'size:2'],
             'stops.*.address' => ['nullable', 'string', 'max:255'], 'stops.*.latitude' => ['nullable', 'numeric', 'between:-90,90'],
@@ -614,7 +638,7 @@ class LoadController extends CrudController
 
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate($this->rules());
+        $data = $request->validate($this->rules(payload: $request->all()));
         $stops = $data['stops'] ?? [];
         unset($data['stops']);
         if (in_array($request->user()?->role?->name, ['user', 'driver'], true)) {
@@ -655,7 +679,7 @@ class LoadController extends CrudController
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate($this->rules(true));
+        $data = $request->validate($this->rules(true, $request->all()));
         $hasStops = array_key_exists('stops', $data);
         $stops = $data['stops'] ?? [];
         unset($data['stops']);
@@ -832,7 +856,7 @@ class LoadController extends CrudController
             foreach ($payload['loads'] as $index => $loadPayload) {
                 $data = validator(
                     is_array($loadPayload) ? $loadPayload : [],
-                    $this->rules(),
+                    $this->rules(payload: is_array($loadPayload) ? $loadPayload : []),
                 )->validate();
                 $stops = $data['stops'] ?? [];
                 unset($data['stops']);
