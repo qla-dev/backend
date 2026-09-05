@@ -3,11 +3,35 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasReviews;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Customer extends BaseModel
 {
     use HasReviews;
+
+    public function scopeFromLoadHistory(Builder $query, User $user): void
+    {
+        $query->where(function (Builder $customer) use ($user): void {
+            $customer->whereNull('customers.user_id')->orWhere('customers.user_id', '!=', $user->id);
+        });
+        $query->whereExists(function (QueryBuilder $loads) use ($user): void {
+            $loads->selectRaw('1')->from('loads')
+                ->where(function (QueryBuilder $customer): void {
+                    $customer->whereColumn('loads.consignee_customer_id', 'customers.id')
+                        ->orWhereColumn('loads.customer_user_id', 'customers.user_id');
+                })
+                ->where(function (QueryBuilder $history) use ($user): void {
+                    $history->where('loads.customer_user_id', $user->id)
+                        ->orWhere('loads.assigned_driver_user_id', $user->id)
+                        ->orWhereIn('loads.company_id', function (QueryBuilder $companies) use ($user): void {
+                            $companies->select('company_id')->from('company_user')
+                                ->where('user_id', $user->id)->where('status', 'active');
+                        });
+                });
+        });
+    }
 
     protected $appends = ['name', 'email', 'username', 'phone', 'country_code', 'language', 'is_active'];
 

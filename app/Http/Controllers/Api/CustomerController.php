@@ -56,6 +56,10 @@ class CustomerController extends CrudController
 
     protected function applyFilters(Builder $query, Request $request): void
     {
+        if ($request->routeIs('customers.mine')) {
+            $query->fromLoadHistory($request->user());
+        }
+
         $search = trim((string) $request->query('search', ''));
         if ($search !== '') {
             $query->where(function (Builder $customerQuery) use ($search): void {

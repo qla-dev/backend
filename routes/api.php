@@ -145,6 +145,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // The dock ledger a warehouse account works its day from - see WarehouseMovementController.
     Route::apiResource('warehouse-movements', WarehouseMovementController::class);
     Route::apiResource('drivers', DriverController::class)->only(['index', 'show']);
+    Route::get('customers/mine', [CustomerController::class, 'index'])->name('customers.mine');
     Route::apiResource('customers', CustomerController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
