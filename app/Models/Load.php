@@ -69,6 +69,14 @@ class Load extends BaseModel
     protected static function booted(): void
     {
         static::creating(function (Load $load): void {
+            if (! $load->consignee_customer_id && $load->customer_user_id) {
+                $owner = User::query()->findOrFail($load->customer_user_id);
+                $recipient = Customer::query()->firstOrCreate(
+                    ['user_id' => $owner->id],
+                    ['name' => $owner->name, 'email' => $owner->email, 'phone' => $owner->phone, 'country_code' => $owner->country_code],
+                );
+                $load->consignee_customer_id = $recipient->id;
+            }
             $load->status_change ??= [$load->status => now()->toIso8601String()];
 
         });
