@@ -51,7 +51,7 @@ class ShipmentWorkspaceCreator
             'load_snapshot' => $this->loadSnapshot($load),
             'offer_snapshot' => $this->offerSnapshot($offer),
             'parties_snapshot' => $this->partiesSnapshot($load, $offer),
-            'operational_checklist' => $this->checklist((string) $load->transport_type),
+            'operational_checklist' => $this->checklist($load->for_storage ? 'warehouse' : (string) $load->transport_type),
             'booked_at' => now(),
         ]);
 
@@ -82,6 +82,7 @@ class ShipmentWorkspaceCreator
             'public_id' => $load->public_id,
             'title' => $load->title,
             'transport_type' => $load->transport_type,
+            'for_storage' => $load->for_storage,
             'cargo_type' => $load->cargo_type,
             'goods_type' => $load->goods_type,
             'weight_kg' => $load->weight_kg,
@@ -119,6 +120,7 @@ class ShipmentWorkspaceCreator
     private function checklist(string $transportType): array
     {
         $items = match ($transportType) {
+            'warehouse' => ['confirm_storage_arrival', 'check_storage_documents', 'record_storage_receipt', 'assign_storage_location', 'confirm_storage_dispatch'],
             'sea' => ['booking_confirmation', 'shipping_line_and_agent', 'vessel_and_voyage', 'container_details', 'shipping_instructions', 'vgm', 'draft_bill_of_lading', 'approve_draft', 'final_bill_of_lading', 'terminal_and_cutoff'],
             'air' => ['airline_and_agent', 'flight_details', 'mawb_hawb', 'cargo_acceptance', 'security_and_customs_documents', 'draft_awb', 'approve_awb', 'departure_status', 'arrival_status'],
             'rail' => ['rail_operator', 'terminals', 'wagon_or_container', 'rail_booking_confirmation', 'departure_schedule', 'transit_status', 'arrival_and_release_documents'],

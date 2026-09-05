@@ -10,6 +10,25 @@ class ShipmentWorkspace extends BaseModel
 
     public const STATUSES = ['booked', 'in_execution', 'completed', 'cancelled'];
 
+    public function getOperationalChecklistAttribute($value): array
+    {
+        $items = is_array($value) ? $value : (json_decode($value ?? '[]', true) ?: []);
+        $snapshot = $this->load_snapshot ?? [];
+        $isStorage = ($snapshot['transport_type'] ?? '') === 'warehouse' || !empty($snapshot['for_storage']);
+        // Older storage bookings inherited the road checklist. Adapt untouched lists
+        // on read; retain any list with recorded work instead of discarding progress.
+        if ($isStorage && collect($items)->contains('key', 'assign_driver_and_vehicle')
+            && collect($items)->every(fn ($item) => ($item['status'] ?? 'pending') === 'pending'
+                && empty($item['action_value']) && empty($item['completed_at']) && empty($item['due_date']))) {
+            return array_map(fn ($key) => [
+                'key' => $key, 'status' => 'pending', 'action_value' => null,
+                'completed_at' => null, 'completed_by_user_id' => null,
+            ], ['confirm_storage_arrival', 'check_storage_documents', 'record_storage_receipt', 'assign_storage_location', 'confirm_storage_dispatch']);
+        }
+
+        return $items;
+    }
+
     protected function casts(): array
     {
         return [

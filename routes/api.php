@@ -191,7 +191,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     Route::patch('loads/{load}/status', [LoadController::class, 'updateStatus'])
-        ->middleware('role:user,driver,company,manager,dispatcher,customs_officer,superadmin,master');
+        ->middleware('role:user,driver,company,manager,dispatcher,customs_officer,warehouse,superadmin,master');
 
     Route::post('loads/{load}/vehicle-return', [VehicleReturnInspectionController::class, 'store'])
         ->middleware('role:driver,company,manager,dispatcher,customs_officer,superadmin,master');

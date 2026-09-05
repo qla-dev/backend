@@ -100,7 +100,7 @@ class WarehouseMovementController extends CrudController
 
     protected function applyOrdering(Builder $query, Request $request): void
     {
-        $query->orderBy('scheduled_at')->orderBy('id');
+        $query->orderByDesc('created_at')->orderByDesc('id');
     }
 
     public function store(Request $request): JsonResponse

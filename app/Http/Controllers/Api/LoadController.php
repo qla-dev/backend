@@ -729,11 +729,17 @@ class LoadController extends CrudController
             abort_unless($user?->isSuperAdminOrMaster(), 403, 'Only an administrator can change booking substates directly.');
         }
 
+        $isStorageOperator = ($load->for_storage || $load->transport_type === 'warehouse')
+            && ($user?->isSuperAdminOrMaster() || $load->offers()->where('status', 'accepted')->where(function (Builder $query) use ($user): void {
+                $query->where('created_by_user_id', $user->id)->orWhereIn('company_id', $user->companies()->pluck('companies.id'));
+            })->exists());
+        $canManageStatus = $canManageStatus || $isStorageOperator;
+
         $isReceivingCustomer = $role === 'user'
             && (int) $load->customer_user_id === (int) $user->id
             && ($data['status'] ?? null) === 'received';
         abort_unless($canManageStatus || $isReceivingCustomer, 403, 'You cannot update this load status.');
-        abort_if(($data['status'] ?? null) === 'received' && ! $isReceivingCustomer, 403, 'Only the customer can mark the load as received.');
+        abort_if(($data['status'] ?? null) === 'received' && ! $isReceivingCustomer && ! $isStorageOperator, 403, 'Only the customer or accepted storage provider can mark the load as received.');
         abort_if($isReceivingCustomer && $load->status !== 'in_delivery', 409, 'The load can be received only while it is in delivery.');
         abort_if($isReceivingCustomer && ! $load->reviews()->where('reviewer_user_id', $user->id)->exists(), 422, 'Post your review before marking the load as received.');
         abort_if(($data['status'] ?? null) === 'finished', 422, 'Complete the vehicle return inspection before finishing the load.');
