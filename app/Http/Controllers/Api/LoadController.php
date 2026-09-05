@@ -374,6 +374,10 @@ class LoadController extends CrudController
         $this->applyEquipmentFilters($query, $request);
         $this->applyAssignmentFilters($query, $request);
 
+        if ($request->boolean('my_loads') && $request->user()) {
+            $query->where('customer_user_id', $request->user()->id);
+        }
+
         if ($request->boolean('my_bids') && $request->user()) {
             $query->whereHas('offers', fn (Builder $offers) => $offers->where('created_by_user_id', $request->user()->id));
         }
@@ -750,6 +754,7 @@ class LoadController extends CrudController
 
         $offer = DB::transaction(function () use ($request, $load, $role, $data) {
             $load = Load::query()->lockForUpdate()->findOrFail($load->id);
+            abort_if((int) $load->customer_user_id === (int) $request->user()->id, 403, 'You cannot reserve your own load.');
             abort_if($load->is_negotiable, 422, 'This load accepts offers instead of direct booking.');
             abort_unless(
                 $load->status === 'posted',

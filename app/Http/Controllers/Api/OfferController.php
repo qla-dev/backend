@@ -7,6 +7,7 @@ use App\Models\Load;
 use App\Models\Offer;
 use App\Models\User;
 use App\Services\ShipmentWorkspaceCreator;
+use App\Services\WarehouseMovementCreator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,6 +35,9 @@ class OfferController extends CrudController
 
     protected function applyFilters(Builder $query, Request $request): void
     {
+        if ($request->filled('load_id')) {
+            $query->where('load_id', $request->integer('load_id'));
+        }
         $user = $request->user();
         if (! $user || $user->isSuperAdminOrMaster()) {
             return;
@@ -125,8 +129,12 @@ class OfferController extends CrudController
         $data = $request->validate($this->rulesForRequest($request, false));
         $this->validateBestBidPaymentTerms($data['price_basis'], $data['payment_terms']);
 
-        $offer = DB::transaction(function () use ($data) {
+        $offer = DB::transaction(function () use ($data, $user) {
             $load = Load::query()->lockForUpdate()->findOrFail($data['load_id']);
+            if ((int) $load->customer_user_id === (int) $user->id) {
+                $parent = !empty($data['parent_offer_id']) ? Offer::query()->find($data['parent_offer_id']) : null;
+                abort_unless(!empty($data['is_counter']) && $parent && (int) $parent->load_id === (int) $load->id && (int) $parent->created_by_user_id !== (int) $user->id, 403, 'You cannot bid on your own load.');
+            }
             abort_unless($load->status === 'posted', 409, 'This load no longer accepts offers.');
             $this->validateBidFloor($load, (float) $data['amount'], $data['price_basis'] !== 'best_bid');
 
@@ -155,6 +163,7 @@ class OfferController extends CrudController
                 'This offer status transition is not allowed.'
             );
         } else {
+            abort_if($isOwner && !$existing->is_counter, 403, 'You cannot bid on your own load.');
             abort_unless($isCreator || $user->isSuperAdminOrMaster(), 403, 'Only the offer creator can edit it.');
         }
 
@@ -183,11 +192,11 @@ class OfferController extends CrudController
         return $this->success((new EntityResource($offer))->resolve($request), 'Offer updated successfully.');
     }
 
-    public function approve(Request $request, int $id, ShipmentWorkspaceCreator $workspaceCreator): JsonResponse
+    public function approve(Request $request, int $id, ShipmentWorkspaceCreator $workspaceCreator, WarehouseMovementCreator $movementCreator): JsonResponse
     {
         $data = $request->validate(['driver_user_id' => ['nullable', 'integer', 'exists:users,id']]);
 
-        [$offer, $workspace] = DB::transaction(function () use ($request, $id, $data, $workspaceCreator) {
+        [$offer, $workspace] = DB::transaction(function () use ($request, $id, $data, $workspaceCreator, $movementCreator) {
             $offer = Offer::query()->lockForUpdate()->findOrFail($id);
             $load = Load::query()->with('shipment')->lockForUpdate()->findOrFail($offer->load_id);
             $user = $request->user();
@@ -208,6 +217,7 @@ class OfferController extends CrudController
 
             Offer::query()->where('load_id', $offer->load_id)->whereKeyNot($offer->id)->where('status', 'pending')->update(['status' => 'not_selected']);
             $offer->update(['driver_user_id' => $driverId, 'status' => 'accepted']);
+            $movementCreator->create($load, $offer);
             $workspace = $workspaceCreator->create($load, $offer->fresh(), $user);
             $load->update([
                 'assigned_driver_user_id' => $driverId,
