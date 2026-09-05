@@ -33,7 +33,7 @@ class WarehouseMovementCreator
             'load_id' => $load->id,
             'direction' => 'inbound',
         ], [
-            'status' => 'scheduled',
+            'status' => 'booked',
             'scheduled_at' => $scheduledAt,
             'customer_name' => $load->customer?->name,
             'storage_type' => $load->storage_type,

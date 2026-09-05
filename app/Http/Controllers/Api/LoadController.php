@@ -748,6 +748,7 @@ class LoadController extends CrudController
     {
         $role = $request->user()?->role?->name;
         $data = $request->validate([
+            'warehouse_id' => [($load->for_storage || $load->transport_type === 'warehouse') ? 'required' : 'nullable', 'integer', 'exists:warehouses,id'],
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'driver_user_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
@@ -763,6 +764,10 @@ class LoadController extends CrudController
             );
 
             $user = $request->user();
+            if ($load->for_storage || $load->transport_type === 'warehouse') {
+                $ownerIds = $user->companies()->pluck('companies.owner_user_id')->push($user->id)->unique();
+                abort_unless($user->isSuperAdminOrMaster() || \App\Models\Warehouse::query()->whereKey($data['warehouse_id'])->whereIn('user_id', $ownerIds)->exists(), 403, 'You can only reserve storage in your own warehouse.');
+            }
             $companyId = null;
             $driverUserId = null;
 
@@ -807,6 +812,8 @@ class LoadController extends CrudController
             $offer = Offer::query()->create([
                 'load_id' => $load->id,
                 'request_type' => 'reservation_request',
+                'warehouse_id' => ($load->for_storage || $load->transport_type === 'warehouse') ? $data['warehouse_id'] : null,
+                'available_from' => ($load->for_storage || $load->transport_type === 'warehouse') ? $load->storage_start_date : null,
                 'company_id' => $companyId,
                 'driver_user_id' => $driverUserId,
                 'created_by_user_id' => $user->id,

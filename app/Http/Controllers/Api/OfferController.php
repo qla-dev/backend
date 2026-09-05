@@ -136,7 +136,16 @@ class OfferController extends CrudController
                 abort_unless(!empty($data['is_counter']) && $parent && (int) $parent->load_id === (int) $load->id && (int) $parent->created_by_user_id !== (int) $user->id, 403, 'You cannot bid on your own load.');
             }
             abort_unless($load->status === 'posted', 409, 'This load no longer accepts offers.');
-            $this->validateBidFloor($load, (float) $data['amount'], $data['price_basis'] !== 'best_bid');
+            if (($load->for_storage || $load->transport_type === 'warehouse') && !$load->is_negotiable) {
+                abort_if(!empty($data['is_counter']), 422, 'Fixed-price storage does not accept counteroffers.');
+                abort_if(Offer::query()->where('load_id', $load->id)->where('created_by_user_id', $user->id)->where('status', 'pending')->exists(), 409, 'You already have a pending reservation request.');
+                $data['request_type'] = 'reservation_request';
+                $data['amount'] = $load->budget;
+                $data['currency'] = $load->currency;
+                $data['price_basis'] = 'fixed_total';
+            } else {
+                $this->validateBidFloor($load, (float) $data['amount'], $data['price_basis'] !== 'best_bid');
+            }
 
             return Offer::query()->create($data);
         });

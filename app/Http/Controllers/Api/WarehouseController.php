@@ -399,7 +399,7 @@ class WarehouseController extends CrudController
                 'stored_cbm' => round((float) $stock->sum('cbm'), 2),
                 'inbound_today' => (clone $completed)->where('direction', 'inbound')->whereDate('scheduled_at', $today)->count(),
                 'outbound_today' => (clone $completed)->where('direction', 'outbound')->whereDate('scheduled_at', $today)->count(),
-                'scheduled_pending' => WarehouseMovement::query()->where('warehouse_id', $warehouse->id)->where('status', 'scheduled')->count(),
+                'scheduled_pending' => WarehouseMovement::query()->where('warehouse_id', $warehouse->id)->whereIn('status', ['booked', 'scheduled'])->count(),
                 'storage_revenue' => round((float) (clone $completed)->where('direction', 'inbound')->sum('rate'), 2),
                 'currency' => (clone $completed)->value('currency') ?? 'EUR',
             ],

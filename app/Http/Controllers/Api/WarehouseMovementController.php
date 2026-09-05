@@ -45,7 +45,7 @@ class WarehouseMovementController extends CrudController
             'warehouse_id' => [$required, 'integer', 'exists:warehouses,id'],
             'load_id' => ['nullable', 'integer', 'exists:loads,id'],
             'direction' => [$required, 'string', 'in:inbound,outbound'],
-            'status' => ['sometimes', 'string', 'in:scheduled,in_progress,completed,cancelled'],
+            'status' => ['sometimes', 'string', 'in:booked,scheduled,in_progress,completed,cancelled'],
             'scheduled_at' => [$required, 'date'],
             'completed_at' => ['nullable', 'date'],
             'dock_number' => ['nullable', 'string', 'max:20'],

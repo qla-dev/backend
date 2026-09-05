@@ -91,7 +91,7 @@ class WarehouseMovementCreatorTest extends TestCase
 
         self::assertSame(1, $movement->warehouse_id);
         self::assertSame(140, $movement->load_id);
-        self::assertSame('scheduled', $movement->status);
+        self::assertSame('booked', $movement->status);
         self::assertSame('inbound', $movement->direction);
         self::assertSame('2026-09-16', $movement->scheduled_at->toDateString());
         self::assertSame(20, $movement->pallets);
