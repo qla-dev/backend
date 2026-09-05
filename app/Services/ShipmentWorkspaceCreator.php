@@ -124,7 +124,7 @@ class ShipmentWorkspaceCreator
             'sea' => ['booking_confirmation', 'shipping_line_and_agent', 'vessel_and_voyage', 'container_details', 'shipping_instructions', 'vgm', 'draft_bill_of_lading', 'approve_draft', 'final_bill_of_lading', 'terminal_and_cutoff'],
             'air' => ['airline_and_agent', 'flight_details', 'mawb_hawb', 'cargo_acceptance', 'security_and_customs_documents', 'draft_awb', 'approve_awb', 'departure_status', 'arrival_status'],
             'rail' => ['rail_operator', 'terminals', 'wagon_or_container', 'rail_booking_confirmation', 'departure_schedule', 'transit_status', 'arrival_and_release_documents'],
-            default => ['assign_driver_and_vehicle', 'confirm_pickup_time', 'vehicle_registrations', 'cmr_and_documents', 'confirm_pickup', 'tracking_and_status_updates', 'proof_of_delivery'],
+            default => ['assign_driver_and_vehicle', 'confirm_pickup_time', 'vehicle_registrations', 'cmr_and_documents', 'proof_of_delivery'],
         };
 
         return array_map(fn (string $key): array => [

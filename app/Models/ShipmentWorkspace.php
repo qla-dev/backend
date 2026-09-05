@@ -26,6 +26,13 @@ class ShipmentWorkspace extends BaseModel
             ], ['confirm_storage_arrival', 'check_storage_documents', 'record_storage_receipt', 'assign_storage_location', 'confirm_storage_dispatch']);
         }
 
+        // Hide retired road tasks in existing workspaces without rewriting stored records.
+        if (!$isStorage && ($snapshot['transport_type'] ?? 'road') === 'road') {
+            return array_values(array_filter($items, fn ($item) => !in_array(
+                $item['key'] ?? '', ['confirm_pickup', 'tracking_and_status_updates'], true
+            )));
+        }
+
         return $items;
     }
 
