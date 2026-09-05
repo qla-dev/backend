@@ -108,7 +108,7 @@ class LoadController extends CrudController
 
     protected function relations(): array
     {
-        return ['customer.role', 'consignee.user.role', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'offers', 'shipment.events', 'shipmentWorkspace', 'routes.stops', 'notes.author', 'documents'];
+        return ['customer.role', 'consignee.user.role', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'offers', 'shipment.events', 'shipmentWorkspace.acceptedOffer.warehouse', 'routes.stops', 'notes.author', 'documents'];
     }
 
     protected function relationsForRequest(Request $request): array
@@ -116,7 +116,7 @@ class LoadController extends CrudController
         if ($request->boolean('tracking')) {
             // The workspace comes along so a booked shipment can show how many operational tasks
             // are still open without the tracking list fetching every workspace one by one.
-            return ['consignee', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'shipment', 'shipmentWorkspace'];
+            return ['consignee', 'company', 'assignedDriver.driver', 'vehicle', 'stops', 'shipment', 'shipmentWorkspace.acceptedOffer.warehouse'];
         }
 
         return parent::relationsForRequest($request);

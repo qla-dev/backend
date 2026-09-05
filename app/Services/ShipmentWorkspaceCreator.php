@@ -68,8 +68,9 @@ class ShipmentWorkspaceCreator
     private function reference(): string
     {
         do {
-            $reference = 'FB-B-'.now()->format('ymd').'-'.Str::upper(Str::random(6));
-        } while (ShipmentWorkspace::query()->where('reference', $reference)->exists());
+            $reference = Str::upper(Str::random(6));
+        } while (ShipmentWorkspace::query()->where('reference', $reference)->exists()
+            || Load::query()->where('booking_reference', $reference)->exists());
 
         return $reference;
     }
