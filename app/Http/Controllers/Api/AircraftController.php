@@ -14,7 +14,12 @@ class AircraftController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate(['search' => ['nullable', 'string', 'max:100']]);
+        $search = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $validated['search'] ?? ''));
         [$south, $west, $north, $east] = $this->resolveBounds($request);
+        if ($search !== '') {
+            [$south, $west, $north, $east] = [-90, -180, 90, 180];
+        }
         $cacheKey = sprintf('aircraft-viewport:%0.2f:%0.2f:%0.2f:%0.2f', $south, $west, $north, $east);
 
         try {
@@ -52,6 +57,14 @@ class AircraftController extends Controller
 
         $aircraft = collect($payload['aircraft'] ?? $payload['ac'] ?? [])
             ->filter(fn ($row) => is_array($row) && is_numeric($row['lat'] ?? null) && is_numeric($row['lon'] ?? null))
+            ->filter(function (array $row) use ($search): bool {
+                if ($search === '') return true;
+                foreach (['r', 'flight', 'hex'] as $field) {
+                    $value = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', (string) ($row[$field] ?? '')));
+                    if (str_contains($value, $search)) return true;
+                }
+                return false;
+            })
             ->filter(fn (array $row) => $this->insideBounds((float) $row['lat'], (float) $row['lon'], $south, $west, $north, $east))
             ->sortBy(fn (array $row) => (float) ($row['seen'] ?? PHP_FLOAT_MAX))
             ->unique(fn (array $row) => (string) ($row['hex'] ?? sprintf('%0.5f:%0.5f', $row['lat'], $row['lon'])))
