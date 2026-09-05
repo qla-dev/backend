@@ -33,6 +33,14 @@ class ShipmentWorkspace extends BaseModel
             )));
         }
 
+        if (!$isStorage && ($snapshot['transport_type'] ?? '') === 'sea') {
+            $items = array_values(array_filter($items, fn ($item) => !in_array(
+                $item['key'] ?? '', ['vgm', 'terminal_and_cutoff'], true
+            )));
+            $order = array_flip(['booking_confirmation', 'shipping_line_and_agent', 'container_details', 'vessel_and_voyage', 'shipping_instructions', 'draft_bill_of_lading', 'approve_draft', 'final_bill_of_lading']);
+            usort($items, fn ($a, $b) => ($order[$a['key'] ?? ''] ?? PHP_INT_MAX) <=> ($order[$b['key'] ?? ''] ?? PHP_INT_MAX));
+        }
+
         return $items;
     }
 
