@@ -138,14 +138,11 @@ class WarehouseMovementCreatorTest extends TestCase
         (new WarehouseMovementCreator)->create($this->load(), $this->offer(['warehouse_id' => 999]));
     }
 
-    public function test_legacy_reservation_uses_the_providers_only_warehouse(): void
+    public function test_reservation_requires_selection_even_with_only_one_warehouse(): void
     {
         $offer = $this->offer(['warehouse_id' => null, 'request_type' => 'reservation_request', 'created_by_user_id' => 7]);
-        $offer->setRelation('company', null);
-        $movement = (new WarehouseMovementCreator)->create($this->load(), $offer);
-        self::assertSame(1, $movement->warehouse_id);
-        self::assertSame('booked', $movement->status);
-        self::assertSame(1, $offer->warehouse_id);
+        $this->expectException(ValidationException::class);
+        (new WarehouseMovementCreator)->create($this->load(), $offer);
     }
 
     public function test_legacy_reservation_does_not_guess_between_provider_warehouses(): void
