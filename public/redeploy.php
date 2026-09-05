@@ -192,8 +192,6 @@ $commands = [
     ['label' => 'Clearing Laravel config cache', 'command' => $phpCommand.' artisan config:clear --no-ansi'],
     ['label' => 'Clearing Laravel route cache', 'command' => $phpCommand.' artisan route:clear --no-ansi'],
     ['label' => 'Clearing Laravel view cache', 'command' => $phpCommand.' artisan view:clear --no-ansi'],
-    ['label' => 'Running database migrations', 'command' => $phpCommand.' artisan migrate --force --no-ansi'],
-    ['label' => 'Seeding demo roles and accounts', 'command' => $phpCommand.' artisan db:seed --force --no-ansi'],
     ['label' => 'Clearing Laravel application cache', 'command' => $phpCommand.' artisan cache:clear --no-ansi'],
     ['label' => 'Rebuilding Laravel config cache', 'command' => $phpCommand.' artisan config:cache --no-ansi'],
 ];

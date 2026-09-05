@@ -93,7 +93,6 @@ class DatabaseSeeder extends Seeder
             'latitude' => 43.8563, 'longitude' => 18.4131, 'total_capacity_pallets' => 500,
             'storage_types' => ['Ambient', 'Chilled', 'Bonded'], 'certifications' => ['ISO 9001', 'HACCP'],
         ]);
-        WarehouseMovement::query()->where('warehouse_id', $warehouse->id)->delete();
         collect([
             ['direction' => 'inbound', 'status' => 'completed', 'scheduled_at' => now()->subDays(10), 'completed_at' => now()->subDays(10), 'customer_name' => 'Bosnalijek d.d.', 'storage_type' => 'Ambient', 'pallets' => 80, 'cbm' => 120, 'weight_kg' => 24000, 'rate' => 960, 'currency' => 'EUR', 'description' => 'Pharma stock intake'],
             ['direction' => 'inbound', 'status' => 'completed', 'scheduled_at' => now()->subDays(7), 'completed_at' => now()->subDays(7), 'customer_name' => 'Klas d.d.', 'storage_type' => 'Chilled', 'pallets' => 60, 'cbm' => 90, 'weight_kg' => 18000, 'rate' => 780, 'currency' => 'EUR', 'description' => 'Chilled goods intake'],
@@ -103,7 +102,13 @@ class DatabaseSeeder extends Seeder
             ['direction' => 'outbound', 'status' => 'scheduled', 'scheduled_at' => now()->startOfDay()->addHours(9), 'customer_name' => 'Klas d.d.', 'storage_type' => 'Chilled', 'pallets' => 15, 'dock_number' => 'D-2', 'currency' => 'EUR', 'description' => 'Scheduled dispatch'],
             ['direction' => 'inbound', 'status' => 'scheduled', 'scheduled_at' => now()->startOfDay()->addHours(14), 'customer_name' => 'Argeta d.o.o.', 'storage_type' => 'Ambient', 'pallets' => 30, 'dock_number' => 'D-3', 'currency' => 'EUR', 'description' => 'Scheduled intake'],
             ['direction' => 'inbound', 'status' => 'scheduled', 'scheduled_at' => now()->startOfDay()->addHours(16)->addMinutes(30), 'customer_name' => 'Coca-Cola HBC', 'storage_type' => 'Ambient', 'pallets' => 25, 'dock_number' => 'D-1', 'currency' => 'EUR', 'description' => 'Scheduled intake'],
-        ])->each(fn (array $movement) => WarehouseMovement::query()->create($movement + ['warehouse_id' => $warehouse->id]));
+        ])->each(fn (array $movement) => WarehouseMovement::query()->firstOrCreate([
+            'warehouse_id' => $warehouse->id,
+            'load_id' => null,
+            'direction' => $movement['direction'],
+            'customer_name' => $movement['customer_name'],
+            'description' => $movement['description'],
+        ], $movement));
 
         $this->call(SubscriptionPackageSeeder::class);
         $proPackage = SubscriptionPackage::query()->where('slug', 'pro')->first();

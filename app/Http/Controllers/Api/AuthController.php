@@ -130,9 +130,7 @@ class AuthController extends Controller
         $companyData = $data['company'] ?? null;
         unset($data['company']);
         $roleName = (string) $user->role?->name;
-        $isWarehouseCompanyAccount = in_array($roleName, ['company', 'manager'], true)
-            && $user->companies()->where('warehouse_first', true)->exists();
-        if ($roleName === 'finance' || $roleName === 'warehouse' || $isWarehouseCompanyAccount) {
+        if ($roleName === 'finance') {
             $data['have_fleet'] = false;
         }
         if ($roleName === 'finance') {
