@@ -43,13 +43,14 @@ class WarehouseMovementCreatorTest extends TestCase
 
         Schema::create('warehouses', function (Blueprint $table): void {
             $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
         });
         // Reuse the real movement schema, without running application migrations or seeders.
         Schema::create('loads', function (Blueprint $table): void {
             $table->id();
         });
         (require __DIR__.'/../../database/migrations/2026_08_26_000006_create_warehouse_movements_table.php')->up();
-        DB::table('warehouses')->insert(['id' => 1]);
+        DB::table('warehouses')->insert(['id' => 1, 'user_id' => 7]);
         DB::table('loads')->insert(['id' => 140]);
     }
 
@@ -135,6 +136,33 @@ class WarehouseMovementCreatorTest extends TestCase
     {
         $this->expectException(ValidationException::class);
         (new WarehouseMovementCreator)->create($this->load(), $this->offer(['warehouse_id' => 999]));
+    }
+
+    public function test_legacy_reservation_uses_the_providers_only_warehouse(): void
+    {
+        $offer = $this->offer(['warehouse_id' => null, 'request_type' => 'reservation_request', 'created_by_user_id' => 7]);
+        $offer->setRelation('company', null);
+        $movement = (new WarehouseMovementCreator)->create($this->load(), $offer);
+        self::assertSame(1, $movement->warehouse_id);
+        self::assertSame('booked', $movement->status);
+        self::assertSame(1, $offer->warehouse_id);
+    }
+
+    public function test_legacy_reservation_does_not_guess_between_provider_warehouses(): void
+    {
+        DB::table('warehouses')->insert(['id' => 2, 'user_id' => 7]);
+        $offer = $this->offer(['warehouse_id' => null, 'request_type' => 'reservation_request', 'created_by_user_id' => 7]);
+        $offer->setRelation('company', null);
+        $this->expectException(ValidationException::class);
+        (new WarehouseMovementCreator)->create($this->load(), $offer);
+    }
+
+    public function test_legacy_reservation_does_not_use_another_providers_warehouse(): void
+    {
+        $offer = $this->offer(['warehouse_id' => null, 'request_type' => 'reservation_request', 'created_by_user_id' => 8]);
+        $offer->setRelation('company', null);
+        $this->expectException(ValidationException::class);
+        (new WarehouseMovementCreator)->create($this->load(), $offer);
     }
 
     public function test_failed_booking_transaction_leaves_no_dock_movement(): void

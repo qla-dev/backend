@@ -17,6 +17,21 @@ class WarehouseMovementCreator
             return null;
         }
 
+        // Older fixed-price reservations did not collect a warehouse. Resolve them only
+        // when the provider has exactly one facility; never guess between several sites.
+        if (! $offer->warehouse_id && $offer->request_type === 'reservation_request') {
+            $ownerId = $offer->company?->owner_user_id ?: $offer->created_by_user_id;
+            $warehouseIds = $ownerId
+                ? Warehouse::query()->where('user_id', $ownerId)->limit(2)->pluck('id')
+                : collect();
+            if ($warehouseIds->count() === 1) {
+                $offer->warehouse_id = $warehouseIds->first();
+                if ($offer->exists) {
+                    $offer->save();
+                }
+            }
+        }
+
         if (! $offer->warehouse_id || ! Warehouse::query()->whereKey($offer->warehouse_id)->exists()) {
             throw ValidationException::withMessages(['warehouse_id' => 'The accepted storage offer must identify a warehouse.']);
         }
