@@ -41,6 +41,12 @@ class ShipmentWorkspace extends BaseModel
             usort($items, fn ($a, $b) => ($order[$a['key'] ?? ''] ?? PHP_INT_MAX) <=> ($order[$b['key'] ?? ''] ?? PHP_INT_MAX));
         }
 
+        if (!$isStorage && ($snapshot['transport_type'] ?? '') === 'air') {
+            return array_values(array_filter($items, fn ($item) => !in_array(
+                $item['key'] ?? '', ['departure_status', 'arrival_status'], true
+            )));
+        }
+
         return $items;
     }
 

@@ -122,7 +122,7 @@ class ShipmentWorkspaceCreator
         $items = match ($transportType) {
             'warehouse' => ['confirm_storage_arrival', 'check_storage_documents', 'record_storage_receipt', 'assign_storage_location', 'confirm_storage_dispatch'],
             'sea' => ['booking_confirmation', 'shipping_line_and_agent', 'container_details', 'vessel_and_voyage', 'shipping_instructions', 'draft_bill_of_lading', 'approve_draft', 'final_bill_of_lading'],
-            'air' => ['airline_and_agent', 'flight_details', 'mawb_hawb', 'cargo_acceptance', 'security_and_customs_documents', 'draft_awb', 'approve_awb', 'departure_status', 'arrival_status'],
+            'air' => ['airline_and_agent', 'flight_details', 'mawb_hawb', 'cargo_acceptance', 'security_and_customs_documents', 'draft_awb', 'approve_awb'],
             'rail' => ['rail_operator', 'terminals', 'wagon_or_container', 'rail_booking_confirmation', 'departure_schedule', 'transit_status', 'arrival_and_release_documents'],
             default => ['assign_driver_and_vehicle', 'confirm_pickup_time', 'vehicle_registrations', 'cmr_and_documents', 'proof_of_delivery'],
         };
