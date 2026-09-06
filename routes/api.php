@@ -206,6 +206,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::middleware('role:superadmin,master')->group(function (): void {
         Route::get('aircraft', [AircraftController::class, 'index'])->middleware('throttle:30,1');
         Route::get('aircraft/{hex}/trace', [AircraftController::class, 'trace'])->middleware('throttle:30,1');
+        Route::get('aircraft/{hex}/details', [AircraftController::class, 'details'])->middleware('throttle:30,1');
         Route::get('vessels', [VesselController::class, 'index'])->middleware('throttle:30,1');
         Route::post('companies/onboard', [CompanyController::class, 'onboard']);
         Route::post('warehouses/onboard', [WarehouseController::class, 'onboard']);

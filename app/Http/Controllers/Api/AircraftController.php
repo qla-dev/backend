@@ -317,6 +317,259 @@ class AircraftController extends Controller
     }
 
     /**
+     * Everything the detail view shows about one aircraft: who operates it,
+     * where it is registered, what it last reported and where it was routed.
+     */
+    public function details(string $hex): JsonResponse
+    {
+        $hex = strtolower(ltrim(trim($hex), '~'));
+        if (! preg_match('/^[0-9a-f]{6}$/', $hex)) {
+            return response()->json([
+                'message' => 'The aircraft identifier is invalid.',
+                'data' => null, 'meta' => [], 'errors' => [],
+            ], 422);
+        }
+
+        try {
+            $details = Cache::remember(
+                "aircraft-details:{$hex}",
+                now()->addSeconds(20),
+                fn (): ?array => $this->describe($hex),
+            );
+        } catch (Throwable $error) {
+            report($error);
+
+            return response()->json([
+                'message' => 'Aircraft details are temporarily unavailable.',
+                'data' => null, 'meta' => [], 'errors' => [],
+            ], 502);
+        }
+
+        if ($details === null) {
+            return response()->json([
+                'message' => 'This aircraft is not in the registry.',
+                'data' => null, 'meta' => [], 'errors' => [],
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Aircraft details retrieved.',
+            'data' => $details, 'meta' => [], 'errors' => [],
+        ]);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function describe(string $hex): ?array
+    {
+        $live = $this->documentedLookup('hex', $hex) ?? $this->globeLookup('hex', $hex) ?? [];
+        $row = $live[0] ?? null;
+        $source = 'live';
+
+        if (! is_array($row)) {
+            $entry = $this->registryEntry(strtoupper($hex));
+            if ($entry === null) {
+                return null;
+            }
+            $row = $this->registryRow(strtoupper($hex), $entry);
+            $source = $row['position_source'] ?? 'registry';
+        }
+
+        // The live feed omits the model and sometimes the registration, so the
+        // registry fills whatever is missing.
+        $entry = $this->registryEntry(strtoupper($hex));
+        if ($entry !== null) {
+            $row['r'] = $row['r'] ?? null ?: (trim((string) ($entry[0] ?? '')) ?: null);
+            $row['t'] = $row['t'] ?? null ?: (trim((string) ($entry[1] ?? '')) ?: null);
+            $row['desc'] = $row['desc'] ?? null ?: (trim((string) ($entry[3] ?? '')) ?: null);
+            $row['dbFlags'] = $row['dbFlags'] ?? ($entry[2] ?? null);
+        }
+
+        $callsign = trim((string) ($row['flight'] ?? '')) ?: null;
+        $registration = $row['r'] ?? null;
+        $latitude = is_numeric($row['lat'] ?? null) ? (float) $row['lat'] : null;
+        $longitude = is_numeric($row['lon'] ?? null) ? (float) $row['lon'] : null;
+
+        return [
+            'hex' => $hex,
+            'registration' => $registration,
+            'callsign' => $callsign,
+            'type' => $row['t'] ?? null,
+            'description' => $row['desc'] ?? null,
+            'category' => $row['category'] ?? null,
+            'country' => $this->countryForHex($hex),
+            'operator' => $this->operatorForCallsign($callsign),
+            'route' => $this->routeForCallsign($callsign, $latitude, $longitude),
+            'db_flags' => $this->decodeDbFlags($row['dbFlags'] ?? $row['flags'] ?? null),
+            'position_source' => $source,
+            'seen_at' => $row['seen_at'] ?? null,
+            'position' => $latitude === null || $longitude === null ? null : ['lat' => $latitude, 'lon' => $longitude],
+            'altitude' => $row['alt_baro'] ?? $row['alt_geom'] ?? null,
+            'ground_speed' => is_numeric($row['gs'] ?? null) ? (float) $row['gs'] : null,
+            'track' => is_numeric($row['track'] ?? null) ? (float) $row['track'] : null,
+            'squawk' => trim((string) ($row['squawk'] ?? '')) ?: null,
+        ];
+    }
+
+    /**
+     * ICAO hands each country a hex range, so the aircraft's own country comes
+     * from its address rather than from anything it transmits.
+     *
+     * @return array<string, string>|null
+     */
+    private function countryForHex(string $hex): ?array
+    {
+        $address = hexdec($hex);
+        foreach ($this->icaoRanges() as $range) {
+            if ($address >= $range['start'] && $address <= $range['end']) {
+                return ['name' => $range['country'], 'code' => strtoupper($range['code'])];
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array<int, array{start: int, end: int, country: string, code: string}> */
+    private function icaoRanges(): array
+    {
+        return Cache::remember('aircraft-icao-ranges', now()->addHours(24), function (): array {
+            // The asset name carries a build hash, so it is read off the page
+            // rather than guessed.
+            $page = Http::timeout(20)->get('https://adsb.lol/');
+            if (! $page->successful() || ! preg_match('/"(flags_[0-9a-f]+\.js)"/', $page->body(), $asset)) {
+                return [];
+            }
+            $response = Http::timeout(20)->get('https://adsb.lol/' . $asset[1]);
+            if (! $response->successful()) {
+                return [];
+            }
+            preg_match_all(
+                '/start:\s*(0x[0-9a-fA-F]+),\s*end:\s*(0x[0-9a-fA-F]+),\s*country:\s*"([^"]*)",\s*country_code:\s*"([^"]*)"/',
+                $response->body(),
+                $matches,
+                PREG_SET_ORDER,
+            );
+
+            return array_map(fn (array $match): array => [
+                'start' => (int) hexdec($match[1]),
+                'end' => (int) hexdec($match[2]),
+                'country' => $match[3],
+                'code' => $match[4],
+            ], $matches);
+        });
+    }
+
+    /**
+     * The first three letters of a callsign are the operator's ICAO code.
+     *
+     * @return array<string, string|null>|null
+     */
+    private function operatorForCallsign(?string $callsign): ?array
+    {
+        if ($callsign === null || ! preg_match('/^([A-Za-z]{3})\d/', $callsign, $matches)) {
+            return null;
+        }
+
+        $operators = Cache::remember('aircraft-operators', now()->addHours(24), function (): array {
+            $response = Http::withHeaders(['Accept' => 'application/json'])
+                ->timeout(30)
+                ->get('https://adsb.lol/db2/operators.js');
+
+            return $response->successful() && is_array($response->json()) ? $response->json() : [];
+        });
+
+        $operator = $operators[strtoupper($matches[1])] ?? null;
+        if (! is_array($operator)) {
+            return null;
+        }
+
+        return [
+            'code' => strtoupper($matches[1]),
+            'name' => $operator['n'] ?? null,
+            'country' => $operator['c'] ?? null,
+            'radio' => $operator['r'] ?? null,
+        ];
+    }
+
+    /**
+     * Resolves the flight's airports. The position disambiguates callsigns that
+     * several operators reuse, so the lookup is skipped without one.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function routeForCallsign(?string $callsign, ?float $lat, ?float $lon): ?array
+    {
+        if ($callsign === null || $lat === null || $lon === null) {
+            return null;
+        }
+
+        // Without the referer this endpoint answers 201 with an empty body.
+        // It also shares the documented API's one-request-a-second budget with
+        // the hex lookup that just ran, so a rejection is waited out.
+        $response = Http::withHeaders([
+            'Accept' => 'application/json',
+            'Referer' => 'https://adsb.lol/',
+        ])
+            ->timeout(15)
+            ->retry(3, 1100, fn ($exception, $request) => true, false)
+            ->post(self::API_BASE . '/api/0/routeset', [
+                'planes' => [['callsign' => $callsign, 'lat' => $lat, 'lng' => $lon]],
+            ]);
+
+        if (! $response->successful() || ! is_array($response->json())) {
+            return null;
+        }
+
+        $route = $response->json()[0] ?? null;
+        if (! is_array($route) || ($route['_airport_codes_iata'] ?? '') === '') {
+            return null;
+        }
+
+        $airports = array_values(array_filter(
+            array_map(fn ($airport): ?array => is_array($airport) ? [
+                'iata' => $airport['iata'] ?? null,
+                'icao' => $airport['icao'] ?? null,
+                'name' => $airport['name'] ?? null,
+                'location' => $airport['location'] ?? null,
+                'country' => $airport['countryiso2'] ?? null,
+                'lat' => is_numeric($airport['lat'] ?? null) ? (float) $airport['lat'] : null,
+                'lon' => is_numeric($airport['lon'] ?? null) ? (float) $airport['lon'] : null,
+            ] : null, (array) ($route['_airports'] ?? [])),
+        ));
+
+        return ['code' => $route['_airport_codes_iata'], 'airports' => $airports];
+    }
+
+    /**
+     * The registry writes the flags positionally ("10" is military) while the
+     * live feed sends the same set as a bitmask.
+     *
+     * @return array<int, string>
+     */
+    private function decodeDbFlags(mixed $flags): array
+    {
+        $names = ['military', 'interesting', 'pia', 'ladd'];
+        $set = [];
+
+        if (is_numeric($flags)) {
+            foreach ($names as $bit => $name) {
+                if (((int) $flags & (1 << $bit)) !== 0) {
+                    $set[] = $name;
+                }
+            }
+
+            return $set;
+        }
+
+        foreach (str_split((string) $flags) as $position => $character) {
+            if ($character === '1' && isset($names[$position])) {
+                $set[] = $names[$position];
+            }
+        }
+
+        return $set;
+    }
+
+    /**
      * The trace files keep flying after an aircraft leaves the live feed, which
      * is how the map still draws it. They are the last position we can offer.
      *
@@ -340,9 +593,18 @@ class AircraftController extends Controller
 
         $base = (float) ($payload['timestamp'] ?? 0);
         $latest = null;
+        // Only some points carry the full report, so the newest one is kept
+        // separately to recover the callsign and squawk it was flying under.
+        $report = null;
         foreach ($payload['trace'] ?? [] as $point) {
-            if (is_array($point) && is_numeric($point[1] ?? null) && is_numeric($point[2] ?? null)) {
-                $latest = $point;
+            if (! is_array($point) || ! is_numeric($point[1] ?? null) || ! is_numeric($point[2] ?? null)) {
+                continue;
+            }
+            $latest = $point;
+            if (is_array($point[8] ?? null)) {
+                // Consecutive reports carry different subsets, so they are layered
+                // rather than replaced: the callsign and the squawk rarely share a point.
+                $report = array_merge($report ?? [], $point[8]);
             }
         }
         if ($latest === null) {
@@ -353,10 +615,16 @@ class AircraftController extends Controller
             'lat' => (float) $latest[1],
             'lon' => (float) $latest[2],
             'alt_baro' => is_numeric($latest[3] ?? null) ? (float) $latest[3] : ($latest[3] ?? null),
+            'gs' => is_numeric($latest[4] ?? null) ? (float) $latest[4] : null,
+            'track' => is_numeric($latest[5] ?? null) ? (float) $latest[5] : null,
             'seen_at' => (int) round($base + (float) $latest[0]),
             'r' => trim((string) ($payload['r'] ?? '')) ?: null,
             't' => trim((string) ($payload['t'] ?? '')) ?: null,
             'desc' => trim((string) ($payload['desc'] ?? '')) ?: null,
+            'dbFlags' => $payload['dbFlags'] ?? null,
+            'flight' => trim((string) ($report['flight'] ?? '')) ?: null,
+            'squawk' => isset($report['squawk']) ? (string) $report['squawk'] : null,
+            'category' => $report['category'] ?? null,
         ];
     }
 
