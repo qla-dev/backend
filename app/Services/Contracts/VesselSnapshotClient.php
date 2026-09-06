@@ -11,5 +11,6 @@ interface VesselSnapshotClient
         float $north,
         float $east,
         array $mmsis = [],
+        string $search = '',
     ): array;
 }

@@ -11,10 +11,15 @@ abstract class TestCase extends BaseTestCase
         $connection = (string) getenv('DB_CONNECTION');
         $database = (string) getenv('DB_DATABASE');
 
-        if ($connection !== 'mysql' || ! str_ends_with($database, '_testing')) {
-            throw new \RuntimeException('Tests require an isolated MySQL database whose name ends with _testing. Refusing to touch any other database.');
+        if ($connection !== 'sqlite' || $database !== ':memory:') {
+            throw new \RuntimeException('Tests require SQLite :memory:. Refusing to touch any other database.');
         }
 
         parent::setUp();
+
+        $effective = config('database.connections.'.config('database.default'));
+        if (($effective['driver'] ?? null) !== 'sqlite' || ($effective['database'] ?? null) !== ':memory:') {
+            throw new \RuntimeException('Effective test connection must be SQLite :memory:.');
+        }
     }
 }

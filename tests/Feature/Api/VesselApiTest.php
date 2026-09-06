@@ -15,6 +15,7 @@ class VesselApiTest extends TestCase
     {
         $primary = new RecordingVesselSnapshotClient([[
             'mmsi' => '249533000',
+            'name' => 'CMA CGM ARGON',
             'lat' => 31.2,
             'lon' => 29.8,
             'updated_at' => now()->toIso8601String(),
@@ -30,7 +31,7 @@ class VesselApiTest extends TestCase
 
         $response = app(VesselController::class)->index($request, $primary, $fallback);
 
-        $this->assertSame([40.0, 10.0, 46.0, 20.0, ['249533000']], $primary->lastCapture);
+        $this->assertSame([-90.0, -180.0, 90.0, 180.0, ['249533000']], $primary->lastCapture);
         $this->assertNull($fallback->lastCapture);
         $this->assertSame('249533000', $response->getData(true)['data'][0]['mmsi']);
         $this->assertTrue($response->getData(true)['meta']['global_search']);
@@ -84,6 +85,29 @@ class VesselApiTest extends TestCase
 
         $this->assertSame('249533000', $response->getData(true)['data'][0]['mmsi']);
     }
+
+    public function test_position_only_snapshot_is_enriched_and_search_finds_names_globally(): void
+    {
+        Cache::flush();
+        $primary = new RecordingVesselSnapshotClient([[
+            'mmsi' => '538012044', 'lat' => 31.2, 'lon' => 29.8,
+            'updated_at' => now()->toIso8601String(), 'speed' => 3.5,
+        ]]);
+        $fallback = new RecordingVesselStreamClient([[
+            'mmsi' => '538012044', 'name' => 'TEST VESSEL',
+            'updated_at' => now()->toIso8601String(),
+        ]]);
+        foreach (['538012044', 'test vessel'] as $search) {
+            Cache::flush();
+            $request = Request::create('/api/vessels', 'GET', [
+                'search' => $search,
+            ]);
+            $data = app(VesselController::class)->index($request, $primary, $fallback)->getData(true)['data'];
+            $this->assertSame('TEST VESSEL', $data[0]['name']);
+            $this->assertSame(3.5, $data[0]['speed']);
+            $this->assertSame([-90.0, -180.0, 90.0, 180.0, 8.0, $search === '538012044' ? [$search] : []], $fallback->lastCapture);
+        }
+    }
 }
 
 class RecordingVesselSnapshotClient implements VesselSnapshotClient
@@ -98,6 +122,7 @@ class RecordingVesselSnapshotClient implements VesselSnapshotClient
         float $north,
         float $east,
         array $mmsis = [],
+        string $search = '',
     ): array {
         $this->lastCapture = [$south, $west, $north, $east, $mmsis];
 

@@ -74,6 +74,21 @@ class VesselDetailsTest extends TestCase
         $this->assertSame(422, (new VesselController())->details('12345', $this->stream())->getStatusCode());
     }
 
+    public function test_it_enriches_a_cached_position_without_losing_coordinates(): void
+    {
+        Cache::put('live-vessels', ['538012044' => [
+            'mmsi' => '538012044', 'lat' => 31.2, 'lon' => 29.8,
+        ]]);
+        [$status, $data] = $this->details('538012044', [
+            ['mmsi' => '538012044', 'name' => 'TEST VESSEL'],
+            ['mmsi' => '538012044', 'name' => ''],
+        ]);
+
+        $this->assertSame(200, $status);
+        $this->assertSame('TEST VESSEL', $data['name']);
+        $this->assertSame(['lat' => 31.2, 'lon' => 29.8], $data['position']);
+    }
+
     public function test_it_reports_a_vessel_that_is_not_broadcasting(): void
     {
         $this->assertSame(404, (new VesselController())->details('999999999', $this->stream())->getStatusCode());

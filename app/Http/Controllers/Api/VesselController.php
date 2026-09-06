@@ -15,14 +15,19 @@ class VesselController extends Controller
     public function index(Request $request, VesselSnapshotClient $primary, VesselStreamClient $fallback): JsonResponse
     {
         $validated = $request->validate([
-            'south' => ['required', 'numeric', 'between:-90,90'],
-            'west' => ['required', 'numeric', 'between:-180,180'],
-            'north' => ['required', 'numeric', 'between:-90,90', 'gt:south'],
-            'east' => ['required', 'numeric', 'between:-180,180'],
+            'south' => ['required_without:search', 'numeric', 'between:-90,90'],
+            'west' => ['required_without:search', 'numeric', 'between:-180,180'],
+            'north' => ['required_without:search', 'numeric', 'between:-90,90'],
+            'east' => ['required_without:search', 'numeric', 'between:-180,180'],
             'search' => ['nullable', 'string', 'max:100'],
         ]);
-        [$south, $west, $north, $east] = array_map('floatval', [$validated['south'], $validated['west'], $validated['north'], $validated['east']]);
         $search = trim((string) ($validated['search'] ?? ''));
+        if ($search === '') {
+            $request->validate(['south' => ['required'], 'north' => ['required', 'gt:south'], 'west' => ['required'], 'east' => ['required']]);
+        }
+        [$south, $west, $north, $east] = $search !== ''
+            ? [-90.0, -180.0, 90.0, 180.0]
+            : array_map('floatval', [$validated['south'], $validated['west'], $validated['north'], $validated['east']]);
         $searchedMmsi = preg_match('/^\d{9}$/', $search) === 1 ? $search : null;
 
         $primaryFailed = false;
@@ -33,6 +38,7 @@ class VesselController extends Controller
                 $north,
                 $east,
                 $searchedMmsi !== null ? [$searchedMmsi] : [],
+                $searchedMmsi === null ? $search : '',
             );
         } catch (\Throwable $error) {
             report($error);
@@ -40,13 +46,24 @@ class VesselController extends Controller
             $updates = [];
         }
 
-        if ($updates === []) {
+        $stored = Cache::get('live-vessels', []);
+        $stored = is_array($stored) ? $stored : [];
+        $missingNames = array_values(array_map(
+            fn (array $row): string => (string) $row['mmsi'],
+            array_filter($updates, fn (array $row): bool => isset($row['mmsi'])
+                && trim((string) ($row['name'] ?? $stored[$row['mmsi']]['name'] ?? '')) === ''),
+        ));
+        $textSearch = $search !== '' && $searchedMmsi === null;
+
+        if ($updates === [] || $missingNames !== [] || $textSearch) {
             try {
-                // AISStream is deliberately secondary: use a narrow MMSI subscription for
-                // global lookups, or the current map bounds for ordinary viewport loading.
-                $updates = $searchedMmsi !== null
+                // Enrich snapshots with static AIS data; text searches need global coverage.
+                $enrichment = $searchedMmsi !== null
                     ? $fallback->capture(-90, -180, 90, 180, 8.0, [$searchedMmsi])
-                    : $fallback->capture($south, $west, $north, $east);
+                    : ($textSearch
+                        ? $fallback->capture(-90, -180, 90, 180, 8.0)
+                        : $fallback->capture($south, $west, $north, $east));
+                $updates = array_merge($updates, $enrichment);
             } catch (\Throwable $error) {
                 report($error);
                 if ($primaryFailed) {
@@ -58,12 +75,10 @@ class VesselController extends Controller
             }
         }
 
-        $stored = Cache::get('live-vessels', []);
-        $stored = is_array($stored) ? $stored : [];
         foreach ($updates as $update) {
             $key = (string) ($update['mmsi'] ?? '');
             if ($key !== '') {
-                $stored[$key] = array_merge($stored[$key] ?? [], $update);
+                $stored[$key] = $this->mergeVessel($stored[$key] ?? [], $update);
             }
         }
         $cutoff = now()->subMinutes(30);
@@ -123,21 +138,23 @@ class VesselController extends Controller
         $stored = Cache::get('live-vessels', []);
         $row = is_array($stored) ? ($stored[$mmsi] ?? null) : null;
 
-        if (! is_array($row)) {
-            // The vessel has aged out of the cache, so ask for it by name.
+        if (! is_array($row) || trim((string) ($row['name'] ?? '')) === '') {
+            // Position-only snapshots also need static vessel details.
             try {
                 foreach ($fallback->capture(-90, -180, 90, 180, 8.0, [$mmsi]) as $update) {
                     if ((string) ($update['mmsi'] ?? '') === $mmsi) {
-                        $row = $update;
+                        $row = $this->mergeVessel($row ?? [], $update);
                     }
                 }
             } catch (\Throwable $error) {
                 report($error);
 
-                return response()->json([
-                    'message' => 'Vessel details are temporarily unavailable.',
-                    'data' => null, 'meta' => [], 'errors' => [],
-                ], 502);
+                if (! is_array($row)) {
+                    return response()->json([
+                        'message' => 'Vessel details are temporarily unavailable.',
+                        'data' => null, 'meta' => [], 'errors' => [],
+                    ], 502);
+                }
             }
         }
 
@@ -171,5 +188,16 @@ class VesselController extends Controller
             ],
             'meta' => [], 'errors' => [],
         ]);
+    }
+
+    private function mergeVessel(array $current, array $update): array
+    {
+        foreach (['name', 'callsign', 'destination'] as $field) {
+            if (trim((string) ($update[$field] ?? '')) === '') {
+                unset($update[$field]);
+            }
+        }
+
+        return array_merge($current, $update);
     }
 }

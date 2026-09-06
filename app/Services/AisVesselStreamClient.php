@@ -115,9 +115,15 @@ class AisVesselStreamClient implements VesselStreamClient
         $current = $vessels[$mmsi] ?? ['mmsi' => $mmsi];
         $row = array_merge($current, [
             'mmsi' => $mmsi,
-            'name' => trim((string) ($metadata['ShipName'] ?? $details['Name'] ?? $current['name'] ?? '')),
             'updated_at' => now()->toIso8601String(),
         ]);
+        foreach ([$metadata['ShipName'] ?? '', $details['Name'] ?? ''] as $name) {
+            $name = trim((string) $name, " \t\n\r\0\x0B@");
+            if ($name !== '') {
+                $row['name'] = $name;
+                break;
+            }
+        }
 
         $lat = $metadata['Latitude'] ?? $metadata['latitude'] ?? $details['Latitude'] ?? null;
         $lon = $metadata['Longitude'] ?? $metadata['longitude'] ?? $details['Longitude'] ?? null;

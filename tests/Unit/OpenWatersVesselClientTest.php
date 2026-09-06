@@ -8,6 +8,22 @@ use Tests\TestCase;
 
 class OpenWatersVesselClientTest extends TestCase
 {
+    public function test_name_search_fetches_global_snapshot_and_returns_only_matches(): void
+    {
+        Http::fake(['ais.openwaters.io/v1/vessels*' => Http::response([
+            'features' => array_map(fn ($name, $mmsi) => [
+                'properties' => ['mmsi' => $mmsi, 'name' => $name],
+                'geometry' => ['coordinates' => [-70, 30]],
+            ], ['AZAMARA QUEST', 'OTHER SHIP'], ['538012044', '249533000']),
+        ])]);
+
+        $rows = app(OpenWatersVesselClient::class)->capture(40, 10, 46, 20, [], 'azamara quest');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('AZAMARA QUEST', $rows[0]['name']);
+        Http::assertSent(fn ($request) => ! isset($request['bbox']) && ! isset($request['mmsi']));
+    }
+
     public function test_it_normalizes_a_live_mmsi_snapshot(): void
     {
         Http::fake([

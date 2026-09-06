@@ -15,6 +15,7 @@ class OpenWatersVesselClient implements VesselSnapshotClient
         float $north,
         float $east,
         array $mmsis = [],
+        string $search = '',
     ): array {
         $mmsis = array_values(array_unique(array_filter(array_map(
             static fn (mixed $mmsi): string => trim((string) $mmsi),
@@ -23,6 +24,12 @@ class OpenWatersVesselClient implements VesselSnapshotClient
 
         if ($mmsis !== []) {
             return $this->request(['mmsi' => implode(',', array_slice($mmsis, 0, 50))]);
+        }
+
+        if ($search !== '') {
+            // The snapshot endpoint has no name filter. Search its global snapshot
+            // before normalizing rows so unrelated vessels never enter our cache.
+            return $this->request([], $search);
         }
 
         $boxes = $east >= $west
@@ -39,7 +46,7 @@ class OpenWatersVesselClient implements VesselSnapshotClient
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function request(array $query): array
+    private function request(array $query, string $search = ''): array
     {
         $response = $this->http()->get('/v1/vessels', $query);
         if (! $response->successful()) {
@@ -51,7 +58,21 @@ class OpenWatersVesselClient implements VesselSnapshotClient
             throw new RuntimeException('Open Waters vessel API returned an invalid response.');
         }
 
-        return array_values(array_filter(array_map(fn (mixed $feature): ?array => $this->normalize($feature), $features)));
+        $rows = [];
+        foreach ($features as $feature) {
+            if ($search !== '') {
+                $properties = is_array($feature) ? ($feature['properties'] ?? []) : [];
+                $haystack = implode(' ', array_map(fn ($key) => (string) ($properties[$key] ?? ''), ['name', 'mmsi', 'callsign', 'destination']));
+                if (! str_contains(mb_strtolower($haystack), mb_strtolower($search))) {
+                    continue;
+                }
+            }
+            if (($row = $this->normalize($feature)) !== null) {
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
     }
 
     private function http(): PendingRequest
