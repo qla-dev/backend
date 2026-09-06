@@ -108,6 +108,41 @@ class AircraftSearchTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_it_finds_a_grounded_aircraft_through_the_registry(): void
+    {
+        Http::fake([
+            'adsb.lol/db2/7.js' => Http::response(['82177' => ['B-226S', 'B738', '00', 'BOEING 737-800']]),
+            'adsb.lol/data/traces/77/trace_recent_782177.json' => Http::response([
+                'r' => 'B-226S', 't' => 'B738',
+                'timestamp' => 1788631271,
+                'trace' => [[0, 30.1, 114.1, 32000], [600, 30.501434, 114.617292, 30100]],
+            ]),
+            '*' => Http::response($this->payload([], 'ac')),
+        ]);
+
+        $body = $this->search('B-226S');
+
+        $this->assertSame(1, $body['meta']['count']);
+        $aircraft = $body['data'][0];
+        $this->assertSame('B-226S', $aircraft['r']);
+        $this->assertSame('BOEING 737-800', $aircraft['desc']);
+        $this->assertSame('782177', $aircraft['hex']);
+        // The last trace fix stands in for a live position.
+        $this->assertSame('last_seen', $aircraft['position_source']);
+        $this->assertSame(30.501434, $aircraft['lat']);
+        $this->assertSame(1788631871, $aircraft['seen_at']);
+    }
+
+    public function test_it_does_not_sweep_the_registry_for_a_callsign(): void
+    {
+        Http::fake(['*' => Http::response($this->payload([], 'ac'))]);
+
+        $this->search('JDL2672');
+
+        // "JDL" is not a registration prefix, so no registry shard should be read.
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/db2/'));
+    }
+
     public function test_it_reports_an_outage_when_no_lookup_answers(): void
     {
         Http::fake(['*' => Http::response('', 503)]);

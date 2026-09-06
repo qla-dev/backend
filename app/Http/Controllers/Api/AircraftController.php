@@ -134,11 +134,230 @@ class AircraftController extends Controller
             }
         }
 
+        // Nothing is transmitting, so fall back to the registry the map itself
+        // reads. An aircraft that is parked still has to be bookable.
+        $registered = $this->registryLookup($search);
+        if ($registered !== null) {
+            return [$registered];
+        }
+
         if (! $answered) {
             throw new RuntimeException('The live aircraft search response was unavailable.');
         }
 
         return [];
+    }
+
+    /**
+     * The registry is keyed by ICAO hex, so a registration is resolved by
+     * reading the shards its country prefix is allocated. Shards are static
+     * files, hence the long cache.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function registryLookup(string $search): ?array
+    {
+        $normalized = strtoupper(preg_replace('/[^A-Z0-9]/', '', strtoupper($search)));
+        if ($normalized === '') {
+            return null;
+        }
+
+        $hex = preg_match('/^[0-9A-F]{6}$/', $normalized)
+            ? $normalized
+            : $this->registryHexForRegistration($normalized);
+        if ($hex === null) {
+            return null;
+        }
+
+        $entry = $this->registryEntry($hex);
+        if ($entry === null) {
+            return null;
+        }
+
+        return $this->registryRow($hex, $entry);
+    }
+
+    /** @return string|null  the ICAO hex the registration is assigned */
+    private function registryHexForRegistration(string $normalized): ?string
+    {
+        $queue = $this->registryShards($normalized);
+        // Big blocks such as the US branch into child shards, which hold most of
+        // the fleet. The cap keeps an unlucky search from walking the registry.
+        for ($read = 0; $queue !== [] && $read < 24; $read++) {
+            $shard = array_shift($queue);
+            foreach ($this->registryFile($shard) as $suffix => $entry) {
+                if ($suffix === 'children') {
+                    foreach ((array) $entry as $child) {
+                        $queue[] = (string) $child;
+                    }
+
+                    continue;
+                }
+                if (! is_array($entry)) {
+                    continue;
+                }
+                $registration = strtoupper(preg_replace('/[^A-Z0-9]/', '', strtoupper((string) ($entry[0] ?? ''))));
+                if ($registration !== '' && $registration === $normalized) {
+                    return $shard . $suffix;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * ICAO allocates each country a hex block, so a registration prefix only
+     * ever needs one or two shards. An unlisted prefix reads nothing rather
+     * than sweeping the whole registry, which keeps a callsign search cheap.
+     *
+     * @return array<int, string>
+     */
+    private function registryShards(string $normalized): array
+    {
+        $blocks = [
+            'B' => ['7', '8'], 'N' => ['A'], 'D' => ['3'], 'F' => ['3'], 'I' => ['3'],
+            'G' => ['4'], 'EI' => ['4'], 'OE' => ['4'], 'OO' => ['4'], 'OK' => ['4'],
+            'OY' => ['4'], 'OH' => ['4'], 'SE' => ['4'], 'LN' => ['4'], 'HB' => ['4'],
+            'OM' => ['4'], 'OP' => ['4'], 'SP' => ['4'], 'OL' => ['4'], 'TC' => ['4'],
+            'OD' => ['7'], 'M' => ['4'], 'CS' => ['4'], 'EC' => ['3'], 'ZK' => ['C'],
+            'VH' => ['7'], 'JA' => ['8'], 'HL' => ['7'], 'VT' => ['8'], 'PK' => ['8'],
+            'A6' => ['8'], 'A7' => ['8'], 'HZ' => ['7'], '9V' => ['7'], '9M' => ['7'],
+            'HS' => ['8'], 'RP' => ['7'], '4X' => ['7'], 'RA' => ['1'], 'UR' => ['5'],
+            'ZS' => ['0'], 'SU' => ['0'], 'XA' => ['0'], 'XB' => ['0'], 'XC' => ['0'],
+            'CC' => ['E'], 'LV' => ['E'], 'PR' => ['E'], 'PS' => ['E'], 'PP' => ['E'],
+            'PT' => ['E'], 'CX' => ['4'], 'T7' => ['5'], '9H' => ['4'], 'E7' => ['5'],
+            '9A' => ['5'], 'S5' => ['5'], 'YU' => ['5'], 'LZ' => ['4'], 'YR' => ['4'],
+            'LY' => ['5'], 'ES' => ['5'], 'YL' => ['5'], 'Z3' => ['5'], 'ZA' => ['5'],
+        ];
+
+        foreach ([2, 1] as $length) {
+            $prefix = substr($normalized, 0, $length);
+            if (isset($blocks[$prefix])) {
+                return $blocks[$prefix];
+            }
+        }
+
+        return [];
+    }
+
+    /** @return array<string, mixed> */
+    private function registryFile(string $shard): array
+    {
+        return Cache::remember(
+            "aircraft-registry-shard:{$shard}",
+            now()->addHours(12),
+            function () use ($shard): array {
+                $response = Http::withHeaders(['Accept' => 'application/json'])
+                    ->timeout(30)
+                    ->get('https://adsb.lol/db2/' . $shard . '.js');
+
+                return $response->successful() && is_array($response->json()) ? $response->json() : [];
+            },
+        );
+    }
+
+    /**
+     * The registry is a trie: a shard either holds the entry or names the child
+     * shard that continues the hex.
+     *
+     * @return array<int, mixed>|null
+     */
+    private function registryEntry(string $hex): ?array
+    {
+        for ($length = 1; $length <= strlen($hex); $length++) {
+            $shard = substr($hex, 0, $length);
+            $file = $this->registryFile($shard);
+            if ($file === []) {
+                return null;
+            }
+            $suffix = substr($hex, $length);
+            if (isset($file[$suffix]) && is_array($file[$suffix])) {
+                return $file[$suffix];
+            }
+            $child = $shard . substr($suffix, 0, 1);
+            if (! in_array($child, (array) ($file['children'] ?? []), true)) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Shapes a registry hit like a live one so the map and the booking pickers
+     * treat both the same, and pins the last position the aircraft reported.
+     *
+     * @param  array<int, mixed>  $entry
+     * @return array<string, mixed>
+     */
+    private function registryRow(string $hex, array $entry): array
+    {
+        $row = [
+            'hex' => strtolower($hex),
+            'r' => trim((string) ($entry[0] ?? '')) ?: null,
+            't' => trim((string) ($entry[1] ?? '')) ?: null,
+            'desc' => trim((string) ($entry[3] ?? '')) ?: null,
+            'flight' => null,
+            'position_source' => 'registry',
+            'seen_at' => null,
+            'lat' => null,
+            'lon' => null,
+        ];
+
+        $fix = $this->lastKnownPosition(strtolower($hex));
+        if ($fix !== null) {
+            // The registry names the aircraft; the trace only fills the gaps.
+            $row = array_merge($row, array_filter($fix, fn ($value) => $value !== null), [
+                'position_source' => 'last_seen',
+            ]);
+        }
+
+        return $row;
+    }
+
+    /**
+     * The trace files keep flying after an aircraft leaves the live feed, which
+     * is how the map still draws it. They are the last position we can offer.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function lastKnownPosition(string $hex): ?array
+    {
+        $response = Http::withHeaders([
+            'Accept' => 'application/json',
+            'Referer' => 'https://adsb.lol/',
+        ])->timeout(15)->get(sprintf(
+            'https://adsb.lol/data/traces/%s/trace_recent_%s.json',
+            substr($hex, -2),
+            $hex,
+        ));
+
+        $payload = $response->successful() && is_array($response->json()) ? $response->json() : null;
+        if ($payload === null) {
+            return null;
+        }
+
+        $base = (float) ($payload['timestamp'] ?? 0);
+        $latest = null;
+        foreach ($payload['trace'] ?? [] as $point) {
+            if (is_array($point) && is_numeric($point[1] ?? null) && is_numeric($point[2] ?? null)) {
+                $latest = $point;
+            }
+        }
+        if ($latest === null) {
+            return null;
+        }
+
+        return [
+            'lat' => (float) $latest[1],
+            'lon' => (float) $latest[2],
+            'alt_baro' => is_numeric($latest[3] ?? null) ? (float) $latest[3] : ($latest[3] ?? null),
+            'seen_at' => (int) round($base + (float) $latest[0]),
+            'r' => trim((string) ($payload['r'] ?? '')) ?: null,
+            't' => trim((string) ($payload['t'] ?? '')) ?: null,
+            'desc' => trim((string) ($payload['desc'] ?? '')) ?: null,
+        ];
     }
 
     /**
