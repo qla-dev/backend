@@ -4,22 +4,29 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use GuzzleHttp\Cookie\CookieJar;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 class AircraftController extends Controller
 {
+    private const API_BASE = 'https://api.adsb.lol';
+
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate(['search' => ['nullable', 'string', 'max:100']]);
-        $search = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $validated['search'] ?? ''));
-        [$south, $west, $north, $east] = $this->resolveBounds($request);
+        $search = trim($validated['search'] ?? '');
+
         if ($search !== '') {
-            [$south, $west, $north, $east] = [-90, -180, 90, 180];
+            return $this->searchResponse($search);
         }
+
+        [$south, $west, $north, $east] = $this->resolveBounds($request);
         $cacheKey = sprintf('aircraft-viewport:%0.2f:%0.2f:%0.2f:%0.2f', $south, $west, $north, $east);
 
         try {
@@ -47,7 +54,7 @@ class AircraftController extends Controller
                 }
                 return $response->json();
             });
-        } catch (\Throwable $error) {
+        } catch (Throwable $error) {
             report($error);
             return response()->json([
                 'message' => 'Live aircraft data is temporarily unavailable.',
@@ -55,25 +62,205 @@ class AircraftController extends Controller
             ], 502);
         }
 
-        $aircraft = collect($payload['aircraft'] ?? $payload['ac'] ?? [])
-            ->filter(fn ($row) => is_array($row) && is_numeric($row['lat'] ?? null) && is_numeric($row['lon'] ?? null))
-            ->filter(function (array $row) use ($search): bool {
-                if ($search === '') return true;
-                foreach (['r', 'flight', 'hex'] as $field) {
-                    $value = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', (string) ($row[$field] ?? '')));
-                    if (str_contains($value, $search)) return true;
-                }
-                return false;
-            })
+        $aircraft = $this->normalize($payload['aircraft'] ?? $payload['ac'] ?? [])
             ->filter(fn (array $row) => $this->insideBounds((float) $row['lat'], (float) $row['lon'], $south, $west, $north, $east))
-            ->sortBy(fn (array $row) => (float) ($row['seen'] ?? PHP_FLOAT_MAX))
-            ->unique(fn (array $row) => (string) ($row['hex'] ?? sprintf('%0.5f:%0.5f', $row['lat'], $row['lon'])))
             ->values();
 
         return response()->json([
             'message' => 'Live aircraft retrieved.', 'data' => $aircraft,
             'meta' => ['count' => $aircraft->count()], 'errors' => [],
         ]);
+    }
+
+    /**
+     * Searching the globe viewport only ever saw the shard the map happened to be
+     * served, so flights outside it came back as "not found". The documented
+     * adsb.lol lookups (https://api.adsb.lol/docs) resolve an identifier against
+     * the whole network instead.
+     */
+    private function searchResponse(string $search): JsonResponse
+    {
+        try {
+            $aircraft = Cache::remember(
+                'aircraft-search:' . strtoupper($search),
+                now()->addSeconds(6),
+                fn (): array => $this->lookup($search),
+            );
+        } catch (Throwable $error) {
+            report($error);
+            return response()->json([
+                'message' => 'Live aircraft data is temporarily unavailable.',
+                'data' => [], 'meta' => [], 'errors' => [],
+            ], 502);
+        }
+
+        return response()->json([
+            'message' => $aircraft === []
+                ? 'No aircraft matching this search is transmitting right now.'
+                : 'Live aircraft retrieved.',
+            'data' => $aircraft,
+            'meta' => ['count' => count($aircraft), 'search' => $search],
+            'errors' => [],
+        ]);
+    }
+
+    /**
+     * The candidates are tried one at a time, most likely first, and the search
+     * stops on the first identifier that resolves. The documented API allows
+     * roughly one request a second, so it only ever sees the leading candidate;
+     * the globe lookup the map already uses carries any remaining attempt.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function lookup(string $search): array
+    {
+        $candidates = $this->searchCandidates($search);
+        if ($candidates === []) {
+            return [];
+        }
+
+        $answered = false;
+        foreach ($candidates as $index => $candidate) {
+            [$kind, $value] = $candidate;
+            $response = $index === 0
+                ? $this->documentedLookup($kind, $value)
+                : $this->globeLookup($kind, $value);
+            if ($response === null) {
+                continue;
+            }
+            $answered = true;
+            if ($response !== []) {
+                return $this->normalize($response)->values()->all();
+            }
+        }
+
+        if (! $answered) {
+            throw new RuntimeException('The live aircraft search response was unavailable.');
+        }
+
+        return [];
+    }
+
+    /**
+     * @return array<int, mixed>|null  null when the endpoint could not be reached
+     */
+    private function documentedLookup(string $kind, string $value): ?array
+    {
+        $response = Http::withHeaders(['Accept' => 'application/json'])
+            ->timeout(12)
+            ->get(self::API_BASE . '/v2/' . $kind . '/' . rawurlencode($value));
+
+        return $this->rows($response, 'ac');
+    }
+
+    /**
+     * @return array<int, mixed>|null  null when the endpoint could not be reached
+     */
+    private function globeLookup(string $kind, string $value): ?array
+    {
+        // The flag has to stay bare: "?json=" turns the response back into HTML.
+        $url = sprintf(
+            'https://adsb.lol/re-api/?json&find_%s=%s',
+            $kind,
+            rawurlencode($value),
+        );
+        $response = Http::withHeaders([
+            'Accept' => 'application/json',
+            'Referer' => 'https://adsb.lol/',
+        ])->timeout(12)->get($url);
+
+        return $this->rows($response, 'aircraft');
+    }
+
+    /** @return array<int, mixed>|null */
+    private function rows(Response $response, string $key): ?array
+    {
+        if (! $response->successful()) {
+            return null;
+        }
+        $body = $response->json();
+        if (! is_array($body)) {
+            return null;
+        }
+
+        return array_values(array_filter((array) ($body[$key] ?? []), 'is_array'));
+    }
+
+    /**
+     * Each lookup matches exactly, so the term is turned into the identifiers it
+     * could plausibly be, ordered by how likely each one is.
+     *
+     * @return array<int, array{string, string}>
+     */
+    private function searchCandidates(string $search): array
+    {
+        $upper = strtoupper($search);
+        $alnum = preg_replace('/[^A-Z0-9]/', '', $upper);
+        $registration = trim(preg_replace('/[^A-Z0-9-]/', '', $upper), '-');
+        if ($alnum === '') {
+            return [];
+        }
+
+        $candidates = [];
+        if (preg_match('/^[0-9A-F]{6}$/', $alnum)) {
+            $candidates[] = ['hex', $alnum];
+        }
+        if (preg_match('/^[0-7]{4}$/', $alnum)) {
+            $candidates[] = ['squawk', $alnum];
+        }
+
+        // A hyphen only ever appears in a registration, never in a callsign.
+        $registrations = array_map(
+            fn (string $variant): array => ['reg', $variant],
+            $this->registrationVariants($registration, $alnum),
+        );
+        if (str_contains($registration, '-')) {
+            $candidates = array_merge($candidates, $registrations, [['callsign', $alnum]]);
+        } else {
+            $candidates = array_merge($candidates, [['callsign', $alnum]], $registrations);
+        }
+
+        if (preg_match('/^[A-Z][A-Z0-9]{2,3}$/', $alnum)) {
+            $candidates[] = ['type', $alnum];
+        }
+
+        return array_values(array_intersect_key(
+            $candidates,
+            array_unique(array_map(fn (array $candidate) => implode(':', $candidate), $candidates)),
+        ));
+    }
+
+    /**
+     * Registrations are matched with their hyphen, so "B-226S" never resolves as
+     * "B226S". Rebuild the one- and two-character country prefixes that cover
+     * civil registrations when the operator leaves the hyphen out.
+     *
+     * @return array<int, string>
+     */
+    private function registrationVariants(string $registration, string $alnum): array
+    {
+        $variants = $registration === '' ? [] : [$registration];
+        if ($alnum !== '' && ! str_contains($registration, '-')) {
+            foreach ([1, 2] as $prefixLength) {
+                if (strlen($alnum) > $prefixLength + 1) {
+                    $variants[] = substr($alnum, 0, $prefixLength) . '-' . substr($alnum, $prefixLength);
+                }
+            }
+        }
+
+        return array_values(array_unique($variants));
+    }
+
+    /**
+     * @param  iterable<mixed>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function normalize(iterable $rows): Collection
+    {
+        return collect($rows)
+            ->filter(fn ($row) => is_array($row) && is_numeric($row['lat'] ?? null) && is_numeric($row['lon'] ?? null))
+            ->sortBy(fn (array $row) => (float) ($row['seen'] ?? PHP_FLOAT_MAX))
+            ->unique(fn (array $row) => (string) ($row['hex'] ?? sprintf('%0.5f:%0.5f', $row['lat'], $row['lon'])));
     }
 
     public function trace(string $hex): JsonResponse
@@ -173,7 +360,7 @@ class AircraftController extends Controller
 
                 return $segments;
             });
-        } catch (\Throwable $error) {
+        } catch (Throwable $error) {
             report($error);
             return response()->json([
                 'message' => 'The aircraft path is temporarily unavailable.',
