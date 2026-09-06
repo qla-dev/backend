@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Services\Contracts\VesselSnapshotClient;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use JsonMachine\Items;
+use JsonMachine\JsonDecoder\ExtJsonDecoder;
 use RuntimeException;
 
 class OpenWatersVesselClient implements VesselSnapshotClient
@@ -53,10 +55,10 @@ class OpenWatersVesselClient implements VesselSnapshotClient
             throw new RuntimeException("Open Waters vessel API returned HTTP {$response->status()}.");
         }
 
-        $features = $response->json('features');
-        if (! is_array($features)) {
-            throw new RuntimeException('Open Waters vessel API returned an invalid response.');
-        }
+        $features = Items::fromString($response->body(), [
+            'pointer' => '/features',
+            'decoder' => new ExtJsonDecoder(true),
+        ]);
 
         $rows = [];
         foreach ($features as $feature) {

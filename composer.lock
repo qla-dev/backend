@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "bf78f739ed5b14a5a746418257ee9eae",
+    "content-hash": "d868b59a01292590728a4169c198f2ca",
     "packages": [
         {
             "name": "amphp/amp",
@@ -2237,20 +2237,20 @@
         },
         {
             "name": "halaxa/json-machine",
-            "version": "1.2.0",
+            "version": "1.2.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/halaxa/json-machine.git",
-                "reference": "c889fdff2d5a51affae0033464ff24b0ae936b72"
+                "reference": "8bf0b0ff6ff60ab480778eaa5ad7d505b442c2d4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/halaxa/json-machine/zipball/c889fdff2d5a51affae0033464ff24b0ae936b72",
-                "reference": "c889fdff2d5a51affae0033464ff24b0ae936b72",
+                "url": "https://api.github.com/repos/halaxa/json-machine/zipball/8bf0b0ff6ff60ab480778eaa5ad7d505b442c2d4",
+                "reference": "8bf0b0ff6ff60ab480778eaa5ad7d505b442c2d4",
                 "shasum": ""
             },
             "require": {
-                "php": "7.2 - 8.4"
+                "php": "7.2 - 8.5"
             },
             "require-dev": {
                 "ext-json": "*",
@@ -2287,7 +2287,7 @@
             "description": "Efficient, easy-to-use and fast JSON pull parser",
             "support": {
                 "issues": "https://github.com/halaxa/json-machine/issues",
-                "source": "https://github.com/halaxa/json-machine/tree/1.2.0"
+                "source": "https://github.com/halaxa/json-machine/tree/1.2.6"
             },
             "funding": [
                 {
@@ -2295,7 +2295,7 @@
                     "type": "other"
                 }
             ],
-            "time": "2024-11-24T12:48:58+00:00"
+            "time": "2025-12-05T14:53:09+00:00"
         },
         {
             "name": "kelunik/certificate",
