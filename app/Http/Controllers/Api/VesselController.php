@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\Contracts\VesselSnapshotClient;
 use App\Services\Contracts\VesselStreamClient;
+use App\Support\VesselReference;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -102,6 +103,73 @@ class VesselController extends Controller
                 'fallback_provider' => 'aisstream',
             ],
             'errors' => [],
+        ]);
+    }
+
+    /**
+     * Everything the detail view shows about one vessel. AIS sends the flag
+     * state, ship type and navigation status as bare ITU numbers, so they are
+     * decoded here rather than in the interface.
+     */
+    public function details(string $mmsi, VesselStreamClient $fallback): JsonResponse
+    {
+        if (preg_match('/^\d{9}$/', $mmsi) !== 1) {
+            return response()->json([
+                'message' => 'The vessel identifier is invalid.',
+                'data' => null, 'meta' => [], 'errors' => [],
+            ], 422);
+        }
+
+        $stored = Cache::get('live-vessels', []);
+        $row = is_array($stored) ? ($stored[$mmsi] ?? null) : null;
+
+        if (! is_array($row)) {
+            // The vessel has aged out of the cache, so ask for it by name.
+            try {
+                foreach ($fallback->capture(-90, -180, 90, 180, 8.0, [$mmsi]) as $update) {
+                    if ((string) ($update['mmsi'] ?? '') === $mmsi) {
+                        $row = $update;
+                    }
+                }
+            } catch (\Throwable $error) {
+                report($error);
+
+                return response()->json([
+                    'message' => 'Vessel details are temporarily unavailable.',
+                    'data' => null, 'meta' => [], 'errors' => [],
+                ], 502);
+            }
+        }
+
+        if (! is_array($row)) {
+            return response()->json([
+                'message' => 'This vessel is not reporting right now.',
+                'data' => null, 'meta' => [], 'errors' => [],
+            ], 404);
+        }
+
+        $latitude = is_numeric($row['lat'] ?? null) ? (float) $row['lat'] : null;
+        $longitude = is_numeric($row['lon'] ?? null) ? (float) $row['lon'] : null;
+
+        return response()->json([
+            'message' => 'Vessel details retrieved.',
+            'data' => [
+                'mmsi' => $mmsi,
+                'name' => trim((string) ($row['name'] ?? '')) ?: null,
+                'callsign' => trim((string) ($row['callsign'] ?? '')) ?: null,
+                'country' => VesselReference::flagState($mmsi),
+                'ship_type' => VesselReference::shipType($row['ship_type'] ?? null),
+                'ship_type_code' => is_numeric($row['ship_type'] ?? null) ? (int) $row['ship_type'] : null,
+                'navigation_status' => VesselReference::navigationStatus($row['navigation_status'] ?? null),
+                'destination' => trim((string) ($row['destination'] ?? '')) ?: null,
+                'position' => $latitude === null || $longitude === null ? null : ['lat' => $latitude, 'lon' => $longitude],
+                'speed' => is_numeric($row['speed'] ?? null) ? (float) $row['speed'] : null,
+                'course' => is_numeric($row['course'] ?? null) ? (float) $row['course'] : null,
+                'heading' => is_numeric($row['heading'] ?? null) ? (float) $row['heading'] : null,
+                'updated_at' => $row['updated_at'] ?? null,
+                'provider' => $row['provider'] ?? null,
+            ],
+            'meta' => [], 'errors' => [],
         ]);
     }
 }

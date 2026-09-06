@@ -143,6 +143,81 @@ class AircraftSearchTest extends TestCase
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/db2/'));
     }
 
+    public function test_it_describes_an_aircraft_that_is_no_longer_flying(): void
+    {
+        Http::fake([
+            'adsb.lol/db2/7.js' => Http::response(['82177' => ['B-226S', 'B738', '00', 'BOEING 737-800']]),
+            'adsb.lol/db2/operators.js' => Http::response([
+                'JDL' => ['n' => 'Jiangsu Jingdong Cargo Airlines', 'c' => 'China', 'r' => 'JINGDONG'],
+            ]),
+            'adsb.lol/data/traces/77/trace_recent_782177.json' => Http::response([
+                'r' => 'B-226S', 't' => 'B738', 'dbFlags' => 0,
+                'timestamp' => 1788631271,
+                'trace' => [[600, 30.5, 114.6, 30100, 473.1, 276.5, 0, 0, ['flight' => 'JDL2672 ', 'squawk' => '2672']]],
+            ]),
+            'adsb.lol/' => Http::response('<script src="flags_abc123.js"></script>'),
+            'adsb.lol/flags_abc123.js' => Http::response(
+                'start: 0x780000, end: 0x7BFFFF, country: "China", country_code: "cn" }',
+            ),
+            'api.adsb.lol/api/0/routeset' => Http::response([[
+                '_airport_codes_iata' => 'WHA-CKG',
+                '_airports' => [
+                    ['iata' => 'WHA', 'icao' => 'ZSWA', 'name' => 'Wuhu Xuanzhou Airport', 'location' => 'Wanzhi', 'countryiso2' => 'CN', 'lat' => 31.1, 'lon' => 118.6],
+                    ['iata' => 'CKG', 'icao' => 'ZUCK', 'name' => 'Chongqing Jiangbei International Airport', 'location' => 'Chongqing', 'countryiso2' => 'CN', 'lat' => 29.7, 'lon' => 106.6],
+                ],
+            ]]),
+            '*' => Http::response($this->payload([], 'ac')),
+        ]);
+
+        $response = (new AircraftController())->details('782177');
+        $data = json_decode($response->getContent(), true)['data'];
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('B-226S', $data['registration']);
+        $this->assertSame('JDL2672', $data['callsign']);
+        $this->assertSame('BOEING 737-800', $data['description']);
+        $this->assertSame('2672', $data['squawk']);
+        $this->assertSame(['name' => 'China', 'code' => 'CN'], $data['country']);
+        $this->assertSame('Jiangsu Jingdong Cargo Airlines', $data['operator']['name']);
+        $this->assertSame('WHA-CKG', $data['route']['code']);
+        $this->assertSame('Chongqing Jiangbei International Airport', $data['route']['airports'][1]['name']);
+        $this->assertSame([], $data['db_flags']);
+        $this->assertSame('last_seen', $data['position_source']);
+    }
+
+    /**
+     * The registry writes the flags positionally while the live feed sends a
+     * bitmask; both have to decode to the same set.
+     */
+    public function test_it_decodes_both_db_flag_encodings(): void
+    {
+        $controller = new AircraftController();
+        $decode = new \ReflectionMethod($controller, 'decodeDbFlags');
+        $decode->setAccessible(true);
+
+        $this->assertSame(['military'], $decode->invoke($controller, '10'));
+        $this->assertSame(['ladd'], $decode->invoke($controller, '0001'));
+        $this->assertSame(['military', 'interesting'], $decode->invoke($controller, '11'));
+        $this->assertSame([], $decode->invoke($controller, '00'));
+        $this->assertSame(['military'], $decode->invoke($controller, 1));
+        $this->assertSame(['ladd'], $decode->invoke($controller, 8));
+    }
+
+    public function test_it_rejects_an_invalid_hex_for_details(): void
+    {
+        $this->assertSame(422, (new AircraftController())->details('nothex')->getStatusCode());
+    }
+
+    public function test_it_reports_an_aircraft_missing_from_the_registry(): void
+    {
+        Http::fake([
+            'adsb.lol/db2/*' => Http::response([]),
+            '*' => Http::response($this->payload([], 'ac')),
+        ]);
+
+        $this->assertSame(404, (new AircraftController())->details('abcdef')->getStatusCode());
+    }
+
     public function test_it_reports_an_outage_when_no_lookup_answers(): void
     {
         Http::fake(['*' => Http::response('', 503)]);

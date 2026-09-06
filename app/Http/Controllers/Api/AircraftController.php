@@ -550,7 +550,9 @@ class AircraftController extends Controller
         $names = ['military', 'interesting', 'pia', 'ladd'];
         $set = [];
 
-        if (is_numeric($flags)) {
+        // The type is the only thing separating the two encodings: "10" is the
+        // registry's positional military flag, while 10 is a live bitmask.
+        if (is_int($flags) || is_float($flags)) {
             foreach ($names as $bit => $name) {
                 if (((int) $flags & (1 << $bit)) !== 0) {
                     $set[] = $name;
