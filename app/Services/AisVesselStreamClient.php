@@ -151,6 +151,21 @@ class AisVesselStreamClient implements VesselStreamClient
             }
         }
 
+        foreach (['ImoNumber' => 'imo', 'MaximumStaticDraught' => 'draught'] as $source => $target) {
+            if (is_numeric($details[$source] ?? null) && $details[$source] > 0) {
+                $row[$target] = (float) $details[$source];
+            }
+        }
+        $dimensions = $details['Dimension'] ?? [];
+        foreach (['length' => ['A', 'B'], 'beam' => ['C', 'D']] as $target => [$first, $second]) {
+            if (is_numeric($dimensions[$first] ?? null) && is_numeric($dimensions[$second] ?? null)) {
+                $size = (float) $dimensions[$first] + (float) $dimensions[$second];
+                if ($size > 0) {
+                    $row[$target] = $size;
+                }
+            }
+        }
+
         return $row;
     }
 }

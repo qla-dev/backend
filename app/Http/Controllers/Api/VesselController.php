@@ -138,7 +138,7 @@ class VesselController extends Controller
         $stored = Cache::get('live-vessels', []);
         $row = is_array($stored) ? ($stored[$mmsi] ?? null) : null;
 
-        if (! is_array($row) || trim((string) ($row['name'] ?? '')) === '') {
+        if (! is_array($row) || trim((string) ($row['name'] ?? '')) === '' || empty($row['imo'])) {
             // Position-only snapshots also need static vessel details.
             try {
                 foreach ($fallback->capture(-90, -180, 90, 180, 8.0, [$mmsi]) as $update) {
@@ -172,6 +172,10 @@ class VesselController extends Controller
             'message' => 'Vessel details retrieved.',
             'data' => [
                 'mmsi' => $mmsi,
+                'imo' => $row['imo'] ?? null,
+                'draught' => $row['draught'] ?? null,
+                'length' => $row['length'] ?? null,
+                'beam' => $row['beam'] ?? null,
                 'name' => trim((string) ($row['name'] ?? '')) ?: null,
                 'callsign' => trim((string) ($row['callsign'] ?? '')) ?: null,
                 'country' => VesselReference::flagState($mmsi),
