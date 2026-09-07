@@ -117,4 +117,21 @@ class ChecklistStatusRequirementsTest extends TestCase
         $this->expectException(ValidationException::class);
         $load->save();
     }
+
+    #[DataProvider('modes')]
+    public function test_sent_requires_the_same_departure_items_for_every_mode(string $mode): void
+    {
+        $this->expectException(ValidationException::class);
+        app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith($this->items($mode), 'sent', $mode));
+    }
+
+    #[DataProvider('modes')]
+    public function test_sent_allows_pending_receipt_documents(string $mode): void
+    {
+        $items = array_map(fn ($item) => array_merge($item, [
+            'status' => $item['required_for_status'] === 'in_delivery' ? 'completed' : 'pending',
+        ]), $this->items($mode));
+        app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith($items, 'sent', $mode));
+        $this->addToAssertionCount(1);
+    }
 }
