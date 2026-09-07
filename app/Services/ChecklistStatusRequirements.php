@@ -26,7 +26,7 @@ class ChecklistStatusRequirements
 
     public function assertAllowed(Load $load): void
     {
-        if (!in_array($load->status, ['in_delivery', 'received'], true)) return;
+        if (!in_array($load->status, ['sent', 'in_delivery', 'received'], true)) return;
 
         $workspace = $load->shipmentWorkspace;
         $items = $workspace?->operational_checklist ?? [];
