@@ -45,7 +45,8 @@ class ShipmentWorkspaceController extends Controller
                 'pending_customer_approval', 'accepted', 'rejected', 'withdrawn', 'not_selected',
             ])],
             'operational_checklist' => ['sometimes', 'array'],
-            'operational_checklist.*.key' => ['required_with:operational_checklist', 'string', 'max:100'],
+            'operational_checklist.*.key' => ['required_with:operational_checklist', 'string', 'max:100', 'distinct'],
+            'operational_checklist.*.required_for_status' => ['sometimes', 'required', Rule::in(['in_delivery', 'received'])],
             'operational_checklist.*.status' => ['required_with:operational_checklist', 'in:pending,in_progress,completed,blocked'],
             'operational_checklist.*.due_date' => ['nullable', 'date'],
             'operational_checklist.*.action_value' => ['nullable', 'string', 'max:2000'],
@@ -68,6 +69,11 @@ class ShipmentWorkspaceController extends Controller
 
         if (array_key_exists('operational_checklist', $data)) {
             abort_unless($isProvider || $isAdmin, 403, 'Only the selected provider can update the operational checklist.');
+            // Keep all existing tasks and preserve categories sent by older clients without this field.
+            $existing = collect($record->operational_checklist)->keyBy('key');
+            $updates = collect($data['operational_checklist'])->keyBy('key');
+            abort_if($updates->keys()->diff($existing->keys())->isNotEmpty(), 422, 'Unknown checklist item.');
+            $data['operational_checklist'] = $existing->map(fn ($item, $key) => array_merge($item, $updates->get($key, [])))->values()->all();
         }
         if (isset($data['status'])) {
             $allowed = $isAdmin

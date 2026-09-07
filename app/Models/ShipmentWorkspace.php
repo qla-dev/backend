@@ -20,7 +20,7 @@ class ShipmentWorkspace extends BaseModel
         if ($isStorage && collect($items)->contains('key', 'assign_driver_and_vehicle')
             && collect($items)->every(fn ($item) => ($item['status'] ?? 'pending') === 'pending'
                 && empty($item['action_value']) && empty($item['completed_at']) && empty($item['due_date']))) {
-            return array_map(fn ($key) => [
+            $items = array_map(fn ($key) => [
                 'key' => $key, 'status' => 'pending', 'action_value' => null,
                 'completed_at' => null, 'completed_by_user_id' => null,
             ], ['confirm_storage_arrival', 'check_storage_documents', 'record_storage_receipt', 'assign_storage_location', 'confirm_storage_dispatch']);
@@ -28,7 +28,7 @@ class ShipmentWorkspace extends BaseModel
 
         // Hide retired road tasks in existing workspaces without rewriting stored records.
         if (!$isStorage && ($snapshot['transport_type'] ?? 'road') === 'road') {
-            return array_values(array_filter($items, fn ($item) => !in_array(
+            $items = array_values(array_filter($items, fn ($item) => !in_array(
                 $item['key'] ?? '', ['confirm_pickup', 'tracking_and_status_updates'], true
             )));
         }
@@ -42,12 +42,12 @@ class ShipmentWorkspace extends BaseModel
         }
 
         if (!$isStorage && ($snapshot['transport_type'] ?? '') === 'air') {
-            return array_values(array_filter($items, fn ($item) => !in_array(
+            $items = array_values(array_filter($items, fn ($item) => !in_array(
                 $item['key'] ?? '', ['departure_status', 'arrival_status'], true
             )));
         }
 
-        return $items;
+        return \App\Services\ChecklistStatusRequirements::withCategories($items);
     }
 
     protected function casts(): array

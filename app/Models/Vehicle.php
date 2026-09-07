@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Vehicle extends BaseModel
 {
@@ -36,6 +37,11 @@ class Vehicle extends BaseModel
     public function locations(): HasMany
     {
         return $this->hasMany(VehicleLocation::class);
+    }
+
+    public function latestLocation(): HasOne
+    {
+        return $this->hasOne(VehicleLocation::class)->ofMany(['recorded_at' => 'max', 'id' => 'max']);
     }
 
     public function documents(): HasMany

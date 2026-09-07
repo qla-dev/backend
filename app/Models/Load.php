@@ -68,6 +68,12 @@ class Load extends BaseModel
 
     protected static function booted(): void
     {
+        static::saving(function (Load $load): void {
+            if ($load->isDirty('status')) {
+                app(\App\Services\ChecklistStatusRequirements::class)->assertAllowed($load);
+            }
+        });
+
         static::creating(function (Load $load): void {
             if (! $load->consignee_customer_id && $load->customer_user_id) {
                 $owner = User::query()->findOrFail($load->customer_user_id);
