@@ -69,11 +69,13 @@ class ShipmentWorkspaceController extends Controller
 
         if (array_key_exists('operational_checklist', $data)) {
             abort_unless($isProvider || $isAdmin, 403, 'Only the selected provider can update the operational checklist.');
-            // Keep all existing tasks and preserve categories sent by older clients without this field.
+            // Keep every task and enforce fixed categories, including for older clients.
             $existing = collect($record->operational_checklist)->keyBy('key');
             $updates = collect($data['operational_checklist'])->keyBy('key');
             abort_if($updates->keys()->diff($existing->keys())->isNotEmpty(), 422, 'Unknown checklist item.');
-            $data['operational_checklist'] = $existing->map(fn ($item, $key) => array_merge($item, $updates->get($key, [])))->values()->all();
+            $data['operational_checklist'] = \App\Services\ChecklistStatusRequirements::withCategories(
+                $existing->map(fn ($item, $key) => array_merge($item, $updates->get($key, [])))->values()->all()
+            );
         }
         if (isset($data['status'])) {
             $allowed = $isAdmin

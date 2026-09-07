@@ -56,9 +56,11 @@ class ChecklistPersistenceTest extends TestCase
         $items = $workspace->operational_checklist;
         $items[0]['required_for_status'] = 'received';
         $workspace->update(['operational_checklist' => $items]);
-        $this->assertSame('received', $workspace->fresh()->operational_checklist[0]['required_for_status']);
+        $this->assertSame('in_delivery', $workspace->fresh()->operational_checklist[0]['required_for_status']);
 
         $load = Load::findOrFail(1);
+        $items[0]['status'] = 'completed';
+        $workspace->update(['operational_checklist' => $items]);
         $load->update(['status' => 'in_delivery']);
         $this->assertSame('in_delivery', $load->fresh()->status);
         $this->assertSame('in_execution', $load->fresh()->booking_status);

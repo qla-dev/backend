@@ -52,22 +52,20 @@ class ChecklistStatusRequirementsTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    public function test_legacy_items_get_defaults_and_saved_categories_override_them(): void
+    public function test_categories_are_fixed_even_for_legacy_overrides(): void
     {
         $load = $this->loadWith([
             ['key' => 'assign_driver_and_vehicle', 'status' => 'pending'],
             ['key' => 'proof_of_delivery', 'status' => 'pending'],
             ['key' => 'vehicle_registrations', 'status' => 'pending', 'required_for_status' => 'received'],
         ], 'booked');
-        $this->assertSame(['in_delivery', 'received', 'received'], array_column($load->shipmentWorkspace->operational_checklist, 'required_for_status'));
+        $this->assertSame(['in_delivery', 'received', 'in_delivery'], array_column($load->shipmentWorkspace->operational_checklist, 'required_for_status'));
         $this->assertSame('received', ChecklistStatusRequirements::category(['key' => 'arrival_and_release_documents']));
     }
 
-    public function test_moving_an_item_between_categories_changes_the_gate(): void
+    public function test_category_override_cannot_bypass_the_gate(): void
     {
         $item = ['key' => 'container_details', 'status' => 'pending', 'required_for_status' => 'received'];
-        app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith([$item], 'in_delivery', 'sea'));
-        $item['required_for_status'] = 'in_delivery';
         $this->expectException(ValidationException::class);
         app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith([$item], 'in_delivery', 'sea'));
     }

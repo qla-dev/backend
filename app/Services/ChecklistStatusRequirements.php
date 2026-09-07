@@ -9,10 +9,6 @@ class ChecklistStatusRequirements
 {
     public static function category(array $item): string
     {
-        if (in_array($item['required_for_status'] ?? null, ['in_delivery', 'received'], true)) {
-            return $item['required_for_status'];
-        }
-
         return in_array($item['key'] ?? '', ['proof_of_delivery', 'arrival_and_release_documents'], true)
             ? 'received' : 'in_delivery';
     }
