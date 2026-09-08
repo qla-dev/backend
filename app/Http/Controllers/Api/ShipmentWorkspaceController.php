@@ -124,6 +124,7 @@ class ShipmentWorkspaceController extends Controller
         return [
             'freightLoad.stops', 'shipment', 'acceptedOffer', 'customer', 'providerCompany',
             'providerUser', 'conversation.participants', 'freightLoad.documents',
+            'freightLoad.vehicle', 'freightLoad.assignedDriver.driver',
         ];
     }
 }
