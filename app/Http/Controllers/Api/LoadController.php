@@ -600,6 +600,7 @@ class LoadController extends CrudController
             'customs_documents.*.source' => ['required', 'in:matched,manual'], 'customs_documents.*.downloadable' => ['required', 'boolean'],
             'weight_kg' => [$updating ? 'sometimes' : 'required_unless:transport_type,warehouse', 'nullable', 'numeric', 'min:0'],
             'length_m' => ['nullable', 'numeric', 'min:0'], 'width_m' => ['nullable', 'numeric', 'min:0'], 'height_m' => ['nullable', 'numeric', 'min:0'],
+            'dimension_scope' => ['sometimes', 'in:overall,per_unit'],
             'volume_m3' => ['nullable', 'numeric', 'min:0'], 'pallets' => ['nullable', 'integer', 'min:0'], 'quantity_measure' => ['nullable', 'string', 'max:255'],
             'teu' => ['nullable', 'string', 'max:80'], 'container_types' => ['nullable', 'string', 'max:255'], 'container_number' => ['nullable', 'string', 'max:255'],
             'etd_at' => ['nullable', 'date'], 'atd_at' => ['nullable', 'date'], 'transit_days' => ['nullable', 'integer', 'min:0', 'max:200'], 'shipper_name' => ['nullable', 'string', 'max:255'],
