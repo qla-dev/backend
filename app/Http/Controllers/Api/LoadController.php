@@ -190,7 +190,8 @@ class LoadController extends CrudController
         }
 
         if ($status !== '') {
-            $query->where('status', $status);
+            if ($status === 'booked') $query->whereIn('status', ['booked', 'sent']);
+            else $query->where('status', $status);
             if ($status === 'posted' && ! $request->boolean('owner_only')) {
                 $query->where(fn (Builder $available) => $available
                     ->whereNull('pre_delivery_status')

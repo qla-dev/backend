@@ -18,7 +18,6 @@ class Load extends BaseModel
         'posted',
         'booked',
         'opened',
-        'sent',
         'in_delivery',
         'received',
         'finished',
@@ -64,6 +63,12 @@ class Load extends BaseModel
                 );
             },
         );
+    }
+
+    public function getStatusAttribute($value): string
+    {
+        // Retired status remains readable without rewriting historical records.
+        return $value === 'sent' ? 'booked' : (string) $value;
     }
 
     protected static function booted(): void

@@ -114,6 +114,10 @@ class DocumentController extends CrudController
             abort(403, 'Personal documents can only be uploaded for your own account.');
         }
 
+        if (!empty($data['load_id']) && in_array(strtolower($data['type'] ?? ''), ['pod', 'proof_of_delivery'], true)) {
+            $load = \App\Models\Load::findOrFail($data['load_id']);
+            if (!$load->for_storage) \App\Services\ChecklistStatusRequirements::assertTaskAllowed($load, ['key' => 'proof_of_delivery']);
+        }
         $file = $request->file('file');
         $extension = strtolower((string) ($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin'));
         $filename = Str::uuid()->toString().'.'.$extension;

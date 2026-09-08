@@ -134,6 +134,7 @@ class ShipmentWorkspaceCreator
         return array_map(fn (string $key): array => [
             'key' => $key,
             'required_for_status' => ChecklistStatusRequirements::category(['key' => $key]),
+            'waiting_for_status' => ChecklistStatusRequirements::waitingForStatus(['key' => $key]),
             'status' => 'pending',
             'action_value' => null,
             'completed_at' => null,

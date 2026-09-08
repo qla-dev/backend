@@ -7,6 +7,21 @@ use Illuminate\Validation\ValidationException;
 
 class ChecklistStatusRequirements
 {
+    public static function waitingForStatus(array $item): ?string
+    {
+        return ($item['key'] ?? '') === 'proof_of_delivery' ? 'in_delivery' : null;
+    }
+
+    public static function assertTaskAllowed(Load $load, array $item): void
+    {
+        $required = self::waitingForStatus($item);
+        if ($required !== null && $load->status !== $required) {
+            throw ValidationException::withMessages([
+                'waiting_for_status' => 'Proof of delivery can only be submitted while the load is in delivery.',
+            ]);
+        }
+    }
+
     public static function category(array $item): string
     {
         if (($item['key'] ?? '') === 'vehicle_return') return 'finished';
@@ -18,12 +33,13 @@ class ChecklistStatusRequirements
     {
         return array_map(fn (array $item): array => array_merge($item, [
             'required_for_status' => self::category($item),
+            'waiting_for_status' => self::waitingForStatus($item),
         ]), $items);
     }
 
     public function assertAllowed(Load $load): void
     {
-        if (!in_array($load->status, ['sent', 'in_delivery', 'received'], true)) return;
+        if (!in_array($load->status, ['in_delivery', 'received'], true)) return;
 
         $workspace = $load->shipmentWorkspace;
         $items = $workspace?->operational_checklist ?? [];

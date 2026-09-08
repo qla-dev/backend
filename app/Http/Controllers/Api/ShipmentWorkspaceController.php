@@ -68,11 +68,19 @@ class ShipmentWorkspaceController extends Controller
         }
 
         if (array_key_exists('operational_checklist', $data)) {
-            abort_unless($isProvider || $isAdmin, 403, 'Only the selected provider can update the operational checklist.');
+            $isAssignedDriver = (int) $record->freightLoad?->assigned_driver_user_id === (int) $user->id;
+            abort_unless($isProvider || $isAdmin || $isAssignedDriver, 403, 'Only the selected provider or assigned driver can update the operational checklist.');
             // Keep every task and enforce fixed categories, including for older clients.
             $existing = collect($record->operational_checklist)->keyBy('key');
             $updates = collect($data['operational_checklist'])->keyBy('key');
             abort_if($updates->keys()->diff($existing->keys())->isNotEmpty(), 422, 'Unknown checklist item.');
+            foreach ($updates as $key => $update) {
+                $previous = $existing->get($key);
+                if ((($update['status'] ?? '') === 'completed' && ($previous['status'] ?? '') !== 'completed')
+                    || (array_key_exists('action_value', $update) && $update['action_value'] !== ($previous['action_value'] ?? null))) {
+                    \App\Services\ChecklistStatusRequirements::assertTaskAllowed($record->freightLoad, $previous);
+                }
+            }
             $data['operational_checklist'] = \App\Services\ChecklistStatusRequirements::withCategories(
                 $existing->map(fn ($item, $key) => array_merge($item, $updates->get($key, [])))->values()->all()
             );
