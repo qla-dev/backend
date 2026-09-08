@@ -127,6 +127,10 @@ class ShipmentWorkspaceCreator
             default => ['assign_driver_and_vehicle', 'confirm_pickup_time', 'vehicle_registrations', 'cmr_and_documents', 'proof_of_delivery'],
         };
 
+        if ($transportType !== 'warehouse') $items[] = 'proof_of_delivery';
+        if ($transportType === 'road') $items[] = 'vehicle_return';
+        $items = array_values(array_unique($items));
+
         return array_map(fn (string $key): array => [
             'key' => $key,
             'required_for_status' => ChecklistStatusRequirements::category(['key' => $key]),

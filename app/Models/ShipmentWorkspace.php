@@ -47,6 +47,13 @@ class ShipmentWorkspace extends BaseModel
             )));
         }
 
+        if (!$isStorage) {
+            $required = ['proof_of_delivery'];
+            if (($snapshot['transport_type'] ?? 'road') === 'road') $required[] = 'vehicle_return';
+            foreach ($required as $key) {
+                if (!collect($items)->contains('key', $key)) $items[] = ['key' => $key, 'status' => 'pending', 'action_value' => null, 'completed_at' => null, 'completed_by_user_id' => null];
+            }
+        }
         return \App\Services\ChecklistStatusRequirements::withCategories($items);
     }
 

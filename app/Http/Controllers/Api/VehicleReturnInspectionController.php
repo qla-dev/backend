@@ -97,6 +97,12 @@ class VehicleReturnInspectionController extends Controller
                     ]);
                 }
 
+                if ($workspace = $load->shipmentWorkspace) {
+                    $workspace->update(['operational_checklist' => array_map(fn ($item) =>
+                        ($item['key'] ?? '') === 'vehicle_return'
+                            ? array_merge($item, ['status' => 'completed', 'completed_at' => now()->toIso8601String(), 'completed_by_user_id' => $user->id])
+                            : $item, $workspace->operational_checklist)]);
+                }
                 $load->update(['status' => 'finished', 'completed_at' => now()]);
 
                 return $inspection->load(['photos', 'recordedBy:id,name']);

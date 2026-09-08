@@ -749,7 +749,7 @@ class LoadController extends CrudController
         abort_if(($data['status'] ?? null) === 'received' && ! $isReceivingCustomer && ! $isStorageOperator, 403, 'Only the customer or accepted storage provider can mark the load as received.');
         abort_if($isReceivingCustomer && $load->status !== 'in_delivery', 409, 'The load can be received only while it is in delivery.');
         abort_if($isReceivingCustomer && ! $load->reviews()->where('reviewer_user_id', $user->id)->exists(), 422, 'Post your review before marking the load as received.');
-        abort_if(($data['status'] ?? null) === 'finished', 422, 'Complete the vehicle return inspection before finishing the load.');
+        abort_if(($data['status'] ?? null) === 'finished' && $load->transport_type === 'road' && !$load->for_storage, 422, 'Complete the vehicle return inspection before finishing the load.');
 
         $load->update($data);
         $load->load($this->relations());

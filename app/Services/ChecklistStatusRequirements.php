@@ -9,6 +9,7 @@ class ChecklistStatusRequirements
 {
     public static function category(array $item): string
     {
+        if (($item['key'] ?? '') === 'vehicle_return') return 'finished';
         return in_array($item['key'] ?? '', ['proof_of_delivery', 'arrival_and_release_documents'], true)
             ? 'received' : 'in_delivery';
     }
@@ -34,7 +35,7 @@ class ChecklistStatusRequirements
 
         $pending = array_filter($items, fn (array $item): bool =>
             // Receiving also requires the earlier delivery conditions to remain fulfilled.
-            ($load->status === 'received' || self::category($item) === 'in_delivery')
+            (self::category($item) === 'in_delivery' || ($load->status === 'received' && self::category($item) === 'received'))
             && ($item['status'] ?? 'pending') !== 'completed');
         if ($pending !== []) {
             throw ValidationException::withMessages([
