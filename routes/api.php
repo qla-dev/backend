@@ -125,6 +125,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('documents/upload', [DocumentController::class, 'upload']);
     Route::get('documents/{document}/download', [DocumentController::class, 'download']);
 
+    // A tracked shipment hands over the positions it sampled while driving, in runs rather than one
+    // row per request. Registered ahead of the resource below, whose show route would otherwise
+    // match 'bulk' as a record id.
+    Route::post('vehicle-locations/bulk', [VehicleLocationController::class, 'bulkStore'])
+        ->middleware('throttle:120,1');
+
     Route::apiResources([
         'vehicles' => VehicleController::class,
         'vehicle-locations' => VehicleLocationController::class,
