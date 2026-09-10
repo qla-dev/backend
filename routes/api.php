@@ -203,8 +203,13 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('loads/{load}/vehicle-return', [VehicleReturnInspectionController::class, 'store'])
         ->middleware('role:driver,company,manager,dispatcher,customs_officer,superadmin,master');
 
+    // Every role that may post a load (see the group above) has to be able to accept an offer or a
+    // reservation request on the load it posted - a company that posts freight was previously
+    // blocked here by the role gate before OfferController::approve could run, so its own
+    // reservations could be rejected but never accepted. Ownership is what actually authorizes this
+    // action, and approve() enforces it itself: load owner, or superadmin/master.
     Route::post('offers/{offer}/approve', [OfferController::class, 'approve'])
-        ->middleware('role:user,superadmin,master');
+        ->middleware('role:user,driver,company,manager,dispatcher,customs_officer,superadmin,master');
     Route::get('shipment-workspaces', [ShipmentWorkspaceController::class, 'index']);
     Route::get('shipment-workspaces/{shipmentWorkspace}', [ShipmentWorkspaceController::class, 'show']);
     Route::patch('shipment-workspaces/{shipmentWorkspace}', [ShipmentWorkspaceController::class, 'update']);
