@@ -71,6 +71,40 @@ class Load extends BaseModel
         return $value === 'sent' ? 'booked' : (string) $value;
     }
 
+    /**
+     * The status history as the `{status: timestamp}` map the rest of the app reads.
+     *
+     * Loads imported from the transport workbook stored this column double-encoded - a JSON string
+     * whose contents are themselves JSON - so the `array` cast decodes it one level and hands back a
+     * string. Writing to that string threw "Cannot access offset of type string on string" and took
+     * down every status change on those rows, including accepting an offer. Those rows also hold a
+     * list of `{status, changed_at}` records instead of a map, so both shapes are folded back here
+     * and the row repairs itself the next time its status moves.
+     */
+    private static function statusHistory(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = json_decode($value, true);
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        if (! array_is_list($value)) {
+            return $value;
+        }
+
+        $history = [];
+        foreach ($value as $entry) {
+            if (is_array($entry) && isset($entry['status'])) {
+                $history[(string) $entry['status']] = (string) ($entry['changed_at'] ?? now()->toIso8601String());
+            }
+        }
+
+        return $history;
+    }
+
     protected static function booted(): void
     {
         static::saving(function (Load $load): void {
@@ -102,7 +136,7 @@ class Load extends BaseModel
 
         static::updating(function (Load $load): void {
             if ($load->isDirty('status')) {
-                $history = $load->status_change ?? [];
+                $history = self::statusHistory($load->status_change);
                 $history[$load->status] = now()->toIso8601String();
                 $load->status_change = $history;
                 $load->booking_status = match ($load->status) {
