@@ -243,6 +243,7 @@ class DispatchChatController extends Controller
             'sent' => 'booked and in preparation',
             'in_delivery' => 'booked and in transit',
             'received' => 'received at its destination',
+            'review' => 'delivered and awaiting the customer review',
             'finished' => 'finished',
             'pending' => 'pending, not yet published',
             'cancelled' => 'cancelled',

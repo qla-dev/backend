@@ -59,8 +59,8 @@ class ChecklistStatusRequirementsTest extends TestCase
             ['key' => 'proof_of_delivery', 'status' => 'pending'],
             ['key' => 'vehicle_registrations', 'status' => 'pending', 'required_for_status' => 'received'],
         ], 'booked');
-        $this->assertSame(['in_delivery', 'received', 'in_delivery'], array_column($load->shipmentWorkspace->operational_checklist, 'required_for_status'));
-        $this->assertSame('received', ChecklistStatusRequirements::category(['key' => 'arrival_and_release_documents']));
+        $this->assertSame(['in_delivery', 'review', 'in_delivery', 'finished'], array_column($load->shipmentWorkspace->operational_checklist, 'required_for_status'));
+        $this->assertSame('review', ChecklistStatusRequirements::category(['key' => 'arrival_and_release_documents']));
     }
 
     public function test_category_override_cannot_bypass_the_gate(): void
@@ -70,26 +70,49 @@ class ChecklistStatusRequirementsTest extends TestCase
         app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith([$item], 'in_delivery', 'sea'));
     }
 
-    public function test_receiving_requires_proof_of_delivery(): void
+    public function test_reviewing_requires_proof_of_delivery(): void
     {
         $this->expectException(ValidationException::class);
         app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith([
             ['key' => 'proof_of_delivery', 'status' => 'pending'],
-        ], 'received'));
+        ], 'review'));
     }
 
-    public function test_receiving_requires_arrival_documents(): void
+    public function test_reviewing_requires_arrival_documents(): void
     {
         $this->expectException(ValidationException::class);
         app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith([
             ['key' => 'arrival_and_release_documents', 'status' => 'blocked'],
-        ], 'received', 'rail'));
+        ], 'review', 'rail'));
+    }
+
+    /** The carrier ends the drive before the paperwork is filed, so the handover documents may still be open. */
+    public function test_receiving_allows_pending_handover_documents(): void
+    {
+        $items = array_map(fn ($item) => array_merge($item, [
+            'status' => $item['required_for_status'] === 'in_delivery' ? 'completed' : 'pending',
+        ]), $this->items('road'));
+        app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith($items, 'received'));
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_receiving_still_requires_the_departure_items(): void
+    {
+        $this->expectException(ValidationException::class);
+        app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith($this->items('road'), 'received'));
     }
 
     public function test_completed_checklist_allows_receiving(): void
     {
         $items = array_map(fn ($item) => array_merge($item, ['status' => 'completed']), $this->items('road'));
         app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith($items, 'received'));
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_completed_checklist_allows_reviewing(): void
+    {
+        $items = array_map(fn ($item) => array_merge($item, ['status' => 'completed']), $this->items('road'));
+        app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith($items, 'review'));
         $this->addToAssertionCount(1);
     }
 

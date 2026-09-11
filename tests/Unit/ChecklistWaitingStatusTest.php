@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 
 class ChecklistWaitingStatusTest extends TestCase
 {
-    public function test_pod_requires_exactly_in_delivery_and_other_tasks_have_no_prerequisite(): void
+    public function test_pod_spans_delivery_and_receipt_and_other_tasks_have_no_prerequisite(): void
     {
         // Only validation services are installed: no application or database is booted.
         $previous = Facade::getFacadeApplication();
@@ -22,14 +22,17 @@ class ChecklistWaitingStatusTest extends TestCase
         $container->instance('validator', new Factory(new Translator(new ArrayLoader, 'en')));
         Facade::setFacadeApplication($container);
         try {
-            foreach (['posted', 'booked', 'sent', 'in_delivery', 'received', 'finished', 'cancelled'] as $status) {
+            // The driver marks the load received on arrival and files the POD afterwards, so the
+            // upload window covers both statuses.
+            $open = ['in_delivery', 'received'];
+            foreach (['posted', 'booked', 'sent', 'in_delivery', 'received', 'review', 'finished', 'cancelled'] as $status) {
                 $load = (new Load)->setRawAttributes(['status' => $status]);
                 ChecklistStatusRequirements::assertTaskAllowed($load, ['key' => 'cmr_and_documents']);
                 try {
                     ChecklistStatusRequirements::assertTaskAllowed($load, ['key' => 'proof_of_delivery']);
-                    $this->assertSame('in_delivery', $status);
+                    $this->assertContains($status, $open);
                 } catch (ValidationException $exception) {
-                    $this->assertNotSame('in_delivery', $status);
+                    $this->assertNotContains($status, $open);
                     $this->assertArrayHasKey('waiting_for_status', $exception->errors());
                 }
             }
@@ -38,7 +41,7 @@ class ChecklistWaitingStatusTest extends TestCase
                 ['key' => 'vehicle_return', 'waiting_for_status' => 'booked'],
             ]);
             $this->assertSame('in_delivery', $items[0]['waiting_for_status']);
-            $this->assertSame('received', $items[0]['required_for_status']);
+            $this->assertSame('review', $items[0]['required_for_status']);
             $this->assertNull($items[1]['waiting_for_status']);
             $this->assertSame('booked', (new Load)->setRawAttributes(['status' => 'sent'])->status);
             $this->assertNotContains('sent', Load::STATUSES);

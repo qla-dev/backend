@@ -744,14 +744,19 @@ class LoadController extends CrudController
             })->exists());
         $canManageStatus = $canManageStatus || $isStorageOperator;
 
+        $target = $data['status'] ?? null;
+        // Receipt and review are the two halves of closing a delivery: the carrier ends the drive
+        // (`received`), and the recipient then files their review (`review`).
         $isReceivingCustomer = $role === 'user'
             && (int) $load->customer_user_id === (int) $user->id
-            && ($data['status'] ?? null) === 'received';
+            && in_array($target, ['received', 'review'], true);
         abort_unless($canManageStatus || $isReceivingCustomer, 403, 'You cannot update this load status.');
-        abort_if(($data['status'] ?? null) === 'received' && ! $isReceivingCustomer && ! $isStorageOperator, 403, 'Only the customer or accepted storage provider can mark the load as received.');
-        abort_if($isReceivingCustomer && $load->status !== 'in_delivery', 409, 'The load can be received only while it is in delivery.');
-        abort_if($isReceivingCustomer && ! $load->reviews()->where('reviewer_user_id', $user->id)->exists(), 422, 'Post your review before marking the load as received.');
-        abort_if(($data['status'] ?? null) === 'finished' && $load->transport_type === 'road' && !$load->for_storage, 422, 'Complete the vehicle return inspection before finishing the load.');
+        abort_if($target === 'received' && $load->status !== 'in_delivery', 409, 'The load can be received only while it is in delivery.');
+        // Only the recipient can say they have reviewed the delivery, and only once a review exists.
+        abort_if($target === 'review' && ! $isReceivingCustomer && ! $user?->isSuperAdminOrMaster(), 403, 'Only the customer can move the load to review.');
+        abort_if($target === 'review' && $load->status !== 'received', 409, 'The load can be reviewed only after it has been received.');
+        abort_if($target === 'review' && $isReceivingCustomer && ! $load->reviews()->where('reviewer_user_id', $user->id)->exists(), 422, 'Post your review before moving the load to review.');
+        abort_if($target === 'finished' && $load->transport_type === 'road' && !$load->for_storage, 422, 'Complete the vehicle return inspection before finishing the load.');
 
         $load->update($data);
         $load->load($this->relations());

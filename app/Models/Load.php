@@ -20,6 +20,7 @@ class Load extends BaseModel
         'opened',
         'in_delivery',
         'received',
+        'review',
         'finished',
         'pending',
         'cancelled',
