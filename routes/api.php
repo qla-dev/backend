@@ -190,7 +190,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ]);
     });
 
-    Route::middleware('role:finance,company,manager,superadmin,master')->group(function (): void {
+    // The access table owns this one outright: finance and the superadmin work the ledger, a company
+    // and its manager may read it, and the middleware refuses their writes rather than trusting the
+    // browser to have hidden the buttons. `role:` stays in front as the cheap first gate.
+    Route::middleware(['role:finance,company,manager,superadmin,master', 'feature:finance'])->group(function (): void {
         Route::apiResources([
             'invoices' => InvoiceController::class,
             'invoice-items' => InvoiceItemController::class,

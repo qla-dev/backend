@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureFeatureAccess;
 use App\Http\Middleware\EnsureRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -13,7 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->alias(['role' => EnsureRole::class]);
+        $middleware->alias([
+            'role' => EnsureRole::class,
+            'feature' => EnsureFeatureAccess::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
