@@ -541,6 +541,9 @@ class DispatchChatController extends Controller
         return collect([
             'Title' => $load->title,
             'Status' => $load->status,
+            'Shipment status' => $shipment?->status,
+            'Estimated delivery at' => optional($shipment?->estimated_delivery_at)->toIso8601String(),
+            'Delivered at' => optional($shipment?->delivered_at)->toIso8601String(),
             'Tracking number' => $shipment?->tracking_number,
             'Booking reference' => $load->booking_reference,
             'Department' => $load->department,
