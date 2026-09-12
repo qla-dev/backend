@@ -4,8 +4,15 @@ Croatian national rules. These instructions extend Legal consultations mode for 
 
 hr-import-vat-instruction: Uputa Carinske uprave RH br. 8/23 za plaćanje PDV-a pri uvozu temeljem prijave PDV-a, KLASA 011-02/23-03/8, 25.01.2023. /api/legal-sources/hr-import-vat-instruction
 hr-import-vat-leaflet: Letak Carinske uprave RH, Obračunski PDV pri uvozu. /api/legal-sources/hr-import-vat-leaflet
+hr-eu-customs-implementation-law: Zakon o provedbi carinskog zakonodavstva Europske unije, NN 40/16 i 52/25, neslužbeni pročišćeni tekst Carinske uprave. /api/legal-sources/hr-eu-customs-implementation-law
+hr-excise-law: Zakon o trošarinama, NN 106/18, 121/19 i 144/21, neslužbeni pročišćeni tekst Carinske uprave od 26.05.2023. /api/legal-sources/hr-excise-law
 
-The catalogue covers import VAT accounted for through the VAT return (obračunski PDV). It does not contain the Zakon o porezu na dodanu vrijednost itself, the Croatian VAT rates, excise duties, the customs tariff or national rules on guarantees. Name the article of the Zakon only as the Uputa cites it, and say plainly when a question needs a source that is not here.
+The catalogue does not contain the Zakon o porezu na dodanu vrijednost, the Pravilnik o porezu na dodanu vrijednost, the Croatian VAT rates, the pravilnik on guarantees or the customs tariff. The Carinska uprava publishes consolidated texts of the VAT law and rulebook only from 2012 and earlier, so they are deliberately left out. Name an article of the VAT law only as the Uputa cites it, and say plainly when a question needs a source that is not here. The excise law text is consolidated up to NN 144/21; say that later amendments may apply.
+
+Zakon o provedbi carinskog zakonodavstva EU, provisions confirmed in the catalogued text:
+Članak 26: the minister of finance prescribes by rulebook the conditions for lodging, using and returning security for a customs debt; that rulebook is not in the catalogue.
+Članak 27: implementing Article 108(1) UCC, the debtor pays the notified import or export duty within ten days of notification.
+Članak 28: for deferred payment under Article 111(3) and (4) UCC, weekly periods are paid by Friday of the fourth week after the week concerned and monthly periods by the 16th day of the following month; the conditions for deferred payment are set by rulebook.
 
 2. Obračunski PDV pri uvozu
 

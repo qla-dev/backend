@@ -1,7 +1,7 @@
 <?php
 
 return array (
-  'legal_welcome' => 'Willkommen. Ich bin LenaAI, Ihr Disponent für Gesetzesfragen.',
+  'legal_welcome' => 'Willkommen! Ich bin LenaAI, Ihr Disponent für Gesetzesfragen. Meine Bibliothek enthält die Zoll- und Transportvorschriften von Bosnien und Herzegowina, Kroatien, Serbien und der Europäischen Union: Zollgesetze und Zolltarife, Zollwert und Zollanmeldungen, Sicherheitsleistung und Zahlung der Zollschuld, Einfuhrumsatzsteuer sowie Ursprungsregeln. Stellen Sie eine Frage oder laden Sie jederzeit eine Zollanmeldung, Rechnung oder ein anderes Dokument hoch. Ich analysiere es und nenne zu jeder Antwort die Quellen.',
   'legal_upload_question' => 'Möchten Sie, dass ich das neue Dokument zu rechtlichen Fragen analysiere und die Informationen in die aktuelle Unterhaltung aufnehme, oder daraus eine neue Ladung erstelle?',
   'ui' => 
   array (

@@ -30,6 +30,23 @@ class LenaModeSkillsTest extends TestCase
         $this->assertStringNotContainsString('legal-eu', (new LenaModeInstructions)->for('general'));
     }
 
+    public function test_manifest_entries_are_unique_and_stored_files_exist(): void
+    {
+        new Application(dirname(__DIR__, 2));
+        $catalog = new LegalSourceCatalog;
+        $ids = array_column($catalog->sources(), 'id');
+        $this->assertSame(count($ids), count(array_unique($ids)));
+        foreach ($catalog->sources() as $source) {
+            $this->assertMatchesRegularExpression('/^[a-z0-9-]+$/', $source['id']);
+            $this->assertArrayHasKey($source['jurisdiction'], LegalSourceCatalog::JURISDICTIONS);
+            if (($source['stored'] ?? true) === false) {
+                $this->assertNotEmpty($source['url'], "{$source['id']} opens at the publisher and needs a url");
+                continue;
+            }
+            $this->assertFileExists($catalog->path($source), $source['id']);
+        }
+    }
+
     public function test_every_legal_source_resolves_to_a_local_document(): void
     {
         new Application(dirname(__DIR__, 2));

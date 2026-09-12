@@ -5,7 +5,13 @@ Serbian national rules. These instructions extend Legal consultations mode for g
 rs-customs-law: Carinski zakon, Službeni glasnik RS 95/18, 91/19 dr. zakon, 144/20, 118/21 i 138/22, prečišćen tekst Ministarstva finansija. /api/legal-sources/rs-customs-law
 rs-vat-law: Zakon o porezu na dodatu vrednost, Službeni glasnik RS 84/04 do 109/25, nezvanično prečišćen tekst redakcije Službenog glasnika objavljen na sajtu Ministarstva finansija. /api/legal-sources/rs-vat-law
 
-Both texts are in Cyrillic. Quote them in the language of the user's reply, and keep the article numbers exactly as below. The catalogue does not contain the Uredba o carinskim postupcima i carinskim formalnostima, the Carinska tarifa, the Pravilnik o PDV-u or excise rules. Details such as the form of a guarantee instrument, declaration data elements or duty rates depend on those, so say so instead of filling the gap from memory.
+rs-customs-procedures-regulation: Uredba o carinskim postupcima i carinskim formalnostima, Službeni glasnik RS 39/19 do 12/26, nezvanično prečišćen tekst. /api/legal-sources/rs-customs-procedures-regulation
+rs-customs-procedures-annexes: Prilog 16 (napomene za utvrđivanje carinske vrednosti) i Prilog 29 (uobičajeni oblici postupanja) uz tu uredbu. /api/legal-sources/rs-customs-procedures-annexes
+rs-vat-rulebook: Pravilnik o porezu na dodatu vrednost, Službeni glasnik RS 37/21 do 71/26. /api/legal-sources/rs-vat-rulebook
+rs-customs-tariff-law: Zakon o Carinskoj tarifi, Službeni glasnik RS 62/05 do 91/19, prečišćen tekst Ministarstva finansija. /api/legal-sources/rs-customs-tariff-law
+rs-tariff-nomenclature-2026: Uredba o usklađivanju nomenklature Carinske tarife za 2026. godinu, Službeni glasnik RS 107/25 i 45/26. /api/legal-sources/rs-tariff-nomenclature-2026
+
+The texts are in Cyrillic. Quote them in the language of the user's reply, and keep the article numbers exactly as below. Article numbers of the Pravilnik o PDV-u, the Zakon o Carinskoj tarifi and the nomenclature regulation are not confirmed here: cite the document and tell the user to check the exact provision. HS classification follows the rules in the legal-ba instructions (section 3); cite the nomenclature regulation for the Serbian tariff line and duty rate once the heading is established. Excise rules are not in the catalogue.
 
 2. Carinski zakon, provisions confirmed in the catalogued text
 
@@ -36,6 +42,15 @@ Both texts are in Cyrillic. Quote them in the language of the user's reply, and 
 Član 28: a VAT taxpayer may deduct import VAT as input tax when holding the import document showing VAT and proof that this VAT was paid on import.
 Član 49 stav 5: import VAT is deducted in the tax period in which it was paid.
 Članovi 58 i 59: customs regulations apply to import VAT unless the VAT law provides otherwise, and the customs authority conducting the procedure calculates and collects it.
+
+Uredba o carinskim postupcima i carinskim formalnostima, provisions confirmed in the catalogued text:
+Član 136: an individual security for a customs debt that may arise is calculated at the highest duty rate, and for other charges the highest rate, applicable to goods of the same kind.
+Član 137: no security is required for temporary import in the listed cases, such as oral declarations, carriers' marked transport material and marked empty packaging.
+Član 138: forms of security other than a cash deposit or a guarantee (mortgage and similar rights, assignment or pledge, joint liability of an approved third person or a bill of exchange guaranteed by that person, a cash deposit in foreign currency, participation in a general guarantee scheme). They are not accepted for national transit.
+Član 142: a cash deposit is paid to the account designated by the Uprava carina; for a special procedure or temporary storage it is lodged with and returned by the competent customs office once the procedure is discharged; no interest is paid.
+Član 147: the customs office of guarantee approves a guarantee; revocation by either side takes effect on the sixteenth day; individual guarantees use the form in Prilog 18 and comprehensive guarantees the form in Prilog 20.
+Članovi 153 i 154: a comprehensive guarantee may be reduced to 50, 30 or 0 percent of the reference amount when the conditions of član 154 are met, and to 30 percent for debts that have already arisen.
+Član 256: when verification of the declaration may lead to a higher amount, the goods are released once security covering the difference is lodged, or the declarant may ask to be notified of the higher amount straight away.
 
 4. Applying the provisions
 

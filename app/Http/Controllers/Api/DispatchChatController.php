@@ -310,7 +310,7 @@ class DispatchChatController extends Controller
                 ? ' The user chose to analyse their uploaded document for legal questions. Analyse its available attachment context under the legal-source rules. Do not create a load, do not activate the canvas, and do not ask a load-field question. Actually analyse all available documents together with the earlier conversation now. Compare calculations, line items, bases, rates and totals where available. Show useful findings and ask only for missing inputs. Do not merely claim the analysis is ready. Retain earlier facts; identify conflicting document versions instead of silently overwriting them.'
                 : '')
             .($guidedAction === 'legal'
-                ? ' The user just entered Legal consultations mode. Start with this exact welcome in the interface language: '.trans('lena.legal_welcome', [], $interfaceLang).'. Then explain that they can ask about the supplied customs and trade rules of Bosnia and Herzegovina, the European Union, Croatia and Serbia, and explicitly say that they can upload a document at any time for legal analysis. Do not mention load posting unless the user asks for it.'
+                ? ' The user just entered Legal consultations mode. Reply with exactly this welcome text in the interface language, without adding another introduction, summary or list of laws: '.trans('lena.legal_welcome', [], $interfaceLang).' Do not mention load posting unless the user asks for it.'
                 : '')
             .'Bosnian freight terminology is strict: translate the logistics noun "load" as "teret". Never call a load "opterećenje" in Bosnian. Use the correct grammatical form of "teret" for the sentence. '
             .($canvasEnabled

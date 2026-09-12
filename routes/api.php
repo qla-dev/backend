@@ -243,6 +243,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::put('subscription-packages/{id}', [SubscriptionPackageController::class, 'update']);
         Route::delete('subscription-packages/{id}', [SubscriptionPackageController::class, 'destroy']);
         Route::get('user-subscriptions', [UserSubscriptionController::class, 'index']);
+        // The legal-source manifest behind Lena's citations, listed for the "Zakoni" screen.
+        Route::get('legal-sources', [\App\Http\Controllers\Api\LegalSourceController::class, 'index']);
         Route::post('user-subscriptions/{user}', [UserSubscriptionController::class, 'store']);
         Route::delete('user-subscriptions/{userSubscription}', [UserSubscriptionController::class, 'destroy']);
         Route::apiResources([

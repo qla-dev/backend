@@ -1,7 +1,7 @@
 <?php
 
 return array (
-  'legal_welcome' => 'Welcome. I am LenaAI, your legislative dispatcher.',
+  'legal_welcome' => 'Welcome! I am LenaAI, your legislative dispatcher. My library holds the customs and freight regulations of Bosnia and Herzegovina, Croatia, Serbia and the European Union: customs laws and tariffs, customs value and declarations, securing and paying the customs debt, import VAT and rules of origin. Ask a question or upload a declaration, invoice or any other document at any time, and I will analyse it and cite the sources behind every answer.',
   'legal_upload_question' => 'Would you like me to analyse the new document for legal questions and incorporate it into the current conversation, or create a new load from it?',
   'ui' => 
   array (
