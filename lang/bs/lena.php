@@ -699,6 +699,8 @@ Možete mi pisati na bilo kojem jeziku. Odgovorit ću isključivo na jeziku koji
     'postLoadModal.latitude' => 'Geografska širina',
     'postLoadModal.longitude' => 'Geografska dužina',
     'postLoadModal.dimensionScope' => 'Dimenzije za',
+    'postLoadModal.recalculateVolume' => 'Izračunaj iz dimenzija',
+    'postLoadModal.supplierContact' => 'Kontakt dobavljača',
   ),
   'actions' => 
   array (

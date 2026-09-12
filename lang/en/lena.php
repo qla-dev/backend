@@ -699,6 +699,8 @@ You can write to me in any language. I will reply exclusively in the language yo
     'postLoadModal.latitude' => 'Latitude',
     'postLoadModal.longitude' => 'Longitude',
     'postLoadModal.dimensionScope' => 'Dimensions for',
+    'postLoadModal.recalculateVolume' => 'Recalculate from dimensions',
+    'postLoadModal.supplierContact' => 'Supplier contact',
   ),
   'actions' => 
   array (
