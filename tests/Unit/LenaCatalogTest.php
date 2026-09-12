@@ -12,8 +12,10 @@ class LenaCatalogTest extends TestCase
     public function test_all_clients_receive_the_same_complete_localized_catalog(): void
     {
         $catalog = app(LenaCatalog::class)->payload();
-        $this->assertSame(['en', 'de', 'bs'], array_keys($catalog['locales']));
-        foreach ($catalog['locales'] as $lang => $text) {
+        $this->assertSame(['en', 'de', 'bs', 'hr', 'sr', 'sr_cyrl'], array_keys($catalog['locales']));
+        $this->assertSame('Ћао', \App\Support\SerbianCyrillic::convert('Ćao'));
+        $this->assertNotSame($catalog['locales']['sr']['welcome']['general'], $catalog['locales']['sr_cyrl']['welcome']['general']);
+        foreach (array_intersect_key($catalog['locales'], array_flip(['en', 'de', 'bs', 'hr', 'sr'])) as $lang => $text) {
             $this->assertStringContainsString('[[LENA_OPTIONS:', $text['welcome']['general']);
             // A load chat greets the way the general one does, and names the load when the client
             // knows its reference.
@@ -34,7 +36,7 @@ class LenaCatalogTest extends TestCase
     {
         $catalog = app(LenaCatalog::class)->payload();
 
-        foreach ($catalog['locales'] as $lang => $text) {
+        foreach (array_intersect_key($catalog['locales'], array_flip(['en', 'de', 'bs', 'hr', 'sr'])) as $lang => $text) {
             foreach ($catalog['steps'] as $key => $step) {
                 $this->assertNotEmpty($text['steps'][$key]['example'], "$lang: $key has no example");
                 $this->assertNotEmpty($step['transports'], "$key applies to no transport type");

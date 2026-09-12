@@ -87,7 +87,7 @@ class LenaGuidedAnswerController extends Controller
             'value' => ['nullable', 'string'],
             'display_text' => ['required', 'string'],
             'skip' => ['required', 'boolean'],
-            'lang' => ['nullable', 'string', 'in:bs,de,en'],
+            'lang' => ['nullable', 'string', 'in:bs,hr,sr,de,en'],
         ]);
         $lang = $validated['lang'] ?? 'en';
         $skip = $validated['skip'];

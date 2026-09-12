@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Support\SerbianCyrillic;
+
 class LenaCatalog
 {
-    public const LOCALES = ['en', 'de', 'bs'];
+    public const LOCALES = ['en', 'de', 'bs', 'hr', 'sr'];
 
     public const TRANSPORTS = ['road', 'air', 'sea', 'rail', 'warehouse'];
 
@@ -106,6 +108,10 @@ class LenaCatalog
             }
             $locales[$locale] = [...$text, 'steps' => $steps, 'form_fields' => $formFields];
         }
+
+        // Keep the user-facing Serbian locale Latin/Ekavian, while exposing the same catalog in
+        // Cyrillic for clients whose native language setting requests that script.
+        $locales['sr_cyrl'] = SerbianCyrillic::convert($locales['sr']);
 
         $payload = [...$schema, 'locales' => $locales];
         $payload['revision'] = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
