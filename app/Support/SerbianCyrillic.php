@@ -23,7 +23,7 @@ final class SerbianCyrillic
             $token = "\u{E000}".count($tokens)."\u{E001}";
             $tokens[$token] = $match[0];
             return $token;
-        }, $value);
+        }, $value); 
 
         $converted = strtr($plain ?? $value, [
             'DŽ' => 'Џ', 'Dž' => 'Џ', 'dž' => 'џ',
