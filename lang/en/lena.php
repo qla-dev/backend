@@ -365,7 +365,7 @@ return array (
     'No, leave load creation' => 'No',
     'Lena welcome general' => 'Hello, I am LenaAI, your AI dispatcher in Freightbook.ai.
 
-You can write to me in any language. I will reply exclusively in the language you use. How can I help you today?',
+  You can write to me in any language. I will reply exclusively in the language you use. I can also guide you through the customs and trade-law library and show clickable sources with each legal answer. How can I help you today?',
     'LenaAI' => 'LenaAI',
     'Lena welcome about load' => 'Ask me about this load. I help drivers and dispatchers with pickup and delivery, cargo, timing, documents, and next steps.
 
@@ -712,7 +712,8 @@ You can write to me in any language. I will reply exclusively in the language yo
     'tracking' => 'Check load status',
     'booking' => 'Reserve a load',
     'hs' => 'Check HS code',
-    'free' => 'Ask about Freightbook.ai',
+      'free' => 'Ask about Freightbook.ai',
+      'legal' => 'Legal consultations',
     'upload_yes' => 'Yes',
     'upload_no' => 'No, ask me questions',
     'start_add_yes' => 'Yes',

@@ -60,6 +60,11 @@ Route::get('health', fn () => response()->json(['message' => 'Freightbook.ai API
 // Shared, non-personalized questions and translations for web and mobile.
 Route::get('lena/catalog', [\App\Http\Controllers\Api\LenaCatalogController::class, 'show']);
 
+// Curated laws cited by Lena's consultation mode. They contain no account-specific data and open
+// directly in a new browser tab from the source card.
+Route::get('legal-sources/{source}', [\App\Http\Controllers\Api\LegalSourceController::class, 'show'])
+    ->where('source', '[a-z0-9-]+');
+
 // Public: the social-registration screen needs to list roles before the user has a session token.
 Route::get('role-options', [RoleController::class, 'options']);
 

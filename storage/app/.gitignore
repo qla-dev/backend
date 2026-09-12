@@ -2,3 +2,5 @@
 !private/
 !public/
 !.gitignore
+!legal-sources/
+!legal-sources/*.pdf

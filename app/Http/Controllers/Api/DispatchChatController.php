@@ -14,6 +14,7 @@ use App\Services\HsCodeSearchService;
 use App\Services\LenaGuidedAnswerResponder;
 use App\Services\LenaLoadQuestionnaire;
 use App\Services\LenaLoadDetailsContext;
+use App\Services\LegalSourceCatalog;
 use App\Services\LoadDraftScanMapper;
 use App\Services\OpenRouterDispatchAssistant;
 use App\Services\OpenRouterLoadScanner;
@@ -218,6 +219,7 @@ class DispatchChatController extends Controller
         );
         $origin = $contextLoad?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $contextLoad?->stops->firstWhere('type', 'delivery')?->city;
+        $legalMode = $guidedAction === 'legal' || $activeGuidedMode === 'legal';
         $hsMode = $guidedAction === 'hs'
             || $activeGuidedMode === 'hs'
             || preg_match('/\b(?:hs\s*(?:code|kod|nummer)?|customs?\s+code|tariff\s+code|zolltarifnummer)\b/i', (string) $latestUserMessage) === 1;
@@ -236,7 +238,8 @@ class DispatchChatController extends Controller
             && ! $activeGuidedMode
             && ! $guidedAction
             && ! $detectedLoadCreationRequest
-            && ! $hsMode;
+            && ! $hsMode
+            && ! $legalMode;
 
         $statusLabels = [
             'posted' => 'posted and open for booking',
@@ -276,6 +279,7 @@ class DispatchChatController extends Controller
         $systemPrompt = 'You are LenaAI, the assistant for the Freightbook.ai freight logistics platform. '
             .$languageInstruction
             .'Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. Write plain text only. Do not use Markdown, asterisks, Markdown headings, or Markdown emphasis. If a list is necessary, use short numbered lines without Markdown symbols. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
+            .($legalMode ? ' You are in Legal consultations mode. Give practical, careful information about Bosnian customs, tariff, declaration, origin and trade rules using only the supplied legal-source catalogue below. Do not present yourself as a lawyer, do not invent article numbers, and say when the supplied material does not establish an answer. At the end of every substantive legal answer, select the relevant source IDs from the catalogue and put them on one separate line exactly as [[LEGAL_SOURCES:id,id]]. Catalogue: '.app(LegalSourceCatalog::class)->promptCatalog().'. ' : '')
             .'Bosnian freight terminology is strict: translate the logistics noun "load" as "teret". Never call a load "opterećenje" in Bosnian. Use the correct grammatical form of "teret" for the sentence. '
             .($canvasEnabled
                 ? ' The conversation load-post canvas is active and remains active until the user selects the guided continue_add_no action. Help the user prepare a new load posting by collecting only facts they provide. Attached-file and message extraction results appear in the user message context and are authoritative for this draft; the canvas panel next to this chat already displays and updates those fields live. Because the user can already see the fields update, do not restate all field values in prose. The server controls a complete ordered questionnaire matching the load scan fields; never declare the load ready based only on title, cargo, weight, pickup, and delivery. Ask exactly one server-supplied missing step at a time. If the latest user message changes or supplies draft data, briefly confirm it and ask that next step. If it instead asks about another LenaAI capability or about Freightbook.ai, answer that request without discarding or changing modes, then write exactly [[LENA_FOLLOWUP]] on its own line, followed by a localized equivalent of "Your load is still in the data collection phase. Would you like to continue?", followed by [[LENA_OPTIONS:continue_add_yes,continue_add_no]] on its own line. In Bosnian, that follow-up sentence must be exactly "Vaš teret je još uvijek u fazi prikupljanja podataka. Želite li nastaviti?" In German, use "Ihre Ladung befindet sich noch in der Datenerfassungsphase. Möchten Sie fortfahren?" You must always include the literal [[LENA_FOLLOWUP]] marker on its own line immediately before that sentence, with no exceptions, even when the answer and the follow-up sentence feel like they belong together; never merge them into one paragraph without the marker between them. Do not ask or restate the next questionnaire step in this same reply; the application asks it again on its own once the user chooses to continue. Never invent values.'
@@ -459,6 +463,11 @@ class DispatchChatController extends Controller
             $reply
         );
         $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
+        // A legal reply must always have a verifiable source card. The model normally selects the
+        // narrowest IDs; if it omits the machine marker, retain transparency with the full library.
+        if ($legalMode && filled($reply) && preg_match('/\[\[LEGAL_SOURCES:[a-z0-9,-]+\]\]/', $reply) !== 1) {
+            $reply .= "\n[[LEGAL_SOURCES:".collect(app(LegalSourceCatalog::class)->sources())->pluck('id')->implode(',').']]';
+        }
         if (in_array($guidedAction, ['add', 'storage', 'start_add_yes'], true) && ! $hasExistingLoadDraftData && ! str_contains($reply, '[[LENA_OPTIONS:')) {
             $reply .= "\n[[LENA_OPTIONS:upload_yes,upload_no]]";
         }
@@ -466,7 +475,7 @@ class DispatchChatController extends Controller
             $reply .= "\n[[LENA_OPTIONS:start_add_yes,start_add_no]]";
         }
         if ($hasNoEstablishedMode && ! str_contains($reply, '[[LENA_OPTIONS:')) {
-            $reply .= "\n[[LENA_OPTIONS:add,storage,tracking,booking,hs,free]]";
+            $reply .= "\n[[LENA_OPTIONS:add,storage,tracking,booking,hs,free,legal]]";
         }
         $hasTextReply = filled($reply);
         if ($hasTextReply && $attachedLoadDetails) {
@@ -887,7 +896,7 @@ class DispatchChatController extends Controller
             return null;
         }
 
-        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no)\]\]$/', trim($message), $match) === 1
+        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|legal|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no)\]\]$/', trim($message), $match) === 1
             ? $match[1]
             : null;
     }
@@ -896,7 +905,7 @@ class DispatchChatController extends Controller
     {
         foreach ($userMessages as $message) {
             $action = $this->guidedAction($message->body);
-            if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free'], true)) {
+            if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free', 'legal'], true)) {
                 return $action;
             }
         }
