@@ -81,6 +81,34 @@ class LenaCatalogTest extends TestCase
         }
     }
 
+    public function test_every_option_carries_the_glyph_both_clients_draw_it_with(): void
+    {
+        $catalog = app(LenaCatalog::class);
+        $schema = $catalog->schema();
+        $payload = $catalog->payload();
+
+        // A transport type is a truck, a plane, a ship, a train and a warehouse in the form's cards,
+        // so the chat's pills are told the same rather than guessing from the label.
+        $transportIcons = collect($payload['locales']['en']['steps']['transportType']['choices'])
+            ->pluck('icon', 'value')->all();
+        $this->assertSame(
+            ['road' => 'Truck', 'air' => 'Plane', 'sea' => 'Ship', 'rail' => 'TrainFront', 'warehouse' => 'Warehouse'],
+            collect($transportIcons)->only(LenaCatalog::TRANSPORTS)->all()
+        );
+
+        foreach ($schema['option_groups'] as $group => $values) {
+            // The packaging registry is 300+ UN codes; they share one glyph rather than each naming it.
+            if ($group === 'PACKAGE_TYPE_OPTIONS' || ! is_array($values)) {
+                continue;
+            }
+            foreach ($values as $value) {
+                if ($value !== '') {
+                    $this->assertArrayHasKey($value, $schema['option_icons'], "$group's \"$value\" has no glyph");
+                }
+            }
+        }
+    }
+
     public function test_questionnaire_order_and_endpoint_schema_have_one_definition(): void
     {
         $step = app(LenaLoadQuestionnaire::class)->nextStep([], collect(), 1);
