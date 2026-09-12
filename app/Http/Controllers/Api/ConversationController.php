@@ -78,6 +78,14 @@ class ConversationController extends CrudController
             $data['canvas'] = true;
         }
 
+        // Same reason MessageController overrides the client's sent_at: every caller sends a plain
+        // new Date().toISOString() (always UTC), and Eloquent's datetime cast stores whatever
+        // timezone a parsed string carries rather than re-localizing it to config('app.timezone').
+        // A client value therefore lands two hours behind the created_at written beside it, and a
+        // conversation with no messages yet - which is exactly what the sidebar falls back to this
+        // column for - shows a time two hours in the past. The server clock is authoritative.
+        $data['last_message_at'] = now();
+
         $record = Conversation::query()->create($data);
         $record->participants()->attach($participantIds);
 
@@ -137,6 +145,10 @@ class ConversationController extends CrudController
         unset($data['initial_message'], $data['greeting'], $data['lang']);
         $participantIds = $data['participant_ids'] ?? null;
         unset($data['participant_ids']);
+        // A client UTC string would land two hours behind the server-written columns (see store).
+        if (array_key_exists('last_message_at', $data)) {
+            $data['last_message_at'] = now();
+        }
         $record->update($data);
         if (is_array($participantIds)) {
             $record->participants()->syncWithoutDetaching($participantIds);
