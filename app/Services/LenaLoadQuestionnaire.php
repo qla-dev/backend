@@ -7,14 +7,16 @@ use Illuminate\Support\Collection;
 
 class LenaLoadQuestionnaire
 {
-
-
     public function nextStep(array $draft, Collection $messages, int $aiDispatcherId): ?array
     {
         $answeredWithoutValue = $this->negativeAnswersByStep($messages, $aiDispatcherId);
+        $catalog = app(LenaCatalog::class);
+        $transport = $this->transport($draft);
 
-        foreach (app(LenaCatalog::class)->schema()['steps'] as $key => $meta) {
-            if ($this->isSkipped($key, $draft) || $this->hasValue($key, $draft) || isset($answeredWithoutValue[$key])) {
+        // Only the steps this transport type actually has: a warehouse booking is never asked
+        // about a vehicle, and a truck is never asked which container types it needs.
+        foreach ($catalog->steps($transport) as $key => $meta) {
+            if ($this->isSkipped($meta, $draft) || $this->hasValue($key, $draft) || isset($answeredWithoutValue[$key])) {
                 continue;
             }
 
@@ -27,6 +29,13 @@ class LenaLoadQuestionnaire
     public function hasCompleteReadyMarker(Collection $messages): bool
     {
         return $messages->contains(fn (Message $message) => str_contains((string) $message->body, '[[LOAD_READY_TO_POST:complete]]'));
+    }
+
+    private function transport(array $draft): string
+    {
+        $transport = (string) ($draft['transportType'] ?? '');
+
+        return in_array($transport, LenaCatalog::TRANSPORTS, true) ? $transport : 'road';
     }
 
     private function negativeAnswersByStep(Collection $messages, int $aiDispatcherId): array
@@ -66,22 +75,13 @@ class LenaLoadQuestionnaire
         return preg_match('/^(?:0|ne|nema|nemam|nikakv\w*|bez|ništa|nista|nije potrebno|nije poznato|nije navedeno|no|none|nothing|unknown|not needed|not specified|no preference|nein|keine|keiner|keins|nichts|unbekannt|nicht erforderlich|nicht angegeben)(?:\b.*)?[.!]?$/ui', $normalized) === 1;
     }
 
-    private function isSkipped(string $key, array $draft): bool
+    // A step the schema marks as conditional - goods going to the warehouse exchange have no
+    // receiving warehouse of the user's own to name.
+    private function isSkipped(array $meta, array $draft): bool
     {
-        $transportType = $draft['transportType'] ?? '';
+        $condition = $meta['skip_when'] ?? null;
 
-        // Goods held in a warehouse are not carried anywhere, so nothing about the vehicle or the
-        // journey is asked - only what arrives, where it is stored and for how long.
-        if ($transportType === 'warehouse') {
-            return in_array($key, ['bodyType', 'vehicleType', 'transportMode', 'deliveryProof', 'priceTerms'], true)
-                || ($key === 'warehouse' && ($draft['storageTarget'] ?? '') === 'exchange');
-        }
-
-        if (in_array($key, ['storageTarget', 'warehouse'], true)) {
-            return true;
-        }
-
-        return in_array($key, ['transportMode', 'deliveryProof'], true) && $transportType === 'road';
+        return $condition !== null && ($draft[$condition['field']] ?? null) === $condition['equals'];
     }
 
     private function hasValue(string $key, array $draft): bool
@@ -89,38 +89,58 @@ class LenaLoadQuestionnaire
         $filled = fn (string $field): bool => filled($draft[$field] ?? null);
         $positive = fn (string $field): bool => is_numeric($draft[$field] ?? null) && (float) $draft[$field] > 0;
         $true = fn (string $field): bool => ($draft[$field] ?? false) === true;
+        $any = fn (array $fields) => collect($fields)->contains(fn (string $field) => filled($draft[$field] ?? null));
 
         return match ($key) {
             'storageTarget' => in_array($draft['storageTarget'] ?? '', ['own', 'exchange'], true),
             'warehouse' => ($draft['storageTarget'] ?? '') === 'exchange' || $positive('warehouseId'),
             'title' => $filled('title') && mb_strtolower(trim((string) $draft['title'])) !== 'new load',
-            'transportType' => in_array($draft['transportType'] ?? '', ['road', 'air', 'sea', 'rail', 'warehouse'], true),
+            'transportType' => in_array($draft['transportType'] ?? '', LenaCatalog::TRANSPORTS, true),
+            'customer' => $any(['consigneeName', 'consignee', 'customerName']),
+            'cargoType' => $filled('cargoType'),
             'goodsType' => $filled('goodsType') || $filled('cargoType'),
+            'hsCode' => ! empty($draft['hsCodes']) || $filled('hsSearchTerms'),
+            'packaging' => $filled('quantityMeasure'),
             'weight' => $positive('weightKg'),
             'pallets' => $positive('pallets'),
-            'bodyType' => $filled('bodyType'),
             'dimensions' => $positive('lengthM') || $positive('widthM') || $positive('heightM') || $positive('volumeM3'),
+            'containers' => ! empty($draft['containerSelections']),
+            'bodyType' => $filled('bodyType'),
             'vehicleType' => $filled('vehicleType'),
-            'loadingEquipment' => $filled('loadingEquipment'),
+            'loadingEquipment' => $filled('loadingEquipment') || ! empty($draft['warehouseEquipment']),
             'characteristics' => $filled('characteristics'),
+            'dangerousGoods' => $any(['dgUnNumber', 'dgImoClass', 'dgPackingGroup', 'dgProperShippingName']),
+            'outOfGauge' => $filled('oogInGauge'),
             'specialRequirements' => ! empty($draft['specialRequirements']),
             'transportMode' => $filled('transportMode'),
             'deliveryProof' => $filled('deliveryProof'),
-            'pickup' => $filled('pickupCity') || $filled('pickupCountryCode') || $filled('pickupAddress'),
+            'pickup' => $any(['pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupPort', 'pickupAirport']),
             'pickupDate' => $filled('pickupDate') || $filled('pickupTimeFrom'),
-            'delivery' => $filled('deliveryCity') || $filled('deliveryCountryCode') || $filled('deliveryAddress'),
+            'delivery' => $any(['deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryPort', 'deliveryAirport']),
             'deliveryDate' => $filled('deliveryDate') || $filled('deliveryTimeFrom'),
+            'transitDays' => $positive('transitDays'),
+            'extraStops' => ! empty($draft['extraPickups']) || ! empty($draft['extraDeliveries']),
+            'storageType' => $filled('warehouseStorageType'),
+            'storagePeriod' => $filled('warehouseStartDate') || $true('warehouseIsOngoing'),
+            'storageTemperature' => ($draft['warehouseTemperatureMin'] ?? null) !== null && ($draft['warehouseTemperatureMax'] ?? null) !== null,
+            'storageServices' => $true('warehouseRequiresCustomsBonded') || $true('warehouseRequiresRacking') || $true('warehouseRequiresInsurance') || $true('warehouseRequiresSecurity') || $true('warehouseFoodPharma') || $true('warehouseFragile'),
+            'storageRate' => $filled('warehouseRateUnit'),
             'budget' => $positive('budget') && $filled('currency'),
             'priceTerms' => in_array($draft['priceTerms'] ?? '', ['fixed', 'negotiable'], true),
             'declaredValue' => $positive('declaredValue'),
-            'terms' => $filled('incoterm') || $positive('paymentDueDays'),
+            'terms' => $filled('incoterm'),
+            'paymentTerms' => $filled('seaPaymentTerms') || $positive('paymentDueDays') || $true('paymentDeferred'),
+            'documentType' => $filled('blType'),
             // Both ends of the range are required, not just one - a range half-answered with only
             // a minimum must keep this step pending rather than letting the server's own next-step
             // marker silently jump ahead while a reply is still mid-way through asking for the
             // maximum (the user can still explicitly skip the rest via [[LENA_SKIP:temperature]]).
             'temperature' => ($draft['temperatureMin'] ?? null) !== null && ($draft['temperatureMax'] ?? null) !== null,
             'requirements' => $true('requiresAdr') || $true('requiresTailLift') || $true('tollRoadsIncluded') || $true('ferryIncluded') || $true('cmrRequired') || $true('palletExchangeRequired') || $true('customsRequired') || $true('insuranceRequired') || $true('certificationRequired') || $true('inspectionServicesRequired') || $true('isUrgent') || $true('requiresTracking'),
-            'contact' => $filled('contactName') || $filled('contactPhone') || $filled('contactMobile') || $filled('contactFax') || $filled('contactEmail'),
+            'contact' => $any(['contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail']),
+            'supplier' => $any(['supplierName', 'supplierEmail', 'supplierPhone', 'supplierMobile', 'supplierFax']),
+            'visibility' => $filled('closedFreightExchange') || $true('publishToAllAfterMinutes'),
+            'comments' => $any(['internalComments', 'externalComments', 'additionalInfo']),
             'notes' => $filled('notes') || $filled('bookingReference') || ! empty($draft['customFields']),
             default => false,
         };

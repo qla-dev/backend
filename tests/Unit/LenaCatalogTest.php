@@ -26,6 +26,61 @@ class LenaCatalogTest extends TestCase
         }
     }
 
+    public function test_every_step_and_form_field_names_an_example_in_every_language(): void
+    {
+        $catalog = app(LenaCatalog::class)->payload();
+
+        foreach ($catalog['locales'] as $lang => $text) {
+            foreach ($catalog['steps'] as $key => $step) {
+                $this->assertNotEmpty($text['steps'][$key]['example'], "$lang: $key has no example");
+                $this->assertNotEmpty($step['transports'], "$key applies to no transport type");
+                // The question a step is asked with shows its example, so the wording and the
+                // example are never written twice.
+                $shown = $text['format_hints'][$key] ?? $text['steps'][$key]['example'];
+                $this->assertStringContainsString($shown, $text['steps'][$key]['question'], "$lang: $key asks without its example");
+            }
+            foreach ($catalog['form_fields'] as $field => $definition) {
+                $this->assertNotEmpty($text['form_fields'][$field]['label'], "$lang: $field has no label");
+                $this->assertNotEmpty($text['form_fields'][$field]['question'], "$lang: $field has no question");
+                $this->assertNotEmpty($text['form_fields'][$field]['example'], "$lang: $field has no example");
+                $this->assertNotSame($field, $text['form_fields'][$field]['label'], "$lang: $field falls back to its own name");
+                $this->assertSame($definition['step'], $text['form_fields'][$field]['step']);
+            }
+            // Option wording the clients used to hold as hardcoded English.
+            $this->assertSame(
+                array_keys($catalog['locales']['en']['option_descriptions']),
+                array_keys($text['option_descriptions']),
+                "$lang: option descriptions are not in step with English"
+            );
+        }
+    }
+
+    public function test_form_controls_read_their_choices_from_the_catalog_without_chat_pills(): void
+    {
+        $fields = app(LenaCatalog::class)->payload()['locales']['en']['form_fields'];
+
+        // A place type is the field's own picker, not what the pickup step asks in the chat.
+        $this->assertSame(
+            ['Warehouse', 'Terminal', 'AOL / Airport of loading', 'Address'],
+            array_column($fields['pickupPlaceType']['choices_by_transport']['road'], 'value')
+        );
+        $this->assertSame(
+            ['Port to Port', 'Port to Door'],
+            array_column($fields['deliveryPlaceType']['choices_by_transport']['sea'], 'value')
+        );
+        $this->assertSame(['m', 'cm', 'mm'], array_column($fields['lengthUnit']['choices'], 'value'));
+        // Container categories and option descriptions travel with the choice they belong to.
+        $containers = collect($fields['containerSelections']['choices'])->keyBy('value');
+        $this->assertSame('Reefer', $containers['40RH']['category']);
+        $this->assertSame("40' High Cube Reefer", $containers['40RH']['label']);
+        $this->assertSame('Full truck load', collect($fields['cargoType']['choices'])->firstWhere('value', 'FTL')['description']);
+        foreach ($fields as $field => $definition) {
+            foreach ([$definition['choices'], ...array_values($definition['choices_by_transport'])] as $choices) {
+                $this->assertEmpty(array_filter($choices, fn ($choice) => isset($choice['skip'])), "$field offers a chat-only pill");
+            }
+        }
+    }
+
     public function test_questionnaire_order_and_endpoint_schema_have_one_definition(): void
     {
         $step = app(LenaLoadQuestionnaire::class)->nextStep([], collect(), 1);
