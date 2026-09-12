@@ -282,16 +282,7 @@ class DispatchChatController extends Controller
                 : ' The load-post canvas is currently off. Never turn it on merely because the user types a load-creation request. The explicit Add a new load action can open it.')
             .($canvasEnabled && $nextLoadStep
                 ? ' The next incomplete questionnaire step is "'.$nextLoadStep['key'].'": ask for '.$nextLoadStep['description'].'. '
-                    // The field is named for the model rather than left to it: given only a worked
-                    // example to adapt, it copied the example's field verbatim and asked for the
-                    // transport type while the buttons below offered body types.
-                    .'Name the field in the question exactly as: "'.$stepLabels->stepLabel($nextLoadStep['key'], $interfaceLang).'" - never the name of any other field, and never the one used in the example wording below. '
-                    .($nextLoadStep['hasOptions']
-                        ? 'The application already shows the valid choices for this step as buttons directly below your message, so do not list, name, or restate those specific option values yourself in the question - that is redundant and less intuitive than just pointing at the buttons. Phrase it generically instead, in the sentence shape of "Odaberite <field name> od ponuđenih opcija." (translate the shape naturally into the language of the user and keep the field name given above). '
-                        : 'This step is answered by typing a value, not by buttons, so ask for it directly and name the expected unit or format when there is one (e.g. kilograms, a date), in the sentence shape of "Unesite <field name> u kg." (adapt the unit to this step, translate naturally into the language of the user, and keep the field name given above). '
-                            .($nextLoadStep['key'] === 'dimensions'
-                                ? 'Explicitly give the expected format and a concrete numeric example, in the style of "Unesite dimenzije tereta u formatu dužina x širina x visina, npr. 2x1.5x1.8." (translate naturally, keep the "npr./z.B./e.g." example). '
-                                : ''))
+                    .'Use this canonical question verbatim for the interface language (translate only if the user explicitly speaks another language): '.json_encode($stepLabels->askStep($nextLoadStep['key'], $nextLoadStep['hasOptions'], $interfaceLang), JSON_UNESCAPED_UNICODE).'. '
                     .'After the question, end the reply with exactly [[LENA_STEP:'.$nextLoadStep['key'].']] on its own line. Do not ask any later step yet and do not emit LOAD_READY_TO_POST.'
                 : ($canvasEnabled
                     ? ' Every questionnaire step is complete. Do not ask another load-field question. The application will show the ready-to-post card.'

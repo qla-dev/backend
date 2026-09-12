@@ -7,47 +7,13 @@ use Illuminate\Support\Collection;
 
 class LenaLoadQuestionnaire
 {
-    // 'options' marks steps the frontend renders with real selectable-choice buttons (see
-    // questionnaireSuggestions() in useLenaEmbeddedMessages.tsx) rather than just a free-text
-    // input - DispatchChatController uses this to stop the AI restating those option values in
-    // its own question text (redundant with the buttons already shown) and to phrase free-input
-    // steps as a direct "enter this value" ask instead. Descriptions here were trimmed to match:
-    // they used to spell out the exact option words, which is what caused the restating.
-    private const STEPS = [
-        'storageTarget' => ['description' => 'whether the goods go to one of the user\'s own warehouses or to the warehouse exchange', 'options' => true],
-        'warehouse' => ['description' => 'the user\'s warehouse that will receive the goods', 'options' => true],
-        'title' => ['description' => 'a short load title', 'options' => false],
-        'transportType' => ['description' => 'the transport type', 'options' => true],
-        'goodsType' => ['description' => 'the goods or cargo type', 'options' => false],
-        'weight' => ['description' => 'the cargo weight in kilograms', 'options' => false],
-        'pallets' => ['description' => 'the pallet or unit count, including zero or none', 'options' => false],
-        'bodyType' => ['description' => 'the trailer or body type, or whether none is required', 'options' => true],
-        'dimensions' => ['description' => 'the dimensions or volume, or whether they are unknown/not needed', 'options' => false],
-        'vehicleType' => ['description' => 'the required vehicle type, or whether there is no preference', 'options' => true],
-        'loadingEquipment' => ['description' => 'loading or unloading equipment requirements, or none', 'options' => true],
-        'characteristics' => ['description' => 'transport characteristics, or none', 'options' => true],
-        'specialRequirements' => ['description' => 'one or more special requirements or notes, or none; explicitly mention that multiple options may be selected', 'options' => true],
-        'transportMode' => ['description' => 'the air/sea transport mode, or none', 'options' => true],
-        'deliveryProof' => ['description' => 'the proof-of-delivery requirement, or none', 'options' => true],
-        'pickup' => ['description' => 'the pickup city, country, and address if available', 'options' => false],
-        'pickupDate' => ['description' => 'the pickup date or date/time window', 'options' => false],
-        'delivery' => ['description' => 'the delivery city, country, and address if available', 'options' => false],
-        'deliveryDate' => ['description' => 'the delivery date or date/time window', 'options' => false],
-        'budget' => ['description' => 'the freight price and currency', 'options' => false],
-        'priceTerms' => ['description' => 'the pricing terms', 'options' => true],
-        'declaredValue' => ['description' => 'the declared cargo value and currency, or none', 'options' => false],
-        'terms' => ['description' => 'Incoterm and deferred-payment terms, or none', 'options' => true],
-        'temperature' => ['description' => 'temperature-control requirements, or none', 'options' => false],
-        'requirements' => ['description' => 'special handling and service requirements, or none', 'options' => true],
-        'contact' => ['description' => 'the contact name and available phone or email details, or none', 'options' => true],
-        'notes' => ['description' => 'any final notes, booking reference, or custom items, or none', 'options' => false],
-    ];
+
 
     public function nextStep(array $draft, Collection $messages, int $aiDispatcherId): ?array
     {
         $answeredWithoutValue = $this->negativeAnswersByStep($messages, $aiDispatcherId);
 
-        foreach (self::STEPS as $key => $meta) {
+        foreach (app(LenaCatalog::class)->schema()['steps'] as $key => $meta) {
             if ($this->isSkipped($key, $draft) || $this->hasValue($key, $draft) || isset($answeredWithoutValue[$key])) {
                 continue;
             }
@@ -78,7 +44,7 @@ class LenaLoadQuestionnaire
             }
 
             if (preg_match('/\[\[LENA_SKIP:([a-zA-Z]+)\]\]/', (string) $message->body, $match) === 1
-                && array_key_exists($match[1], self::STEPS)) {
+                && array_key_exists($match[1], app(LenaCatalog::class)->schema()['steps'])) {
                 $answered[$match[1]] = true;
                 $pendingStep = null;
 
@@ -128,7 +94,7 @@ class LenaLoadQuestionnaire
             'storageTarget' => in_array($draft['storageTarget'] ?? '', ['own', 'exchange'], true),
             'warehouse' => ($draft['storageTarget'] ?? '') === 'exchange' || $positive('warehouseId'),
             'title' => $filled('title') && mb_strtolower(trim((string) $draft['title'])) !== 'new load',
-            'transportType' => in_array($draft['transportType'] ?? '', ['road', 'air', 'sea', 'warehouse'], true),
+            'transportType' => in_array($draft['transportType'] ?? '', ['road', 'air', 'sea', 'rail', 'warehouse'], true),
             'goodsType' => $filled('goodsType') || $filled('cargoType'),
             'weight' => $positive('weightKg'),
             'pallets' => $positive('pallets'),

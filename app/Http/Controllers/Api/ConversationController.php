@@ -62,7 +62,7 @@ class ConversationController extends CrudController
     {
         $p = $u ? 'sometimes' : 'required';
 
-        return ['company_id' => ['nullable', 'integer', 'exists:companies,id'], 'load_id' => ['nullable', 'integer', 'exists:loads,id'], 'load_draft_id' => ['nullable', 'integer', 'exists:load_drafts,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'channel' => ['sometimes', 'in:inapp,whatsapp,telegram'], 'subject' => ['nullable', 'string', 'max:255'], 'canvas' => ['sometimes', 'boolean'], 'last_message_at' => ['nullable', 'date'], 'participant_ids' => ['sometimes', 'array'], 'participant_ids.*' => ['integer', 'exists:users,id'], 'initial_message' => ['nullable', 'string', 'max:2000']];
+        return ['company_id' => ['nullable', 'integer', 'exists:companies,id'], 'load_id' => ['nullable', 'integer', 'exists:loads,id'], 'load_draft_id' => ['nullable', 'integer', 'exists:load_drafts,id'], 'created_by_user_id' => [$p, 'integer', 'exists:users,id'], 'channel' => ['sometimes', 'in:inapp,whatsapp,telegram'], 'subject' => ['nullable', 'string', 'max:255'], 'canvas' => ['sometimes', 'boolean'], 'last_message_at' => ['nullable', 'date'], 'participant_ids' => ['sometimes', 'array'], 'participant_ids.*' => ['integer', 'exists:users,id'], 'initial_message' => ['nullable', 'string', 'max:2000'], 'greeting' => ['nullable', 'in:draft,warehouse_transport,last_mile'], 'lang' => ['nullable', 'in:en,de,bs']];
     }
 
     public function store(Request $request): JsonResponse
@@ -70,8 +70,9 @@ class ConversationController extends CrudController
         $data = $request->validate($this->rules());
         $participantIds = collect($data['participant_ids'] ?? [])->push($data['created_by_user_id'])->unique()->values();
         unset($data['participant_ids']);
-        $initialMessage = $data['initial_message'] ?? null;
-        unset($data['initial_message']);
+        $greeting = $data['greeting'] ?? 'draft';
+        $lang = $data['lang'] ?? $request->user()?->language ?? 'en';
+        unset($data['initial_message'], $data['greeting'], $data['lang']);
 
         if (! blank($data['load_draft_id'] ?? null)) {
             $data['canvas'] = true;
@@ -85,7 +86,7 @@ class ConversationController extends CrudController
         // a LenaAI-originated draft which already backfills load_draft_id onto an existing,
         // already-active conversation (DispatchChatController) rather than creating a new one.
         if (! blank($data['load_draft_id'] ?? null)) {
-            $this->postDraftCreatedMessage($record, $request->user(), $initialMessage);
+            $this->postDraftCreatedMessage($record, $greeting, $lang);
         }
 
         $record->load($this->relations());
@@ -93,7 +94,7 @@ class ConversationController extends CrudController
         return $this->success((new EntityResource($record))->resolve($request), 'Resource created successfully.', status: 201);
     }
 
-    private function postDraftCreatedMessage(Conversation $conversation, ?User $user, ?string $customBody = null): void
+    private function postDraftCreatedMessage(Conversation $conversation, string $greeting, string $lang): void
     {
         $aiDispatcherId = User::query()->where('username', 'ai_dispatcher')->value('id');
         if (! $aiDispatcherId) {
@@ -102,16 +103,13 @@ class ConversationController extends CrudController
 
         $optionsSuffix = "\n\n[[LENA_OPTIONS:continue_add_yes,continue_add_no]]";
 
-        if ($customBody !== null && trim($customBody) !== '') {
-            $body = $customBody.$optionsSuffix;
-        } else {
-            $bodies = [
-                'bs' => 'Čestitamo, kreirali ste draft tereta! Sačuvani podaci su učitani u Draft Panel. Želite li sada nastaviti vođeno popunjavanje?'.$optionsSuffix,
-                'de' => 'Ihr Ladungsentwurf wurde erstellt. Die gespeicherten Daten wurden in den Entwurfsbereich geladen. Möchten Sie jetzt mit der geführten Eingabe fortfahren?'.$optionsSuffix,
-                'en' => 'Your load draft was created. Its saved data is loaded in the Draft panel. Would you like to continue the guided form now?'.$optionsSuffix,
-            ];
-            $body = $bodies[$user?->language] ?? $bodies['en'];
-        }
+        $text = app(\App\Services\LenaCatalog::class)->text($lang);
+        $body = match ($greeting) {
+            'warehouse_transport' => $text['ui']['postLoadModal.warehouseTransportWelcomeMessage'],
+            'last_mile' => $text['ui']['postLoadModal.lastMileWelcomeMessage'],
+            default => $text['draft_created'],
+        };
+        $body .= $optionsSuffix;
 
         Message::query()->create([
             'conversation_id' => $conversation->id,
@@ -136,6 +134,7 @@ class ConversationController extends CrudController
         $this->scopeConversationToParticipant($query, $request->user()?->id);
         $record = $query->findOrFail($id);
         $data = $request->validate($this->rules(true));
+        unset($data['initial_message'], $data['greeting'], $data['lang']);
         $participantIds = $data['participant_ids'] ?? null;
         unset($data['participant_ids']);
         $record->update($data);

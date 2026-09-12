@@ -57,6 +57,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('health', fn () => response()->json(['message' => 'Freightbook.ai API is healthy.', 'data' => ['status' => 'ok', 'timestamp' => now()->toIso8601String()], 'meta' => [], 'errors' => []]));
 
+// Shared, non-personalized questions and translations for web and mobile.
+Route::get('lena/catalog', [\App\Http\Controllers\Api\LenaCatalogController::class, 'show']);
+
 // Public: the social-registration screen needs to list roles before the user has a session token.
 Route::get('role-options', [RoleController::class, 'options']);
 

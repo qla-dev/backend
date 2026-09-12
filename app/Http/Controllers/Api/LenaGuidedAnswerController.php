@@ -71,7 +71,7 @@ class LenaGuidedAnswerController extends Controller
             // temperature) - those are only ever reachable through the universal "later" pill (see
             // questionnaireSuggestions()' withLater([]) default), so they only ever arrive here
             // with skip:true, guarded just below.
-            'step' => ['required', 'string', 'in:storageTarget,warehouse,title,transportType,goodsType,weight,pallets,bodyType,dimensions,vehicleType,loadingEquipment,characteristics,specialRequirements,transportMode,deliveryProof,pickup,pickupDate,delivery,deliveryDate,budget,priceTerms,declaredValue,terms,temperature,requirements,contact,notes'],
+            'step' => ['required', 'string', 'in:'.implode(',', array_keys(app(\App\Services\LenaCatalog::class)->schema()['steps']))],
             'value' => ['nullable', 'string'],
             'display_text' => ['required', 'string'],
             'skip' => ['required', 'boolean'],
