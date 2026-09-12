@@ -119,6 +119,15 @@
             "20PL",
             "40PL"
         ],
+        "CURRENCY_OPTIONS": [
+            "BAM",
+            "EUR",
+            "GBP",
+            "USD",
+            "RSD",
+            "CNY",
+            "JPY"
+        ],
         "DELIVERY_PLACE_TYPE_OPTIONS": [
             "Warehouse",
             "Terminal",
@@ -181,6 +190,332 @@
         "OOG_GAUGE_OPTIONS": [
             "in_gauge",
             "out_of_gauge"
+        ],
+        "PACKAGE_TYPE_OPTIONS": [
+            "PV",
+            "TZ",
+            "CY",
+            "TK",
+            "TY",
+            "TG",
+            "FL",
+            "PN",
+            "PZ",
+            "DN",
+            "WB",
+            "PJ",
+            "NS",
+            "GI",
+            "GZ",
+            "TE",
+            "IN",
+            "IZ",
+            "UN",
+            "JT",
+            "TB",
+            "TL",
+            "BB",
+            "SO",
+            "CI",
+            "3A",
+            "QK",
+            "QL",
+            "JC",
+            "JY",
+            "3H",
+            "QM",
+            "QN",
+            "BJ",
+            "AV",
+            "CT",
+            "CF",
+            "CG",
+            "DG",
+            "CW",
+            "SI",
+            "SL",
+            "PL",
+            "SU",
+            "FW",
+            "PP",
+            "YT",
+            "6H",
+            "YC",
+            "YD",
+            "YG",
+            "YJ",
+            "YB",
+            "YA",
+            "YM",
+            "YF",
+            "YH",
+            "YK",
+            "YL",
+            "6P",
+            "YQ",
+            "YR",
+            "YW",
+            "YP",
+            "YN",
+            "YZ",
+            "YS",
+            "YX",
+            "YV",
+            "YY",
+            "VK",
+            "1F",
+            "GL",
+            "CN",
+            "ME",
+            "OU",
+            "OT",
+            "AJ",
+            "BK",
+            "CE",
+            "HR",
+            "HB",
+            "HC",
+            "HA",
+            "BI",
+            "FO",
+            "BX",
+            "4G",
+            "4C",
+            "FP",
+            "MX",
+            "LU",
+            "4B",
+            "4A",
+            "DH",
+            "QP",
+            "QQ",
+            "4F",
+            "4D",
+            "4H",
+            "QR",
+            "QS",
+            "AI",
+            "BW",
+            "TN",
+            "CD",
+            "CX",
+            "CA",
+            "PT",
+            "AL",
+            "WA",
+            "WD",
+            "WH",
+            "WL",
+            "WC",
+            "AA",
+            "ZJ",
+            "ZG",
+            "ZD",
+            "ZH",
+            "ZK",
+            "ZF",
+            "ZU",
+            "ZS",
+            "PLN",
+            "ZN",
+            "ZQ",
+            "ZP",
+            "ZM",
+            "ZR",
+            "WF",
+            "ZV",
+            "WJ",
+            "WG",
+            "WM",
+            "WK",
+            "ZA",
+            "ZC",
+            "WS",
+            "ZW",
+            "WU",
+            "ZY",
+            "WZ",
+            "ZX",
+            "WY",
+            "WT",
+            "WW",
+            "WV",
+            "WX",
+            "WN",
+            "WQ",
+            "WP",
+            "WR",
+            "ZT",
+            "SM",
+            "P2",
+            "SE",
+            "NT",
+            "NU",
+            "NV",
+            "RT",
+            "CJ",
+            "SY",
+            "RL",
+            "NA",
+            "NE",
+            "NF",
+            "NG",
+            "UC",
+            "TS",
+            "PF",
+            "FR",
+            "EN",
+            "SV",
+            "PA",
+            "PC",
+            "PK",
+            "IK",
+            "IF",
+            "IG",
+            "IE",
+            "IA",
+            "IB",
+            "ID",
+            "IC",
+            "PX",
+            "OC",
+            "OE",
+            "AG",
+            "AX",
+            "OD",
+            "OA",
+            "OB",
+            "8A",
+            "PB",
+            "PD",
+            "PE",
+            "AF",
+            "TW",
+            "CQ",
+            "OF",
+            "CZ",
+            "BD",
+            "PG",
+            "ST",
+            "SP",
+            "PY",
+            "SZ",
+            "LV",
+            "CV",
+            "CU",
+            "CC",
+            "KI",
+            "T1",
+            "RG",
+            "LE",
+            "AT",
+            "B4",
+            "AD",
+            "MR",
+            "MW",
+            "AC",
+            "PR",
+            "GR",
+            "AB",
+            "BM",
+            "VY",
+            "VO",
+            "VR",
+            "VG",
+            "VS",
+            "VQ",
+            "VL",
+            "BT",
+            "CS",
+            "ED",
+            "EE",
+            "EF",
+            "EH",
+            "EG",
+            "BC",
+            "TC",
+            "MC",
+            "CB",
+            "DM",
+            "DK",
+            "DL",
+            "FC",
+            "SS",
+            "7B",
+            "8B",
+            "EI",
+            "MA",
+            "SC",
+            "SK",
+            "FD",
+            "DB",
+            "DC",
+            "DA",
+            "7A",
+            "CR",
+            "TR",
+            "SX",
+            "BR",
+            "RD",
+            "RZ",
+            "BZ",
+            "CH",
+            "CL",
+            "FB",
+            "FE",
+            "RJ",
+            "RK",
+            "BY",
+            "PU",
+            "IL",
+            "DX",
+            "DY",
+            "DW",
+            "DT",
+            "DV",
+            "DS",
+            "DU",
+            "GU",
+            "CM",
+            "JR",
+            "PO",
+            "RO",
+            "ZZ",
+            "VP",
+            "LT",
+            "CO",
+            "CP",
+            "HG",
+            "BH",
+            "HN",
+            "VN",
+            "BG",
+            "SA",
+            "44",
+            "FX",
+            "GY",
+            "5H",
+            "XA",
+            "XB",
+            "XC",
+            "5M",
+            "XJ",
+            "XK",
+            "EC",
+            "XD",
+            "JB",
+            "TT",
+            "5L",
+            "XF",
+            "XG",
+            "XH",
+            "ZB",
+            "43",
+            "MB",
+            "MS",
+            "SH",
+            "SD",
+            "SW"
         ],
         "PAYMENT_TERMS_OPTIONS": [
             "immediate",
@@ -333,42 +668,210 @@
         "20PL": "Platform",
         "40PL": "Platform"
     },
+    "option_icons": {
+        "20FR": "Container",
+        "20GP": "Container",
+        "20OT": "Container",
+        "20PL": "Container",
+        "20RF": "Container",
+        "20STD": "Container",
+        "40FR": "Container",
+        "40FRHC": "Container",
+        "40HC": "Container",
+        "40OT": "Container",
+        "40OTHC": "Container",
+        "40PL": "Container",
+        "40RH": "Container",
+        "40STD": "Container",
+        "45RH": "Container",
+        "ADR": "ShieldAlert",
+        "AOD": "FileText",
+        "AOD / Airport of delivery": "PlaneLanding",
+        "AOL / Airport of loading": "PlaneLanding",
+        "AWB Required": "FileText",
+        "Address": "MapPin",
+        "Address + Last Mile Delivery": "MapPin",
+        "Address to Airport": "Truck",
+        "Air Freight + Last-Mile Delivery": "Truck",
+        "Airport Handling": "PlaneLanding",
+        "Airport to Address": "Truck",
+        "Airport to Airport": "Plane",
+        "Ambient": "Boxes",
+        "Area": "Radar",
+        "BAM": "Coins",
+        "BULK": "Boxes",
+        "Bonded": "Lock",
+        "Box": "Box",
+        "Box Truck": "Truck",
+        "Bulk": "Container",
+        "CFR": "FileText",
+        "CIF": "FileText",
+        "CIM": "FileText",
+        "CIM/SMGS": "FileText",
+        "CIP": "FileText",
+        "CMR": "FileText",
+        "CNY": "Coins",
+        "CPT": "FileText",
+        "Cargo Lift / High Loader Required": "Layers",
+        "Cargo Van": "Truck",
+        "Certification": "BadgeCheck",
+        "Charter": "Plane",
+        "Chilled": "Snowflake",
+        "Collect": "Handshake",
+        "Container truck": "Container",
+        "Conveyor Required": "Wrench",
+        "Conveyors": "Layers",
+        "Crane / Heavy Lift": "Ship",
+        "Cross-docking": "Forklift",
+        "Current user": "UserRound",
+        "Curtain": "Blinds",
+        "Curtainsider": "Blinds",
+        "Customs": "Landmark",
+        "Customs Clearance": "Landmark",
+        "Customs bonded": "Lock",
+        "Customs handling": "Landmark",
+        "DAP": "FileText",
+        "DDP": "FileText",
+        "DG / IMO": "ShieldAlert",
+        "DPU": "FileText",
+        "Dedicated": "Truck",
+        "Dispatch team": "UserRound",
+        "Distribution": "Truck",
+        "Dock Doors": "DoorOpen",
+        "Dock Levellers": "PanelBottom",
+        "Door to Port": "Truck",
+        "Dry Ice": "ThermometerSnowflake",
+        "EUR": "Coins",
+        "EXW": "FileText",
+        "Economy": "Package",
+        "Express": "Clock3",
+        "FAS": "FileText",
+        "FCA": "FileText",
+        "FCL": "Container",
+        "FOB": "FileText",
+        "FOOD GRADE": "UtensilsCrossed",
+        "FRAGILE": "AlertTriangle",
+        "FTL": "Truck",
+        "Ferry": "Ship",
+        "Flatbed": "PanelBottom",
+        "Food grade / pharma": "Pill",
+        "Forklift Required": "Forklift",
+        "Forklift: No": "CircleOff",
+        "Forklift: Yes": "Forklift",
+        "Forklifts": "Forklift",
+        "Fragile Cargo": "ShieldAlert",
+        "Fragile goods": "Wine",
+        "Frozen": "ThermometerSnowflake",
+        "GBP": "Coins",
+        "GDP": "BadgeCheck",
+        "Goods inspection": "ScanEye",
+        "HEAVY": "Weight",
+        "Handheld Scanners": "ScanLine",
+        "Hazmat": "AlertTriangle",
+        "I": "ShieldAlert",
+        "II": "ShieldAlert",
+        "III": "ShieldAlert",
+        "Inspection services": "ScanEye",
+        "Insurance": "Umbrella",
+        "Insurance Required": "Umbrella",
+        "JPY": "Coins",
+        "Kitting": "Boxes",
+        "LCL": "Boxes",
+        "LIQUID": "Droplet",
+        "LTL": "Package",
+        "Labeling": "Tags",
+        "Lithium Batteries": "Zap",
+        "Loading": "ArrowUpFromLine",
+        "MED (medicine)": "FileText",
+        "Mega": "Maximize2",
+        "Must be trackable": "Radar",
+        "No Special Equipment": "CircleOff",
+        "Not specified": "CircleOff",
+        "OOG": "Layers",
+        "Operations desk": "UserRound",
+        "Original B/L": "FileText",
+        "Other": "FileText",
+        "Other Special Handling Equipment": "ShieldCheck",
+        "Other loading/unloading equipment": "ShieldCheck",
+        "Outdoor": "Container",
+        "Oversized / Heavy Cargo": "Layers",
+        "PHARMA": "Pill",
+        "POD": "FileText",
+        "Pallet Jack Required": "Boxes",
+        "Pallet Jacks": "Package",
+        "Pallet exchange": "Package",
+        "Palletizing": "Layers",
+        "Pick & Pack": "PackageCheck",
+        "Port Handling": "Ship",
+        "Port to Door": "Truck",
+        "Port to Port": "Ship",
+        "Prepaid": "Banknote",
+        "Priority": "Clock3",
+        "Priority / Time Critical": "Zap",
+        "Priority load": "Zap",
+        "Private board": "Lock",
+        "REEFER": "ThermometerSnowflake",
+        "RSD": "Coins",
+        "Racking": "Layers",
+        "Reach Trucks": "Truck",
+        "Reefer": "ThermometerSnowflake",
+        "Repackaging": "PackageOpen",
+        "Rigid Truck": "Truck",
+        "Roller Bed Required": "RotateCcw",
+        "SMGS": "FileText",
+        "SeaWaybill": "FileText",
+        "Security": "ShieldCheck",
+        "Security Screening": "ScanEye",
+        "Special Handling": "Wrench",
+        "Standard": "Package",
+        "Storage": "Warehouse",
+        "Stuffing Required": "Boxes",
+        "TIMOCOM": "Globe",
+        "TIR": "Landmark",
+        "Tail Lift Required": "ArrowDownToLine",
+        "Tail lift": "ArrowDownToLine",
+        "Tautliner": "Container",
+        "Telex Release": "FileText",
+        "Terminal": "Building2",
+        "Terminal Handling": "TrainFront",
+        "Toll roads": "Route",
+        "Track & Trace Required": "Radar",
+        "Trailer": "Truck",
+        "ULD Required": "Package2",
+        "USD": "Coins",
+        "Unloading": "ArrowDownToLine",
+        "Unstuffing Required": "RotateCcw",
+        "Unsure": "HelpCircle",
+        "VAL (money and other valuables)": "Gem",
+        "VALUABLE": "Gem",
+        "Vehicle with ramp": "Truck",
+        "Vehicle without ramp": "Truck",
+        "Warehouse": "Warehouse",
+        "air": "Plane",
+        "cm": "Ruler",
+        "deferred": "CalendarDays",
+        "exchange": "Landmark",
+        "fixed": "Banknote",
+        "immediate": "Banknote",
+        "in_gauge": "Package",
+        "kg": "Weight",
+        "m": "Ruler",
+        "mm": "Ruler",
+        "negotiable": "Handshake",
+        "out_of_gauge": "Layers",
+        "overall": "Boxes",
+        "own": "ArrowDownToLine",
+        "per_m3_month": "Boxes",
+        "per_month": "CalendarDays",
+        "per_pallet_month": "Layers",
+        "per_unit": "Box",
+        "rail": "TrainFront",
+        "road": "Truck",
+        "sea": "Ship",
+        "t": "Weight",
+        "warehouse": "Warehouse"
+    },
     "steps": {
-        "storageTarget": {
-            "description": "whether the goods go to one of the user's own warehouses or to the warehouse exchange",
-            "options": true,
-            "group": null,
-            "label_key": null,
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "warehouse"
-            ],
-            "form_fields": [
-                "storageTarget"
-            ]
-        },
-        "warehouse": {
-            "description": "the user's warehouse that will receive the goods",
-            "options": true,
-            "group": null,
-            "label_key": null,
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "warehouse"
-            ],
-            "form_fields": [
-                "warehouseId",
-                "warehouseName"
-            ],
-            "skip_when": {
-                "field": "storageTarget",
-                "equals": "exchange"
-            }
-        },
         "title": {
             "description": "a short load title",
             "options": false,
@@ -407,9 +910,45 @@
                 "transportType"
             ]
         },
+        "storageTarget": {
+            "description": "whether the goods go to one of the user's own warehouses or to the warehouse exchange",
+            "options": true,
+            "group": null,
+            "label_key": null,
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "warehouse"
+            ],
+            "form_fields": [
+                "storageTarget"
+            ]
+        },
+        "warehouse": {
+            "description": "the user's warehouse that will receive the goods",
+            "options": true,
+            "group": null,
+            "label_key": null,
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "warehouse"
+            ],
+            "form_fields": [
+                "warehouseId",
+                "warehouseName"
+            ],
+            "skip_when": {
+                "field": "storageTarget",
+                "equals": "exchange"
+            },
+            "dynamic": "warehouses"
+        },
         "customer": {
             "description": "the customer or consignee the load is posted for, or none",
-            "options": false,
+            "options": true,
             "group": null,
             "label_key": "postLoadModal.consignee",
             "multiple": false,
@@ -424,6 +963,22 @@
             ],
             "form_fields": [
                 "consignee"
+            ],
+            "dynamic": "customers"
+        },
+        "storageType": {
+            "description": "the storage conditions the goods need",
+            "options": true,
+            "group": "WAREHOUSE_STORAGE_TYPE_OPTIONS",
+            "label_key": "postLoadModal.warehouseStorageType",
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "warehouse"
+            ],
+            "form_fields": [
+                "warehouseStorageType"
             ]
         },
         "cargoType": {
@@ -451,12 +1006,12 @@
                 "warehouse": "CARGO_TYPE_OPTIONS"
             }
         },
-        "goodsType": {
-            "description": "the goods or cargo type",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.cargoName",
-            "multiple": false,
+        "loadingEquipment": {
+            "description": "loading or unloading equipment requirements, or none",
+            "options": true,
+            "group": "LOADING_EQUIPMENT_OPTIONS",
+            "label_key": "postLoadModal.loadingEquipment",
+            "multiple": true,
             "mask": null,
             "unit": "",
             "transports": [
@@ -467,111 +1022,47 @@
                 "warehouse"
             ],
             "form_fields": [
-                "goodsType"
+                "loadingEquipment"
+            ],
+            "groups_by_transport": {
+                "road": "LOADING_EQUIPMENT_OPTIONS",
+                "air": "AIR_LOADING_EQUIPMENT_OPTIONS",
+                "sea": "SEA_LOADING_EQUIPMENT_OPTIONS",
+                "rail": "RAIL_LOADING_EQUIPMENT_OPTIONS",
+                "warehouse": "WAREHOUSE_HANDLING_REQUIREMENT_OPTIONS"
+            }
+        },
+        "storageEquipment": {
+            "description": "the warehouse equipment the goods need, or none; explicitly mention that multiple options may be selected",
+            "options": true,
+            "group": "WAREHOUSE_EQUIPMENT_OPTIONS",
+            "label_key": "postLoadModal.warehouseEquipment",
+            "multiple": true,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "warehouse"
+            ],
+            "form_fields": [
+                "warehouseEquipment"
             ]
         },
-        "hsCode": {
-            "description": "the HS customs tariff code of the goods, or none",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.hsCodes",
-            "multiple": false,
+        "specialRequirements": {
+            "description": "one or more special requirements or notes, or none; explicitly mention that multiple options may be selected",
+            "options": true,
+            "group": "AIR_SPECIAL_REQUIREMENT_OPTIONS",
+            "label_key": "postLoadModal.specialRequirements",
+            "multiple": true,
             "mask": null,
             "unit": "",
             "transports": [
                 "road",
                 "air",
                 "sea",
-                "rail",
-                "warehouse"
+                "rail"
             ],
             "form_fields": [
-                "hsCodes",
-                "customsDocuments"
-            ]
-        },
-        "packaging": {
-            "description": "how the goods are packaged (the packaging method), or none",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.packagingMethod",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "quantityMeasure"
-            ]
-        },
-        "weight": {
-            "description": "the cargo weight in kilograms",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.weightValue",
-            "multiple": false,
-            "mask": "integer",
-            "unit": "kg",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "weightKg",
-                "weightUnit"
-            ]
-        },
-        "pallets": {
-            "description": "the pallet or unit count, including zero or none",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.unitCount",
-            "multiple": false,
-            "mask": "integer",
-            "unit": "pieces",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "pallets"
-            ]
-        },
-        "dimensions": {
-            "description": "the dimensions or volume, or whether they are unknown/not needed",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.dimensions",
-            "multiple": false,
-            "mask": "dimensions",
-            "unit": "m",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "lengthM",
-                "lengthUnit",
-                "widthM",
-                "widthUnit",
-                "heightM",
-                "heightUnit",
-                "volumeM3",
-                "dimensionScope"
+                "specialRequirements"
             ]
         },
         "containers": {
@@ -620,11 +1111,48 @@
                 "vehicleType"
             ]
         },
-        "loadingEquipment": {
-            "description": "loading or unloading equipment requirements, or none",
+        "deliveryProof": {
+            "description": "the proof-of-delivery requirement, or none",
             "options": true,
-            "group": "LOADING_EQUIPMENT_OPTIONS",
-            "label_key": "postLoadModal.loadingEquipment",
+            "group": "DELIVERY_PROOF_OPTIONS",
+            "label_key": "postLoadModal.deliveryProof",
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "air",
+                "sea",
+                "rail"
+            ],
+            "form_fields": [
+                "deliveryProof"
+            ]
+        },
+        "documentType": {
+            "description": "the transport document type required",
+            "options": true,
+            "group": "SEA_BL_TYPE_OPTIONS",
+            "label_key": "postLoadModal.blType",
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "sea",
+                "rail"
+            ],
+            "form_fields": [
+                "blType"
+            ],
+            "groups_by_transport": {
+                "sea": "SEA_BL_TYPE_OPTIONS",
+                "rail": "RAIL_DOCUMENT_TYPE_OPTIONS"
+            }
+        },
+        "temperature": {
+            "description": "temperature-control requirements, or none",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.temperature",
             "multiple": false,
             "mask": null,
             "unit": "",
@@ -636,15 +1164,26 @@
                 "warehouse"
             ],
             "form_fields": [
-                "loadingEquipment"
+                "temperatureControlled",
+                "temperatureMin",
+                "temperatureMax"
+            ]
+        },
+        "storageTemperature": {
+            "description": "the storage temperature range, or none",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.temperature",
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "warehouse"
             ],
-            "groups_by_transport": {
-                "road": "LOADING_EQUIPMENT_OPTIONS",
-                "air": "AIR_LOADING_EQUIPMENT_OPTIONS",
-                "sea": "SEA_LOADING_EQUIPMENT_OPTIONS",
-                "rail": "RAIL_LOADING_EQUIPMENT_OPTIONS",
-                "warehouse": "WAREHOUSE_HANDLING_REQUIREMENT_OPTIONS"
-            }
+            "form_fields": [
+                "warehouseTemperatureMin",
+                "warehouseTemperatureMax"
+            ]
         },
         "characteristics": {
             "description": "transport characteristics, or none",
@@ -713,11 +1252,80 @@
                 "oogWeightKg"
             ]
         },
-        "temperature": {
-            "description": "temperature-control requirements, or none",
+        "requirements": {
+            "description": "special handling and service requirements, or none",
+            "options": true,
+            "group": "LOAD_REQUIREMENT_OPTIONS",
+            "label_key": "postLoadModal.requirements",
+            "multiple": true,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail"
+            ],
+            "form_fields": [
+                "requiresAdr",
+                "requiresTailLift",
+                "urgent",
+                "tollRoadsIncluded",
+                "ferryIncluded",
+                "cmrRequired",
+                "palletExchangeRequired",
+                "customsRequired",
+                "insuranceRequired",
+                "certificationRequired",
+                "inspectionServicesRequired",
+                "mustBeTrackable"
+            ]
+        },
+        "storageServices": {
+            "description": "the warehouse services required, or none; explicitly mention that multiple options may be selected",
+            "options": true,
+            "group": "WAREHOUSE_SERVICE_OPTIONS",
+            "label_key": "postLoadModal.warehouseServices",
+            "multiple": true,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "warehouse"
+            ],
+            "form_fields": [
+                "warehouseRequiresCustomsBonded",
+                "warehouseRequiresRacking",
+                "warehouseRequiresInsurance",
+                "warehouseRequiresSecurity",
+                "warehouseFoodPharma",
+                "warehouseFragile"
+            ]
+        },
+        "declaredValue": {
+            "description": "the declared cargo value and currency, or none",
             "options": false,
             "group": null,
-            "label_key": "postLoadModal.temperature",
+            "label_key": "postLoadModal.declaredValue",
+            "multiple": false,
+            "mask": "decimal",
+            "unit": "",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail",
+                "warehouse"
+            ],
+            "form_fields": [
+                "declaredValue",
+                "shipmentValueCurrency"
+            ]
+        },
+        "goodsType": {
+            "description": "the goods or cargo type",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.cargoName",
             "multiple": false,
             "mask": null,
             "unit": "",
@@ -729,27 +1337,112 @@
                 "warehouse"
             ],
             "form_fields": [
-                "temperatureControlled",
-                "temperatureMin",
-                "temperatureMax"
+                "goodsType"
             ]
         },
-        "specialRequirements": {
-            "description": "one or more special requirements or notes, or none; explicitly mention that multiple options may be selected",
-            "options": true,
-            "group": "AIR_SPECIAL_REQUIREMENT_OPTIONS",
-            "label_key": "postLoadModal.specialRequirements",
-            "multiple": true,
+        "hsCode": {
+            "description": "the HS customs tariff code of the goods, or none",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.hsCodes",
+            "multiple": false,
             "mask": null,
             "unit": "",
             "transports": [
                 "road",
                 "air",
                 "sea",
-                "rail"
+                "rail",
+                "warehouse"
             ],
             "form_fields": [
-                "specialRequirements"
+                "hsCodes",
+                "customsDocuments"
+            ]
+        },
+        "pallets": {
+            "description": "the pallet or unit count, including zero or none",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.unitCount",
+            "multiple": false,
+            "mask": "integer",
+            "unit": "pieces",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail",
+                "warehouse"
+            ],
+            "form_fields": [
+                "pallets"
+            ]
+        },
+        "packaging": {
+            "description": "how the goods are packaged (the packaging method), or none",
+            "options": true,
+            "group": "PACKAGE_TYPE_OPTIONS",
+            "label_key": "postLoadModal.packagingMethod",
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail",
+                "warehouse"
+            ],
+            "form_fields": [
+                "quantityMeasure"
+            ],
+            "searchable": true
+        },
+        "dimensions": {
+            "description": "the dimensions or volume, or whether they are unknown/not needed",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.dimensions",
+            "multiple": false,
+            "mask": "dimensions",
+            "unit": "m",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail",
+                "warehouse"
+            ],
+            "form_fields": [
+                "lengthM",
+                "lengthUnit",
+                "widthM",
+                "widthUnit",
+                "heightM",
+                "heightUnit",
+                "volumeM3",
+                "dimensionScope"
+            ]
+        },
+        "weight": {
+            "description": "the cargo weight in kilograms",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.weightValue",
+            "multiple": false,
+            "mask": "integer",
+            "unit": "kg",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail",
+                "warehouse"
+            ],
+            "form_fields": [
+                "weightKg",
+                "weightUnit"
             ]
         },
         "transportMode": {
@@ -765,23 +1458,6 @@
             ],
             "form_fields": [
                 "transportMode"
-            ]
-        },
-        "deliveryProof": {
-            "description": "the proof-of-delivery requirement, or none",
-            "options": true,
-            "group": "DELIVERY_PROOF_OPTIONS",
-            "label_key": "postLoadModal.deliveryProof",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "air",
-                "sea",
-                "rail"
-            ],
-            "form_fields": [
-                "deliveryProof"
             ]
         },
         "pickup": {
@@ -809,29 +1485,6 @@
                 "pickupAirport",
                 "pickupLatitude",
                 "pickupLongitude"
-            ]
-        },
-        "pickupDate": {
-            "description": "the pickup date or date/time window",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.dateTimeFrom",
-            "multiple": false,
-            "mask": "date",
-            "unit": "",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "pickupDate",
-                "pickupDateTo",
-                "pickupTimeFrom",
-                "pickupTimeTo",
-                "pickupWindow"
             ]
         },
         "delivery": {
@@ -862,6 +1515,61 @@
                 "deliveryRadiusKm"
             ]
         },
+        "extraStops": {
+            "description": "any further pickup or delivery stops beyond the first of each, or none",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.addPickupStop",
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "road"
+            ],
+            "form_fields": [
+                "extraPickups",
+                "extraDeliveries"
+            ]
+        },
+        "transitDays": {
+            "description": "the expected transit time in days, or none",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.transitDays",
+            "multiple": false,
+            "mask": "integer",
+            "unit": "days",
+            "transports": [
+                "sea",
+                "rail"
+            ],
+            "form_fields": [
+                "transitDays"
+            ]
+        },
+        "pickupDate": {
+            "description": "the pickup date or date/time window",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.dateTimeFrom",
+            "multiple": false,
+            "mask": "date",
+            "unit": "",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail",
+                "warehouse"
+            ],
+            "form_fields": [
+                "pickupDate",
+                "pickupDateTo",
+                "pickupTimeFrom",
+                "pickupTimeTo",
+                "pickupWindow"
+            ]
+        },
         "deliveryDate": {
             "description": "the delivery date or date/time window",
             "options": false,
@@ -885,68 +1593,6 @@
                 "deliveryWindow"
             ]
         },
-        "transitDays": {
-            "description": "the expected transit time in days, or none",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.transitDays",
-            "multiple": false,
-            "mask": "integer",
-            "unit": "days",
-            "transports": [
-                "sea",
-                "rail"
-            ],
-            "form_fields": [
-                "transitDays"
-            ]
-        },
-        "extraStops": {
-            "description": "any further pickup or delivery stops beyond the first of each, or none",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.addPickupStop",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "road"
-            ],
-            "form_fields": [
-                "extraPickups",
-                "extraDeliveries"
-            ]
-        },
-        "storageType": {
-            "description": "the storage conditions the goods need",
-            "options": true,
-            "group": "WAREHOUSE_STORAGE_TYPE_OPTIONS",
-            "label_key": "postLoadModal.warehouseStorageType",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "warehouse"
-            ],
-            "form_fields": [
-                "warehouseStorageType"
-            ]
-        },
-        "storageEquipment": {
-            "description": "the warehouse equipment the goods need, or none; explicitly mention that multiple options may be selected",
-            "options": true,
-            "group": "WAREHOUSE_EQUIPMENT_OPTIONS",
-            "label_key": "postLoadModal.warehouseEquipment",
-            "multiple": true,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "warehouse"
-            ],
-            "form_fields": [
-                "warehouseEquipment"
-            ]
-        },
         "storagePeriod": {
             "description": "the storage start and end date, or whether the storage is ongoing",
             "options": false,
@@ -962,134 +1608,6 @@
                 "warehouseStartDate",
                 "warehouseEndDate",
                 "warehouseIsOngoing"
-            ]
-        },
-        "storageTemperature": {
-            "description": "the storage temperature range, or none",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.temperature",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "warehouse"
-            ],
-            "form_fields": [
-                "warehouseTemperatureMin",
-                "warehouseTemperatureMax"
-            ]
-        },
-        "storageServices": {
-            "description": "the warehouse services required, or none; explicitly mention that multiple options may be selected",
-            "options": true,
-            "group": "WAREHOUSE_SERVICE_OPTIONS",
-            "label_key": "postLoadModal.warehouseServices",
-            "multiple": true,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "warehouse"
-            ],
-            "form_fields": [
-                "warehouseRequiresCustomsBonded",
-                "warehouseRequiresRacking",
-                "warehouseRequiresInsurance",
-                "warehouseRequiresSecurity",
-                "warehouseFoodPharma",
-                "warehouseFragile"
-            ]
-        },
-        "storageRate": {
-            "description": "how the storage price should be quoted",
-            "options": true,
-            "group": "WAREHOUSE_RATE_UNIT_OPTIONS",
-            "label_key": "postLoadModal.warehouseRateUnit",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "warehouse"
-            ],
-            "form_fields": [
-                "warehouseRateUnit"
-            ]
-        },
-        "budget": {
-            "description": "the freight price and currency",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.targetPrice",
-            "multiple": false,
-            "mask": "decimal",
-            "unit": "",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "budget",
-                "freightCurrency"
-            ]
-        },
-        "priceTerms": {
-            "description": "the pricing terms",
-            "options": true,
-            "group": null,
-            "label_key": "postLoadModal.priceTerms",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail"
-            ],
-            "form_fields": [
-                "receivePriceProposals"
-            ]
-        },
-        "declaredValue": {
-            "description": "the declared cargo value and currency, or none",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.declaredValue",
-            "multiple": false,
-            "mask": "decimal",
-            "unit": "",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "declaredValue",
-                "shipmentValueCurrency"
-            ]
-        },
-        "terms": {
-            "description": "Incoterm and deferred-payment terms, or none",
-            "options": true,
-            "group": "INCOTERM_OPTIONS",
-            "label_key": "postLoadModal.incoterm",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "incoterm"
             ]
         },
         "paymentTerms": {
@@ -1127,32 +1645,31 @@
                 ]
             }
         },
-        "documentType": {
-            "description": "the transport document type required",
+        "terms": {
+            "description": "Incoterm and deferred-payment terms, or none",
             "options": true,
-            "group": "SEA_BL_TYPE_OPTIONS",
-            "label_key": "postLoadModal.blType",
+            "group": "INCOTERM_OPTIONS",
+            "label_key": "postLoadModal.incoterm",
             "multiple": false,
             "mask": null,
             "unit": "",
             "transports": [
+                "road",
+                "air",
                 "sea",
-                "rail"
+                "rail",
+                "warehouse"
             ],
             "form_fields": [
-                "blType"
-            ],
-            "groups_by_transport": {
-                "sea": "SEA_BL_TYPE_OPTIONS",
-                "rail": "RAIL_DOCUMENT_TYPE_OPTIONS"
-            }
+                "incoterm"
+            ]
         },
-        "requirements": {
-            "description": "special handling and service requirements, or none",
+        "priceTerms": {
+            "description": "the pricing terms",
             "options": true,
-            "group": "LOAD_REQUIREMENT_OPTIONS",
-            "label_key": "postLoadModal.requirements",
-            "multiple": true,
+            "group": null,
+            "label_key": "postLoadModal.priceTerms",
+            "multiple": false,
             "mask": null,
             "unit": "",
             "transports": [
@@ -1162,18 +1679,83 @@
                 "rail"
             ],
             "form_fields": [
-                "requiresAdr",
-                "requiresTailLift",
-                "urgent",
-                "tollRoadsIncluded",
-                "ferryIncluded",
-                "cmrRequired",
-                "palletExchangeRequired",
-                "customsRequired",
-                "insuranceRequired",
-                "certificationRequired",
-                "inspectionServicesRequired",
-                "mustBeTrackable"
+                "receivePriceProposals"
+            ]
+        },
+        "budget": {
+            "description": "the freight price and currency",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.targetPrice",
+            "multiple": false,
+            "mask": "decimal",
+            "unit": "",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail",
+                "warehouse"
+            ],
+            "form_fields": [
+                "budget",
+                "freightCurrency"
+            ]
+        },
+        "storageRate": {
+            "description": "how the storage price should be quoted",
+            "options": true,
+            "group": "WAREHOUSE_RATE_UNIT_OPTIONS",
+            "label_key": "postLoadModal.warehouseRateUnit",
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "warehouse"
+            ],
+            "form_fields": [
+                "warehouseRateUnit"
+            ]
+        },
+        "comments": {
+            "description": "internal or offer comments, or none",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.externalComments",
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail",
+                "warehouse"
+            ],
+            "form_fields": [
+                "internalComments",
+                "externalComments",
+                "additionalInfo"
+            ]
+        },
+        "notes": {
+            "description": "any final notes, booking reference, or custom items, or none",
+            "options": false,
+            "group": null,
+            "label_key": "postLoadModal.notes",
+            "multiple": false,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "road",
+                "air",
+                "sea",
+                "rail",
+                "warehouse"
+            ],
+            "form_fields": [
+                "notes",
+                "bookingReference"
             ]
         },
         "contact": {
@@ -1245,47 +1827,6 @@
                 "closedFreightComments",
                 "publishToAllAfterMinutes",
                 "publishDelayMinutes"
-            ]
-        },
-        "comments": {
-            "description": "internal or offer comments, or none",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.externalComments",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "internalComments",
-                "externalComments",
-                "additionalInfo"
-            ]
-        },
-        "notes": {
-            "description": "any final notes, booking reference, or custom items, or none",
-            "options": false,
-            "group": null,
-            "label_key": "postLoadModal.notes",
-            "multiple": false,
-            "mask": null,
-            "unit": "",
-            "transports": [
-                "road",
-                "air",
-                "sea",
-                "rail",
-                "warehouse"
-            ],
-            "form_fields": [
-                "notes",
-                "bookingReference"
             ]
         }
     },
@@ -1500,7 +2041,8 @@
         },
         "freightCurrency": {
             "label_key": "postLoadModal.currency",
-            "step": "budget"
+            "step": "budget",
+            "group": "CURRENCY_OPTIONS"
         },
         "goodsType": {
             "label_key": "postLoadModal.cargoName",
@@ -1678,7 +2220,8 @@
         },
         "quantityMeasure": {
             "label_key": "postLoadModal.packagingMethod",
-            "step": "packaging"
+            "step": "packaging",
+            "group": "PACKAGE_TYPE_OPTIONS"
         },
         "receivePriceProposals": {
             "label_key": "postLoadModal.priceTerms",
@@ -1699,7 +2242,8 @@
         },
         "shipmentValueCurrency": {
             "label_key": "postLoadModal.currency",
-            "step": "declaredValue"
+            "step": "declaredValue",
+            "group": "CURRENCY_OPTIONS"
         },
         "showEmail": {
             "label_key": "postLoadModal.showInOffer",

@@ -20,20 +20,59 @@ class LenaLoadQuestionnaireTest extends TestCase
     public function test_storage_flow_chooses_destination_and_owned_warehouse_before_load_fields(): void
     {
         $questionnaire = new LenaLoadQuestionnaire;
+        // The form asks these where it asks the transport type, so they follow it here too.
+        $started = ['title' => 'Coffee', 'transportType' => 'warehouse'];
 
-        $target = $questionnaire->nextStep(['transportType' => 'warehouse'], collect(), 99);
-        $warehouse = $questionnaire->nextStep([
-            'transportType' => 'warehouse',
-            'storageTarget' => 'own',
-        ], collect(), 99);
-        $exchange = $questionnaire->nextStep([
-            'transportType' => 'warehouse',
-            'storageTarget' => 'exchange',
-        ], collect(), 99);
+        $target = $questionnaire->nextStep($started, collect(), 99);
+        $warehouse = $questionnaire->nextStep([...$started, 'storageTarget' => 'own'], collect(), 99);
+        $exchange = $questionnaire->nextStep([...$started, 'storageTarget' => 'exchange'], collect(), 99);
 
         $this->assertSame('storageTarget', $target['key']);
         $this->assertSame('warehouse', $warehouse['key']);
-        $this->assertSame('title', $exchange['key']);
+        $this->assertSame('customer', $exchange['key']);
+    }
+
+    public function test_the_questionnaire_asks_in_the_order_the_post_a_load_form_asks(): void
+    {
+        $asked = $this->stepsAskedFor(new LenaLoadQuestionnaire, 'road');
+
+        // The form's own order: its header, then the Cargo step top to bottom, then Route, then
+        // Contact. Any reordering of the form is meant to move these with it. The transport type
+        // itself is not listed because choosing it is what selects this list.
+        $this->assertSame([
+            'title', 'customer', 'cargoType', 'loadingEquipment', 'specialRequirements',
+            'bodyType', 'vehicleType', 'temperature', 'characteristics', 'dangerousGoods', 'requirements',
+            'declaredValue', 'goodsType', 'hsCode', 'pallets', 'packaging', 'dimensions', 'weight',
+            'pickup', 'delivery', 'extraStops', 'pickupDate', 'deliveryDate',
+            'paymentTerms', 'terms', 'priceTerms', 'budget', 'comments', 'notes', 'contact', 'supplier', 'visibility',
+        ], $asked);
+    }
+
+    public function test_a_step_offers_options_wherever_the_form_offers_a_picker(): void
+    {
+        $steps = app(LenaCatalog::class)->schema()['steps'];
+
+        // Every one of these is a card grid, a radio row or a dropdown in the form, so the chat
+        // must offer the same values rather than asking for free text.
+        foreach (['transportType', 'storageTarget', 'warehouse', 'customer', 'cargoType', 'loadingEquipment',
+            'storageEquipment', 'specialRequirements', 'containers', 'bodyType', 'vehicleType', 'deliveryProof',
+            'documentType', 'storageType', 'characteristics', 'requirements', 'storageServices', 'packaging',
+            'outOfGauge', 'transportMode', 'priceTerms', 'terms', 'paymentTerms', 'storageRate', 'visibility',
+            'contact'] as $step) {
+            $this->assertTrue($steps[$step]['options'], "$step should offer the form's own options");
+        }
+        // And these are typed into the form, so they stay free text (a mask where one applies).
+        foreach (['title', 'goodsType', 'hsCode', 'weight', 'pallets', 'dimensions', 'temperature',
+            'storageTemperature', 'pickup', 'delivery', 'pickupDate', 'deliveryDate', 'transitDays',
+            'extraStops', 'storagePeriod', 'budget', 'declaredValue', 'dangerousGoods', 'supplier',
+            'comments', 'notes'] as $step) {
+            $this->assertFalse($steps[$step]['options'], "$step is typed into the form, not picked");
+        }
+        // Multi-select in the form means multi-select in the chat.
+        foreach (['loadingEquipment', 'characteristics', 'specialRequirements', 'requirements', 'containers',
+            'storageServices', 'storageEquipment'] as $step) {
+            $this->assertTrue($steps[$step]['multiple'], "$step accepts more than one value in the form");
+        }
     }
 
     public function test_each_transport_type_is_asked_only_its_own_steps(): void
@@ -89,15 +128,14 @@ class LenaLoadQuestionnaireTest extends TestCase
 
     public function test_it_follows_scan_field_order_and_accepts_explicit_none(): void
     {
-        $draft = $this->draftThroughGoods();
         $messages = new Collection([
             $this->message(99, 'How many pallets? [[LENA_STEP:pallets]]', '2026-08-22 10:00:00'),
             $this->message(1, 'nema', '2026-08-22 10:01:00'),
         ]);
 
-        $next = (new LenaLoadQuestionnaire)->nextStep($draft, $messages, 99);
+        $next = (new LenaLoadQuestionnaire)->nextStep($this->draftThroughGoods(), $messages, 99);
 
-        $this->assertSame('dimensions', $next['key']);
+        $this->assertSame('packaging', $next['key']);
     }
 
     public function test_a_side_question_does_not_consume_the_pending_step(): void
@@ -107,7 +145,7 @@ class LenaLoadQuestionnaireTest extends TestCase
             $this->message(1, 'Kako radi tracking?', '2026-08-22 10:01:00'),
         ]);
 
-        $next = (new LenaLoadQuestionnaire)->nextStep($this->draftThroughCharacteristics(), $messages, 99);
+        $next = (new LenaLoadQuestionnaire)->nextStep($this->draftThroughLoading(), $messages, 99);
 
         $this->assertSame('specialRequirements', $next['key']);
     }
@@ -119,15 +157,17 @@ class LenaLoadQuestionnaireTest extends TestCase
             $this->message(1, '[[LENA_SKIP:specialRequirements]]', '2026-08-22 10:01:00'),
         ]);
 
-        $next = (new LenaLoadQuestionnaire)->nextStep($this->draftThroughCharacteristics(), $messages, 99);
+        $next = (new LenaLoadQuestionnaire)->nextStep($this->draftThroughLoading(), $messages, 99);
 
-        $this->assertSame('pickup', $next['key']);
+        $this->assertSame('bodyType', $next['key']);
     }
 
     public function test_it_finishes_only_after_the_complete_scan_field_sequence(): void
     {
-        $draft = $this->draftThroughCharacteristics() + [
-            'specialRequirements' => ['Keep dry'],
+        $draft = $this->draftThroughGoods() + [
+            'pallets' => 10,
+            'quantityMeasure' => 'PX',
+            'lengthM' => 6,
             'pickupCity' => 'Sarajevo',
             'pickupDate' => '2026-08-23',
             'deliveryCity' => 'Berlin',
@@ -180,32 +220,34 @@ class LenaLoadQuestionnaireTest extends TestCase
         return $asked;
     }
 
-    private function draftThroughGoods(): array
+    /** Everything the form's Cargo step asks before the loading equipment. */
+    private function draftThroughLoading(): array
     {
         return [
             'title' => 'Steel',
             'transportType' => 'road',
             'consigneeName' => 'Delta Trade d.o.o.',
             'cargoType' => 'FTL',
-            'goodsType' => 'Steel coils',
-            'hsCodes' => [['code' => '7208.10']],
-            'quantityMeasure' => 'PX',
-            'weightKg' => 12000,
+            'loadingEquipment' => 'Forklift: Yes',
         ];
     }
 
-    private function draftThroughCharacteristics(): array
+    /** ... and everything it asks between there and the pallet count. */
+    private function draftThroughGoods(): array
     {
-        return $this->draftThroughGoods() + [
-            'pallets' => 10,
-            'lengthM' => 6,
+        return $this->draftThroughLoading() + [
+            'specialRequirements' => ['Keep dry'],
             'bodyType' => 'Curtain',
             'vehicleType' => 'Truck',
-            'loadingEquipment' => 'Forklift: Yes',
-            'characteristics' => 'CMR',
-            'dgUnNumber' => 'UN 1263',
             'temperatureMin' => 2,
             'temperatureMax' => 8,
+            'characteristics' => 'CMR',
+            'dgUnNumber' => 'UN 1263',
+            'requiresTracking' => true,
+            'declaredValue' => 10000,
+            'goodsType' => 'Steel coils',
+            'hsCodes' => [['code' => '7208.10']],
+            'weightKg' => 12000,
         ];
     }
 

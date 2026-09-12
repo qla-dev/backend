@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\ScopesConversationAccess;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EntityResource;
 use App\Models\Conversation;
+use App\Models\Customer;
 use App\Models\LoadDraft;
 use App\Models\Message;
 use App\Models\User;
@@ -39,7 +40,7 @@ class LenaGuidedAnswerController extends Controller
     // The steps applyAnswer() actually knows how to write into the draft (pill steps + the
     // regex-masked numeric/date ones). Every other step is skip-only here.
     private const VALUE_CAPABLE_STEPS = [
-        'storageTarget', 'warehouse', 'transportType', 'cargoType', 'bodyType', 'vehicleType', 'loadingEquipment', 'characteristics',
+        'storageTarget', 'warehouse', 'customer', 'transportType', 'cargoType', 'packaging', 'bodyType', 'vehicleType', 'loadingEquipment', 'characteristics',
         'specialRequirements', 'transportMode', 'deliveryProof', 'priceTerms', 'terms',
         'requirements', 'contact', 'weight', 'pallets', 'dimensions', 'budget', 'declaredValue',
         'pickupDate', 'deliveryDate', 'containers', 'outOfGauge', 'transitDays', 'storageType',
@@ -234,6 +235,20 @@ class LenaGuidedAnswerController extends Controller
             ];
         }
 
+        // The customer picker sends the chosen customer's id; anything else is a typed-in name.
+        if ($step === 'customer' && ctype_digit($value)) {
+            $customer = Customer::query()->find((int) $value);
+            abort_unless($customer, 422, 'The selected customer is not available.');
+
+            return [...$draft,
+                'consignee' => $customer->toArray(),
+                'consigneeName' => (string) ($customer->company_name ?: $customer->name),
+                'consigneeTaxNumber' => (string) ($customer->tax_number ?? ''),
+                'consigneeCity' => (string) ($customer->city ?? ''),
+                'consigneeCountryCode' => (string) ($customer->country_code ?? ''),
+            ];
+        }
+
         if ($step === 'storageTarget') {
             abort_unless(in_array($value, ['own', 'exchange'], true), 422, 'Invalid storage destination.');
         }
@@ -242,6 +257,8 @@ class LenaGuidedAnswerController extends Controller
             'storageTarget' => [...$draft, 'storageTarget' => $value, 'warehouseId' => $value === 'exchange' ? null : ($draft['warehouseId'] ?? null)],
             'transportType' => [...$draft, 'transportType' => $value],
             'cargoType' => [...$draft, 'cargoType' => $value],
+            'customer' => [...$draft, 'consigneeName' => $value],
+            'packaging' => [...$draft, 'quantityMeasure' => $value],
             'bodyType' => [...$draft, 'bodyType' => $value],
             'vehicleType' => [...$draft, 'vehicleType' => $value],
             'loadingEquipment' => [...$draft, 'loadingEquipment' => $value],

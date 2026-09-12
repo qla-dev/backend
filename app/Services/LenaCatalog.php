@@ -135,6 +135,10 @@ class LenaCatalog
             if (isset($schema['container_categories'][$value])) {
                 $choice['category'] = $schema['container_categories'][$value];
             }
+            // The glyph both clients draw this option with, so a card and a chat pill agree.
+            if (isset($schema['option_icons'][$value])) {
+                $choice['icon'] = $schema['option_icons'][$value];
+            }
 
             return $choice;
         }, is_array($values) ? $values : []);
