@@ -14,6 +14,7 @@ use App\Services\HsCodeSearchService;
 use App\Services\LenaGuidedAnswerResponder;
 use App\Services\LenaLoadQuestionnaire;
 use App\Services\LenaLoadDetailsContext;
+use App\Services\LenaModeInstructions;
 use App\Services\LegalSourceCatalog;
 use App\Services\LoadDraftScanMapper;
 use App\Services\OpenRouterDispatchAssistant;
@@ -29,7 +30,7 @@ class DispatchChatController extends Controller
 {
     use ScopesConversationAccess;
 
-    public function store(Request $request, OpenRouterDispatchAssistant $assistant, LenaLoadQuestionnaire $questionnaire, HsCodeSearchService $hsCodeSearch, OpenRouterLoadScanner $loadScanner, LenaGuidedAnswerResponder $stepLabels): JsonResponse
+    public function store(Request $request, OpenRouterDispatchAssistant $assistant, LenaLoadQuestionnaire $questionnaire, HsCodeSearchService $hsCodeSearch, OpenRouterLoadScanner $loadScanner, LenaGuidedAnswerResponder $stepLabels, LenaModeInstructions $modeInstructions): JsonResponse
     {
         $validated = $request->validate([
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
@@ -280,9 +281,23 @@ class DispatchChatController extends Controller
         $languageInstruction = $isPreparedTrigger
             ? 'The latest user message is a guided action or skip selection, not typed text, so reply entirely in '.$interfaceLangName.', the user\'s current interface language. '
             : 'Determine the language of the user\'s latest message and write your ENTIRE reply in that language. ';
+        $instructionMode = $legalMode
+            ? 'legal'
+            : ($load
+                ? 'about-load'
+                : ($canvasEnabled
+                    ? ($storageMode ? 'storage' : 'post-load')
+                    : ($trackingMode
+                        ? 'tracking'
+                        : ($hsMode
+                            ? 'hs'
+                            : ($activeGuidedMode === 'booking'
+                                ? 'booking'
+                                : ($activeGuidedMode === 'free' ? 'free' : 'general'))))));
         $systemPrompt = 'You are LenaAI, the assistant for the Freightbook.ai freight logistics platform. '
             .$languageInstruction
             .'Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. Write plain text only. Do not use Markdown, asterisks, Markdown headings, or Markdown emphasis. If a list is necessary, use short numbered lines without Markdown symbols. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
+            .$modeInstructions->for($instructionMode)
             .($legalMode ? ' You are in Legal consultations mode. Give practical, careful information about Bosnian customs, tariff, declaration, origin and trade rules using only the supplied legal-source catalogue below. Do not present yourself as a lawyer, do not invent article numbers, and say when the supplied material does not establish an answer. At the end of every substantive legal answer, select the relevant source IDs from the catalogue and put them on one separate line exactly as [[LEGAL_SOURCES:id,id]]. Catalogue: '.app(LegalSourceCatalog::class)->promptCatalog().'. ' : '')
             .($legalMode && $latestMessageHasFileAttachment && ! $guidedAction
                 ? ' A document was just uploaded while Legal consultations mode is active. Do not create a load or activate the load-post canvas. Briefly confirm that the document is available, then ask the user to choose whether Lena should analyse it for legal questions or create a new load from it. End with exactly [[LENA_OPTIONS:legal_upload_analyze,legal_upload_load]].'
