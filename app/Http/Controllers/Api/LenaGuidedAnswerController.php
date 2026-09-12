@@ -34,7 +34,7 @@ class LenaGuidedAnswerController extends Controller
     use ScopesConversationAccess;
 
     // Multi-select pill steps only - a comma-joined list of chosen labels, not a single value.
-    private const MULTI_VALUE_STEPS = ['specialRequirements', 'requirements', 'characteristics', 'containers', 'storageServices'];
+    private const MULTI_VALUE_STEPS = ['specialRequirements', 'requirements', 'characteristics', 'containers', 'storageServices', 'storageEquipment'];
 
     // The steps applyAnswer() actually knows how to write into the draft (pill steps + the
     // regex-masked numeric/date ones). Every other step is skip-only here.
@@ -43,7 +43,7 @@ class LenaGuidedAnswerController extends Controller
         'specialRequirements', 'transportMode', 'deliveryProof', 'priceTerms', 'terms',
         'requirements', 'contact', 'weight', 'pallets', 'dimensions', 'budget', 'declaredValue',
         'pickupDate', 'deliveryDate', 'containers', 'outOfGauge', 'transitDays', 'storageType',
-        'storagePeriod', 'storageServices', 'storageRate', 'paymentTerms', 'documentType', 'visibility',
+        'storageEquipment', 'storagePeriod', 'storageServices', 'storageRate', 'paymentTerms', 'documentType', 'visibility',
     ];
 
     private const DATE_STEPS = ['pickupDate', 'deliveryDate', 'storagePeriod'];
@@ -198,6 +198,8 @@ class LenaGuidedAnswerController extends Controller
             } elseif ($step === 'containers') {
                 // One of each chosen type; the form's quantity stepper adjusts the count later.
                 $draft['containerSelections'] = array_map(fn ($type) => ['type' => $type, 'quantity' => '1'], array_values($values));
+            } elseif ($step === 'storageEquipment') {
+                $draft['warehouseEquipment'] = array_values($values);
             } elseif ($step === 'storageServices') {
                 foreach (self::WAREHOUSE_SERVICE_FIELDS as $label => $field) {
                     $draft[$field] = in_array($label, $values, true);
@@ -242,11 +244,7 @@ class LenaGuidedAnswerController extends Controller
             'cargoType' => [...$draft, 'cargoType' => $value],
             'bodyType' => [...$draft, 'bodyType' => $value],
             'vehicleType' => [...$draft, 'vehicleType' => $value],
-            // Storage requests pick from the warehouse's own equipment list, which the form keeps
-            // as a multi-select of its own rather than the single loading method a vehicle needs.
-            'loadingEquipment' => ($draft['transportType'] ?? '') === 'warehouse'
-                ? [...$draft, 'warehouseEquipment' => [$value]]
-                : [...$draft, 'loadingEquipment' => $value],
+            'loadingEquipment' => [...$draft, 'loadingEquipment' => $value],
             'transportMode' => [...$draft, 'transportMode' => $value],
             'deliveryProof' => [...$draft, 'deliveryProof' => $value],
             'priceTerms' => [...$draft, 'priceTerms' => $value],

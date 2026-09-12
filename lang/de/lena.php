@@ -782,6 +782,7 @@ Bei jeder Antwort prüfe ich die neuesten verfügbaren Ladungsdaten. Frag mich n
     'supplier' => 'den Lieferantenkontakt',
     'visibility' => 'die Veröffentlichung',
     'comments' => 'die Kommentare',
+    'storageEquipment' => 'die Lagerausrüstung',
   ),
   'format_hints' => 
   array (
@@ -917,6 +918,7 @@ Bei jeder Antwort prüfe ich die neuesten verfügbaren Ladungsdaten. Frag mich n
     'visibility' => 'TIMOCOM für 30 Minuten, dann alle',
     'comments' => 'Fahrer muss 1 Stunde vor Ankunft anrufen',
     'notes' => 'Referenz PO-4821, Tor 3',
+    'storageEquipment' => 'Forklifts, Dock Levellers',
   ),
   'option_descriptions' => 
   array (

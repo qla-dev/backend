@@ -782,6 +782,7 @@ Pri svakom odgovoru provjeravam najnovije dostupne podatke o teretu. Pitaj me za
     'supplier' => 'kontakt dobavljača',
     'visibility' => 'objavu',
     'comments' => 'komentare',
+    'storageEquipment' => 'skladišnu opremu',
   ),
   'format_hints' => 
   array (
@@ -917,6 +918,7 @@ Pri svakom odgovoru provjeravam najnovije dostupne podatke o teretu. Pitaj me za
     'visibility' => 'TIMOCOM 30 minuta, zatim svi',
     'comments' => 'Vozač mora pozvati 1 sat prije dolaska',
     'notes' => 'Referenca PO-4821, kapija 3',
+    'storageEquipment' => 'Forklifts, Dock Levellers',
   ),
   'option_descriptions' => 
   array (

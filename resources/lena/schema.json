@@ -23,6 +23,13 @@
         "free"
     ],
     "option_groups": {
+        "AIR_CARGO_TYPE_OPTIONS": [
+            "Standard",
+            "Express",
+            "Priority",
+            "Economy",
+            "Charter"
+        ],
         "AIR_CHARACTERISTIC_OPTIONS": [
             "MED (medicine)",
             "VAL (money and other valuables)",
@@ -82,6 +89,10 @@
             "Current user",
             "Operations desk",
             "Dispatch team"
+        ],
+        "CONTAINER_CARGO_TYPE_OPTIONS": [
+            "FCL",
+            "LCL"
         ],
         "CONTAINER_DELIVERY_PLACE_TYPE_OPTIONS": [
             "Port to Port",
@@ -196,6 +207,12 @@
             "Special Handling",
             "No Special Equipment"
         ],
+        "ROAD_CARGO_TYPE_OPTIONS": [
+            "FTL",
+            "LTL",
+            "Express",
+            "Dedicated"
+        ],
         "ROAD_CHARACTERISTIC_OPTIONS": [
             "GDP",
             "TIR"
@@ -290,9 +307,14 @@
             "Unsure"
         ],
         "WEIGHT_UNIT_OPTIONS": [
-            "kg",
-            "t"
+            "t",
+            "kg"
         ]
+    },
+    "label_overrides": {
+        "rail": {
+            "Port to Port": "postLoadModal.terminal"
+        }
     },
     "container_categories": {
         "20GP": "Standard",
@@ -407,7 +429,7 @@
         "cargoType": {
             "description": "whether the shipment is a full or part load (FTL, LTL, FCL, LCL)",
             "options": true,
-            "group": "CARGO_TYPE_OPTIONS",
+            "group": "ROAD_CARGO_TYPE_OPTIONS",
             "label_key": "postLoadModal.cargoModel",
             "multiple": false,
             "mask": null,
@@ -420,7 +442,14 @@
             ],
             "form_fields": [
                 "cargoType"
-            ]
+            ],
+            "groups_by_transport": {
+                "road": "ROAD_CARGO_TYPE_OPTIONS",
+                "air": "AIR_CARGO_TYPE_OPTIONS",
+                "sea": "CONTAINER_CARGO_TYPE_OPTIONS",
+                "rail": "CONTAINER_CARGO_TYPE_OPTIONS",
+                "warehouse": "CARGO_TYPE_OPTIONS"
+            }
         },
         "goodsType": {
             "description": "the goods or cargo type",
@@ -614,12 +643,7 @@
                 "air": "AIR_LOADING_EQUIPMENT_OPTIONS",
                 "sea": "SEA_LOADING_EQUIPMENT_OPTIONS",
                 "rail": "RAIL_LOADING_EQUIPMENT_OPTIONS",
-                "warehouse": "WAREHOUSE_EQUIPMENT_OPTIONS"
-            },
-            "form_fields_by_transport": {
-                "warehouse": [
-                    "warehouseEquipment"
-                ]
+                "warehouse": "WAREHOUSE_HANDLING_REQUIREMENT_OPTIONS"
             }
         },
         "characteristics": {
@@ -644,8 +668,8 @@
                 "road": "ROAD_CHARACTERISTIC_OPTIONS",
                 "air": "AIR_CHARACTERISTIC_OPTIONS",
                 "sea": "SEA_CHARACTERISTIC_OPTIONS",
-                "rail": "ROAD_CHARACTERISTIC_OPTIONS",
-                "warehouse": "WAREHOUSE_HANDLING_REQUIREMENT_OPTIONS"
+                "rail": "SEA_CHARACTERISTIC_OPTIONS",
+                "warehouse": "ROAD_CHARACTERISTIC_OPTIONS"
             }
         },
         "dangerousGoods": {
@@ -906,6 +930,21 @@
             ],
             "form_fields": [
                 "warehouseStorageType"
+            ]
+        },
+        "storageEquipment": {
+            "description": "the warehouse equipment the goods need, or none; explicitly mention that multiple options may be selected",
+            "options": true,
+            "group": "WAREHOUSE_EQUIPMENT_OPTIONS",
+            "label_key": "postLoadModal.warehouseEquipment",
+            "multiple": true,
+            "mask": null,
+            "unit": "",
+            "transports": [
+                "warehouse"
+            ],
+            "form_fields": [
+                "warehouseEquipment"
             ]
         },
         "storagePeriod": {
@@ -1273,7 +1312,8 @@
         },
         "budget": {
             "label_key": "postLoadModal.targetPrice",
-            "step": "budget"
+            "step": "budget",
+            "example": "1450"
         },
         "cargoType": {
             "label_key": "postLoadModal.cargoModel",
@@ -1305,15 +1345,18 @@
         },
         "contactEmail": {
             "label_key": "postLoadModal.contactEmail",
-            "step": "contact"
+            "step": "contact",
+            "example": "john@company.com"
         },
         "contactFax": {
             "label_key": "postLoadModal.contactFax",
-            "step": "contact"
+            "step": "contact",
+            "example": "+387 33 555 111"
         },
         "contactMobile": {
             "label_key": "postLoadModal.contactMobile",
-            "step": "contact"
+            "step": "contact",
+            "example": "+387 61 123 456"
         },
         "contactName": {
             "label_key": "postLoadModal.contactName",
@@ -1321,7 +1364,8 @@
         },
         "contactPhone": {
             "label_key": "postLoadModal.contactPhone",
-            "step": "contact"
+            "step": "contact",
+            "example": "+387 33 123 456"
         },
         "containerSelections": {
             "label_key": "postLoadModal.containerTypes",
@@ -1337,7 +1381,8 @@
         },
         "declaredValue": {
             "label_key": "postLoadModal.declaredValue",
-            "step": "declaredValue"
+            "step": "declaredValue",
+            "example": "50000"
         },
         "deliveryAddress": {
             "label_key": "postLoadModal.deliveryAddress",
@@ -1396,7 +1441,8 @@
         },
         "deliveryRadiusKm": {
             "label_key": "postLoadModal.areaRadius",
-            "step": "delivery"
+            "step": "delivery",
+            "example": "25"
         },
         "deliveryTimeFrom": {
             "label_key": "postLoadModal.deliveryTimeFrom",
@@ -1412,20 +1458,24 @@
         },
         "dgImoClass": {
             "label_key": "postLoadModal.dgImoClass",
-            "step": "dangerousGoods"
+            "step": "dangerousGoods",
+            "example": "9"
         },
         "dgPackingGroup": {
             "label_key": "postLoadModal.dgPackingGroup",
             "step": "dangerousGoods",
+            "example": "II",
             "group": "DG_PACKING_GROUP_OPTIONS"
         },
         "dgProperShippingName": {
             "label_key": "postLoadModal.dgProperShippingName",
-            "step": "dangerousGoods"
+            "step": "dangerousGoods",
+            "example": "Lithium ion batteries"
         },
         "dgUnNumber": {
             "label_key": "postLoadModal.dgUnNumber",
-            "step": "dangerousGoods"
+            "step": "dangerousGoods",
+            "example": "UN 3481"
         },
         "dimensionScope": {
             "label_key": "postLoadModal.dimensionScope",
@@ -1458,7 +1508,8 @@
         },
         "heightM": {
             "label_key": "postLoadModal.heightValue",
-            "step": "dimensions"
+            "step": "dimensions",
+            "example": "2.70"
         },
         "heightUnit": {
             "label_key": "postLoadModal.heightUnit",
@@ -1487,7 +1538,8 @@
         },
         "lengthM": {
             "label_key": "postLoadModal.lengthValue",
-            "step": "dimensions"
+            "step": "dimensions",
+            "example": "13.6"
         },
         "lengthUnit": {
             "label_key": "postLoadModal.lengthUnit",
@@ -1512,7 +1564,8 @@
         },
         "oogHeightM": {
             "label_key": "postLoadModal.oogHeight",
-            "step": "outOfGauge"
+            "step": "outOfGauge",
+            "example": "0.4"
         },
         "oogInGauge": {
             "label_key": "postLoadModal.oogGauge",
@@ -1520,15 +1573,18 @@
         },
         "oogLengthM": {
             "label_key": "postLoadModal.oogLength",
-            "step": "outOfGauge"
+            "step": "outOfGauge",
+            "example": "0.5"
         },
         "oogWeightKg": {
             "label_key": "postLoadModal.oogWeight",
-            "step": "outOfGauge"
+            "step": "outOfGauge",
+            "example": "1500"
         },
         "oogWidthM": {
             "label_key": "postLoadModal.oogWidth",
-            "step": "outOfGauge"
+            "step": "outOfGauge",
+            "example": "0.3"
         },
         "palletExchangeRequired": {
             "label_key": "postLoadModal.palletExchange",
@@ -1536,7 +1592,8 @@
         },
         "pallets": {
             "label_key": "postLoadModal.unitCount",
-            "step": "pallets"
+            "step": "pallets",
+            "example": "24"
         },
         "paymentDeferred": {
             "label_key": "postLoadModal.deferredPayment",
@@ -1544,7 +1601,8 @@
         },
         "paymentDueDays": {
             "label_key": "postLoadModal.paymentDueDays",
-            "step": "paymentTerms"
+            "step": "paymentTerms",
+            "example": "30"
         },
         "pickupAddress": {
             "label_key": "postLoadModal.pickupAddress",
@@ -1611,7 +1669,8 @@
         },
         "publishDelayMinutes": {
             "label_key": "postLoadModal.publishToAllAfter",
-            "step": "visibility"
+            "step": "visibility",
+            "example": "5"
         },
         "publishToAllAfterMinutes": {
             "label_key": "postLoadModal.publishToAllAfter",
@@ -1668,15 +1727,18 @@
         },
         "supplierEmail": {
             "label_key": "postLoadModal.contactEmail",
-            "step": "supplier"
+            "step": "supplier",
+            "example": "office@supplier.com"
         },
         "supplierFax": {
             "label_key": "postLoadModal.contactFax",
-            "step": "supplier"
+            "step": "supplier",
+            "example": "+387 33 555 111"
         },
         "supplierMobile": {
             "label_key": "postLoadModal.contactMobile",
-            "step": "supplier"
+            "step": "supplier",
+            "example": "+387 61 123 456"
         },
         "supplierName": {
             "label_key": "postLoadModal.supplierName",
@@ -1684,7 +1746,8 @@
         },
         "supplierPhone": {
             "label_key": "postLoadModal.contactPhone",
-            "step": "supplier"
+            "step": "supplier",
+            "example": "+387 33 123 456"
         },
         "temperatureControlled": {
             "label_key": "postLoadModal.temperature",
@@ -1692,11 +1755,13 @@
         },
         "temperatureMax": {
             "label_key": "postLoadModal.temperatureMax",
-            "step": "temperature"
+            "step": "temperature",
+            "example": "8"
         },
         "temperatureMin": {
             "label_key": "postLoadModal.temperatureMin",
-            "step": "temperature"
+            "step": "temperature",
+            "example": "2"
         },
         "tollRoadsIncluded": {
             "label_key": "postLoadModal.tollRoads",
@@ -1704,7 +1769,8 @@
         },
         "transitDays": {
             "label_key": "postLoadModal.transitDays",
-            "step": "transitDays"
+            "step": "transitDays",
+            "example": "18"
         },
         "transportMode": {
             "label_key": "postLoadModal.transportMode",
@@ -1724,7 +1790,8 @@
         },
         "volumeM3": {
             "label_key": "postLoadModal.volume",
-            "step": "dimensions"
+            "step": "dimensions",
+            "example": "33.2"
         },
         "warehouseEndDate": {
             "label_key": "postLoadModal.warehouseEndDate",
@@ -1732,7 +1799,7 @@
         },
         "warehouseEquipment": {
             "label_key": "postLoadModal.warehouseEquipment",
-            "step": "loadingEquipment",
+            "step": "storageEquipment",
             "group": "WAREHOUSE_EQUIPMENT_OPTIONS"
         },
         "warehouseFoodPharma": {
@@ -1786,15 +1853,18 @@
         },
         "warehouseTemperatureMax": {
             "label_key": "postLoadModal.temperatureMax",
-            "step": "storageTemperature"
+            "step": "storageTemperature",
+            "example": "8"
         },
         "warehouseTemperatureMin": {
             "label_key": "postLoadModal.temperatureMin",
-            "step": "storageTemperature"
+            "step": "storageTemperature",
+            "example": "2"
         },
         "weightKg": {
             "label_key": "postLoadModal.weightValue",
-            "step": "weight"
+            "step": "weight",
+            "example": "24000"
         },
         "weightUnit": {
             "label_key": "postLoadModal.weightUnit",
@@ -1803,7 +1873,8 @@
         },
         "widthM": {
             "label_key": "postLoadModal.widthValue",
-            "step": "dimensions"
+            "step": "dimensions",
+            "example": "2.45"
         },
         "widthUnit": {
             "label_key": "postLoadModal.widthUnit",

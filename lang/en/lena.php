@@ -782,6 +782,7 @@ I check the latest available load data with every reply. Ask me for its current 
     'supplier' => 'the supplier contact',
     'visibility' => 'the publication',
     'comments' => 'the comments',
+    'storageEquipment' => 'the warehouse equipment',
   ),
   'format_hints' => 
   array (
@@ -917,6 +918,7 @@ I check the latest available load data with every reply. Ask me for its current 
     'visibility' => 'TIMOCOM for 30 minutes, then everyone',
     'comments' => 'Driver must call 1 hour before arrival',
     'notes' => 'Reference PO-4821, gate 3',
+    'storageEquipment' => 'Forklifts, Dock Levellers',
   ),
   'option_descriptions' => 
   array (

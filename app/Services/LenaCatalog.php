@@ -68,7 +68,7 @@ class LenaCatalog
                 $steps[$key]['choices_by_transport'] = [];
                 $steps[$key]['fields_by_transport'] = [];
                 foreach ($step['groups_by_transport'] ?? [] as $transport => $group) {
-                    $steps[$key]['choices_by_transport'][$transport] = $this->choices($key, [...$step, 'group' => $group], $schema, $text);
+                    $steps[$key]['choices_by_transport'][$transport] = $this->choices($key, [...$step, 'group' => $group], $schema, $text, transport: $transport);
                 }
                 foreach (self::TRANSPORTS as $transport) {
                     $steps[$key]['fields_by_transport'][$transport] = $this->stepFields($step, $transport);
@@ -84,9 +84,9 @@ class LenaCatalog
                     ...$definition,
                     'label' => $text['ui'][$definition['label_key']] ?? $field,
                     'question' => $step['question'] ?? null,
-                    // What the form shows as the field's placeholder, so the example a load is
-                    // described with is written once for both the chat and the form.
-                    'example' => $step['example'] ?? '',
+                    // What the form shows as the field's placeholder: the field's own example where
+                    // it has one, otherwise the whole answer its step is asked with.
+                    'example' => $definition['example'] ?? $step['example'] ?? '',
                     'mask' => $step['mask'] ?? null,
                     'unit' => $step['unit'] ?? '',
                     'multiple' => $step['multiple'] ?? false,
@@ -101,7 +101,7 @@ class LenaCatalog
                     'choices_by_transport' => [],
                 ];
                 foreach ($definition['groups_by_transport'] ?? $schema['steps'][$definition['step']]['groups_by_transport'] ?? [] as $transport => $group) {
-                    $formFields[$field]['choices_by_transport'][$transport] = $this->choices($field, ['options' => false, 'group' => $group], $schema, $text, withSkip: false);
+                    $formFields[$field]['choices_by_transport'][$transport] = $this->choices($field, ['options' => false, 'group' => $group], $schema, $text, withSkip: false, transport: $transport);
                 }
             }
             $locales[$locale] = [...$text, 'steps' => $steps, 'form_fields' => $formFields];
@@ -113,7 +113,7 @@ class LenaCatalog
         return $payload;
     }
 
-    private function choices(string $key, array $step, array $schema, array $text, bool $withSkip = true): array
+    private function choices(string $key, array $step, array $schema, array $text, bool $withSkip = true, ?string $transport = null): array
     {
         $values = match ($key) {
             'transportType' => self::TRANSPORTS,
@@ -121,10 +121,13 @@ class LenaCatalog
             'priceTerms' => ['fixed', 'negotiable'],
             default => $schema['option_groups'][$step['group'] ?? ''] ?? [],
         };
-        $choices = array_map(function ($value) use ($text, $schema) {
+        $override = $schema['label_overrides'][$transport ?? ''] ?? [];
+        $choices = array_map(function ($value) use ($text, $schema, $override) {
             $choice = [
                 'value' => $value,
-                'label' => $text['labels'][$value] ?? $text['ui'][$value] ?? $value,
+                'label' => isset($override[$value])
+                    ? ($text['ui'][$override[$value]] ?? $value)
+                    : ($text['labels'][$value] ?? $text['ui'][$value] ?? $value),
             ];
             if (isset($text['option_descriptions'][$value])) {
                 $choice['description'] = $text['option_descriptions'][$value];
