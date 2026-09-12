@@ -714,6 +714,8 @@ Možete mi pisati na bilo kojem jeziku. Odgovorit ću isključivo na jeziku koji
     'hs' => 'Provjera HS koda',
       'free' => 'Pitanja o Freightbook.ai',
       'legal' => 'Zakonske konsultacije',
+    'legal_upload_analyze' => 'Analiziraj dokument za zakonska pitanja',
+    'legal_upload_load' => 'Kreiraj novi teret iz dokumenta',
     'upload_yes' => 'Da',
     'upload_no' => 'Ne, postavi mi pitanja',
     'start_add_yes' => 'Da',

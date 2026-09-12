@@ -53,6 +53,12 @@ class ShipmentWorkspaceController extends Controller
             'operational_checklist.*.completed_at' => ['nullable', 'date'],
             'operational_checklist.*.completed_by_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'cancellation_reason' => ['nullable', 'string', 'max:2000', 'required_if:status,cancelled'],
+            'additional_charges' => ['sometimes', 'array'],
+            'additional_charges.*.type' => ['required', 'string', 'max:120'],
+            'additional_charges.*.condition' => ['nullable', 'string', 'max:500'],
+            'additional_charges.*.rate' => ['required', 'numeric', 'min:0'],
+            'additional_charges.*.unit' => ['nullable', 'string', 'max:30'],
+            'approve_additional_charge_id' => ['sometimes', 'string', 'max:100'],
         ]);
 
         $user = $request->user();
@@ -60,6 +66,30 @@ class ShipmentWorkspaceController extends Controller
         $isProvider = (int) $record->provider_user_id === (int) $user->id
             || ($record->provider_company_id && $user->companies()->whereKey($record->provider_company_id)->exists());
         $isAdmin = $user->isSuperAdminOrMaster();
+
+        if (array_key_exists('additional_charges', $data)) {
+            abort_unless($isProvider || $isAdmin, 403, 'Only the provider can add additional charges.');
+            $existing = $record->additional_charges ?? [];
+            $newCharges = collect($data['additional_charges'])->map(fn (array $charge) => [
+                'id' => (string) \Illuminate\Support\Str::uuid(), 'type' => $charge['type'],
+                'condition' => $charge['condition'] ?? '', 'rate' => (float) $charge['rate'],
+                'unit' => $charge['unit'] ?? '', 'approved' => false, 'approved_at' => null, 'source' => 'workspace',
+            ])->all();
+            $data['additional_charges'] = [...$existing, ...$newCharges];
+        }
+        if (isset($data['approve_additional_charge_id'])) {
+            abort_unless($isCustomer || $isAdmin, 403, 'Only the customer can approve an additional charge.');
+            $charges = collect($record->additional_charges ?? []);
+            abort_unless($charges->contains('id', $data['approve_additional_charge_id']), 422, 'Unknown additional charge.');
+            $data['additional_charges'] = $charges->map(function (array $charge) use ($data): array {
+                if ($charge['id'] === $data['approve_additional_charge_id'] && ! ($charge['approved'] ?? false)) {
+                    $charge['approved'] = true;
+                    $charge['approved_at'] = now()->toIso8601String();
+                }
+                return $charge;
+            })->all();
+            unset($data['approve_additional_charge_id']);
+        }
 
         if (array_key_exists('offer_status', $data)) {
             abort_unless($isCustomer || $isProvider || $isAdmin, 403, 'Only workspace participants can update the accepted offer status.');
@@ -98,6 +128,13 @@ class ShipmentWorkspaceController extends Controller
         }
 
         $record->update($data);
+        if (array_key_exists('additional_charges', $data)) {
+            // The original bid amount already includes its approved bid lines. Only workspace
+            // additions increment the agreed amount after customer approval.
+            $increment = collect($data['additional_charges'])->filter(fn (array $charge) => ($charge['source'] ?? '') === 'workspace' && ($charge['approved'] ?? false))->sum('rate');
+            $base = (float) $record->acceptedOffer?->amount;
+            $record->update(['agreed_amount' => $base + $increment]);
+        }
         $record->load($this->relations());
 
         return response()->json(['message' => 'Shipment workspace updated successfully.', 'data' => (new EntityResource($record))->resolve($request), 'meta' => [], 'errors' => []]);

@@ -63,6 +63,7 @@ class ShipmentWorkspace extends BaseModel
             'agreed_amount' => 'decimal:2',
             'load_snapshot' => 'array',
             'offer_snapshot' => 'array',
+            'additional_charges' => 'array',
             'parties_snapshot' => 'array',
             'operational_checklist' => 'array',
             'booked_at' => 'datetime',

@@ -714,6 +714,8 @@ You can write to me in any language. I will reply exclusively in the language yo
     'hs' => 'Check HS code',
       'free' => 'Ask about Freightbook.ai',
       'legal' => 'Legal consultations',
+    'legal_upload_analyze' => 'Analyse document for legal questions',
+    'legal_upload_load' => 'Create a new load from it',
     'upload_yes' => 'Yes',
     'upload_no' => 'No, ask me questions',
     'start_add_yes' => 'Yes',

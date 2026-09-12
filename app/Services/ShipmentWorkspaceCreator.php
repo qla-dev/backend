@@ -50,6 +50,14 @@ class ShipmentWorkspaceCreator
             'agreed_amount' => $offer->amount,
             'load_snapshot' => $this->loadSnapshot($load),
             'offer_snapshot' => $this->offerSnapshot($offer),
+            // Bid charges are part of the amount the customer accepted. Preserve each line so
+            // subsequent additions can require an explicit, per-line customer approval.
+            'additional_charges' => collect($offer->additional_charges ?? [])->map(fn (array $charge) => [
+                'id' => (string) Str::uuid(), 'type' => $charge['type'] ?? 'Additional charge',
+                'condition' => $charge['condition'] ?? '', 'rate' => (float) ($charge['rate'] ?? 0),
+                'unit' => $charge['unit'] ?? '', 'approved' => true, 'approved_at' => now()->toIso8601String(),
+                'source' => 'accepted_bid',
+            ])->values()->all(),
             'parties_snapshot' => $this->partiesSnapshot($load, $offer),
             'operational_checklist' => $this->checklist($load->for_storage ? 'warehouse' : (string) $load->transport_type),
             'booked_at' => now(),

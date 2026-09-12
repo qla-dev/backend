@@ -61,12 +61,17 @@ class DispatchChatController extends Controller
         $latestUserMessage = $latestUserMessageModel?->body;
         $guidedAction = $this->guidedAction($latestUserMessage);
         $activeGuidedMode = $this->activeGuidedMode($userMessages);
+        // A legal upload is deliberately not freight-document input. The user explicitly chooses
+        // whether it should become a legal analysis or start a new load afterwards.
+        $legalMode = $guidedAction !== 'legal_upload_load'
+            && ($guidedAction === 'legal' || $activeGuidedMode === 'legal');
         $wasCanvasEnabled = (bool) $conversation->canvas;
         // Auto-detect load-creation intent from an attached document (already scanned regardless
         // of canvas state, see attachFile in useLenaAiChat.ts) or from cargo-shaped free text, not
         // only from the narrow "new load"/"novi teret" phrasing asksToOpenLoadCanvas looks for.
         // This must keep working even while a different guided mode (tracking, hs, ...) is active.
-        $detectedLoadCreationRequest = ! $load
+        $detectedLoadCreationRequest = ! $legalMode
+            && ! $load
             && ! $wasCanvasEnabled
             && ! $guidedAction
             && (
@@ -138,7 +143,7 @@ class DispatchChatController extends Controller
             }
         }
         $contextLoad = $load ?? $matchedGeneralLoad;
-        $requestedLoadCanvas = in_array($guidedAction, ['add', 'storage', 'start_add_yes'], true) || $autoStartFromDocument;
+        $requestedLoadCanvas = in_array($guidedAction, ['add', 'storage', 'start_add_yes', 'legal_upload_load'], true) || $autoStartFromDocument;
         $canvasBlockedByExistingLoad = $requestedLoadCanvas && $load;
         $canvasEnabled = $wasCanvasEnabled;
         if ($canvasBlockedByExistingLoad || $guidedAction === 'continue_add_no') {
@@ -219,7 +224,6 @@ class DispatchChatController extends Controller
         );
         $origin = $contextLoad?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $contextLoad?->stops->firstWhere('type', 'delivery')?->city;
-        $legalMode = $guidedAction === 'legal' || $activeGuidedMode === 'legal';
         $hsMode = $guidedAction === 'hs'
             || $activeGuidedMode === 'hs'
             || preg_match('/\b(?:hs\s*(?:code|kod|nummer)?|customs?\s+code|tariff\s+code|zolltarifnummer)\b/i', (string) $latestUserMessage) === 1;
@@ -280,6 +284,15 @@ class DispatchChatController extends Controller
             .$languageInstruction
             .'Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. Write plain text only. Do not use Markdown, asterisks, Markdown headings, or Markdown emphasis. If a list is necessary, use short numbered lines without Markdown symbols. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
             .($legalMode ? ' You are in Legal consultations mode. Give practical, careful information about Bosnian customs, tariff, declaration, origin and trade rules using only the supplied legal-source catalogue below. Do not present yourself as a lawyer, do not invent article numbers, and say when the supplied material does not establish an answer. At the end of every substantive legal answer, select the relevant source IDs from the catalogue and put them on one separate line exactly as [[LEGAL_SOURCES:id,id]]. Catalogue: '.app(LegalSourceCatalog::class)->promptCatalog().'. ' : '')
+            .($legalMode && $latestMessageHasFileAttachment && ! $guidedAction
+                ? ' A document was just uploaded while Legal consultations mode is active. Do not create a load or activate the load-post canvas. Briefly confirm that the document is available, then ask the user to choose whether Lena should analyse it for legal questions or create a new load from it. End with exactly [[LENA_OPTIONS:legal_upload_analyze,legal_upload_load]].'
+                : '')
+            .($guidedAction === 'legal_upload_analyze'
+                ? ' The user chose to analyse their uploaded document for legal questions. Analyse its available attachment context under the legal-source rules. Do not create a load, do not activate the canvas, and do not ask a load-field question. Briefly state that the document analysis is ready and invite a specific legal question.'
+                : '')
+            .($guidedAction === 'legal'
+                ? ' The user just entered Legal consultations mode. Welcome them briefly, explain that they can ask about the supplied Bosnian customs and trade rules, and explicitly say that they can upload a document at any time for legal analysis. Do not mention load posting unless the user asks for it.'
+                : '')
             .'Bosnian freight terminology is strict: translate the logistics noun "load" as "teret". Never call a load "opterećenje" in Bosnian. Use the correct grammatical form of "teret" for the sentence. '
             .($canvasEnabled
                 ? ' The conversation load-post canvas is active and remains active until the user selects the guided continue_add_no action. Help the user prepare a new load posting by collecting only facts they provide. Attached-file and message extraction results appear in the user message context and are authoritative for this draft; the canvas panel next to this chat already displays and updates those fields live. Because the user can already see the fields update, do not restate all field values in prose. The server controls a complete ordered questionnaire matching the load scan fields; never declare the load ready based only on title, cargo, weight, pickup, and delivery. Ask exactly one server-supplied missing step at a time. If the latest user message changes or supplies draft data, briefly confirm it and ask that next step. If it instead asks about another LenaAI capability or about Freightbook.ai, answer that request without discarding or changing modes, then write exactly [[LENA_FOLLOWUP]] on its own line, followed by a localized equivalent of "Your load is still in the data collection phase. Would you like to continue?", followed by [[LENA_OPTIONS:continue_add_yes,continue_add_no]] on its own line. In Bosnian, that follow-up sentence must be exactly "Vaš teret je još uvijek u fazi prikupljanja podataka. Želite li nastaviti?" In German, use "Ihre Ladung befindet sich noch in der Datenerfassungsphase. Möchten Sie fortfahren?" You must always include the literal [[LENA_FOLLOWUP]] marker on its own line immediately before that sentence, with no exceptions, even when the answer and the follow-up sentence feel like they belong together; never merge them into one paragraph without the marker between them. Do not ask or restate the next questionnaire step in this same reply; the application asks it again on its own once the user chooses to continue. Never invent values.'
@@ -322,7 +335,7 @@ class DispatchChatController extends Controller
                 : '')
             .($guidedAction
                 ? ' The user selected the guided LenaAI action "'.$guidedAction.'". Follow it immediately, in the user\'s language. '
-                    .(in_array($guidedAction, ['add', 'storage', 'start_add_yes'], true)
+                    .(in_array($guidedAction, ['add', 'storage', 'start_add_yes', 'legal_upload_load'], true)
                         ? ($hasExistingLoadDraftData
                             ? 'For add or start_add_yes, a document or message was already provided earlier in this conversation and its load data was already extracted into the draft below; never ask whether they have a document to upload. Briefly announce that you are starting the load draft from what they already gave you, then continue directly with the next incomplete questionnaire step described below.'
                             : 'For add or start_add_yes, ask exactly whether they have a document, shipping file or waybill to upload, and end your reply with [[LENA_OPTIONS:upload_yes,upload_no]]. Ask it with exactly this wording, in the language of the user. In Bosnian: "Imate li dokument, datoteku za otpremu ili tovarni list koji želite učitati?". In English: "Do you have a document, shipping file or waybill you would like to upload?". In German: "Möchten Sie ein Dokument, eine Versanddatei oder einen Frachtbrief hochladen?".')
@@ -468,7 +481,10 @@ class DispatchChatController extends Controller
         if ($legalMode && filled($reply) && preg_match('/\[\[LEGAL_SOURCES:[a-z0-9,-]+\]\]/', $reply) !== 1) {
             $reply .= "\n[[LEGAL_SOURCES:".collect(app(LegalSourceCatalog::class)->sources())->pluck('id')->implode(',').']]';
         }
-        if (in_array($guidedAction, ['add', 'storage', 'start_add_yes'], true) && ! $hasExistingLoadDraftData && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+        if ($legalMode && $latestMessageHasFileAttachment && ! $guidedAction && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+            $reply .= "\n[[LENA_OPTIONS:legal_upload_analyze,legal_upload_load]]";
+        }
+        if (in_array($guidedAction, ['add', 'storage', 'start_add_yes', 'legal_upload_load'], true) && ! $hasExistingLoadDraftData && ! str_contains($reply, '[[LENA_OPTIONS:')) {
             $reply .= "\n[[LENA_OPTIONS:upload_yes,upload_no]]";
         }
         if ($detectedLoadCreationRequest && ! $autoStartFromDocument && ! str_contains($reply, '[[LENA_OPTIONS:')) {
@@ -896,7 +912,7 @@ class DispatchChatController extends Controller
             return null;
         }
 
-        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|legal|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no)\]\]$/', trim($message), $match) === 1
+        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|legal|legal_upload_analyze|legal_upload_load|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no)\]\]$/', trim($message), $match) === 1
             ? $match[1]
             : null;
     }
@@ -905,6 +921,9 @@ class DispatchChatController extends Controller
     {
         foreach ($userMessages as $message) {
             $action = $this->guidedAction($message->body);
+            if ($action === 'legal_upload_load') {
+                return 'add';
+            }
             if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free', 'legal'], true)) {
                 return $action;
             }

@@ -8,6 +8,8 @@
         "hs",
         "free",
         "legal",
+        "legal_upload_analyze",
+        "legal_upload_load",
         "upload_yes",
         "upload_no",
         "start_add_yes",
