@@ -701,6 +701,9 @@ Možete mi pisati na bilo kojem jeziku. Odgovorit ću isključivo na jeziku koji
     'postLoadModal.dimensionScope' => 'Dimenzije za',
     'postLoadModal.recalculateVolume' => 'Izračunaj iz dimenzija',
     'postLoadModal.supplierContact' => 'Kontakt dobavljača',
+    'lena.optionSearch' => 'Pretraži opcije…',
+    'lena.optionNoResults' => 'Nema odgovarajućih opcija',
+    'lena.optionMore' => 'Još :count - nastavite kucati da suzite izbor',
   ),
   'actions' => 
   array (

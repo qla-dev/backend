@@ -147,7 +147,10 @@ class LenaLoadDetailsContext
         $context['tracking_events'] = ($load->shipment?->events ?? collect())->map(fn ($event) => $this->fields($event, [
             'status', 'title', 'description', 'location', 'latitude', 'longitude', 'occurred_at',
         ]))->all();
-        $context['notes'] = $load->notes
+        // A load carries both a free-text `notes` column and a `notes()` relation of LoadNote rows,
+        // and the column shadows the relation on the model - so the note rows have to be taken from
+        // the loaded relation by name rather than read off the model as a property.
+        $context['notes'] = ($load->relationLoaded('notes') ? $load->getRelation('notes') : collect())
             ->filter(fn ($note) => ! $note->is_private || (int) $note->author_user_id === $viewerId)
             ->map(fn ($note) => [
                 ...$this->fields($note, ['id', 'note_type', 'priority', 'body', 'is_private', 'created_at', 'updated_at']),

@@ -74,6 +74,25 @@ class LenaLoadDetailsContextTest extends TestCase
         $this->assertStringNotContainsString('Someone else private', json_encode($result));
     }
 
+    public function test_note_rows_are_read_even_though_the_load_has_a_notes_column_of_its_own(): void
+    {
+        // loads.notes is the free-text note typed into the Post a load form, and it shadows the
+        // notes() relation of LoadNote rows on the model - reading the rows off the property gave
+        // "Call to a member function filter() on null" for every load whose column was empty.
+        foreach ([null, 'Call before pickup'] as $column) {
+            $load = $this->loadDetails();
+            $load->notes = $column;
+            $load->setRelation('notes', collect([
+                (new LoadNote(['body' => 'Public instructions', 'is_private' => false, 'author_user_id' => 8]))
+                    ->setRelation('author', new User(['name' => 'Dispatcher'])),
+            ]));
+
+            $result = (new LenaLoadDetailsContext)->snapshot($load, 7, true);
+
+            $this->assertSame('Public instructions', $result['notes'][0]['body']);
+        }
+    }
+
     public function test_marketplace_access_does_not_expose_operational_sections(): void
     {
         $result = (new LenaLoadDetailsContext)->snapshot($this->loadDetails(), 7, false);

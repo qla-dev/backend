@@ -964,7 +964,8 @@
             "form_fields": [
                 "consignee"
             ],
-            "dynamic": "customers"
+            "dynamic": "customers",
+            "searchable": true
         },
         "storageType": {
             "description": "the storage conditions the goods need",

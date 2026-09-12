@@ -701,6 +701,9 @@ You can write to me in any language. I will reply exclusively in the language yo
     'postLoadModal.dimensionScope' => 'Dimensions for',
     'postLoadModal.recalculateVolume' => 'Recalculate from dimensions',
     'postLoadModal.supplierContact' => 'Supplier contact',
+    'lena.optionSearch' => 'Search the options…',
+    'lena.optionNoResults' => 'No matching options',
+    'lena.optionMore' => ':count more - keep typing to narrow it down',
   ),
   'actions' => 
   array (
