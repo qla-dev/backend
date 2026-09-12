@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\LegalSourceCatalog;
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class LegalSourceController extends Controller
 {
-    public function show(string $source, LegalSourceCatalog $catalog): Response
+    public function show(string $source, LegalSourceCatalog $catalog): BinaryFileResponse
     {
         $entry = $catalog->find($source);
         abort_unless($entry, 404);
