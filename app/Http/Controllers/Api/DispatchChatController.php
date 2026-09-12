@@ -491,9 +491,16 @@ class DispatchChatController extends Controller
             $reply
         );
         $reply = trim((string) preg_replace('/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+)\]\]/u', '', $reply));
-        // A legal reply must always have a verifiable source card. The model normally selects the
-        // narrowest IDs; if it omits the machine marker, retain transparency with the full library.
-        if ($legalMode && filled($reply) && preg_match('/\[\[LEGAL_SOURCES:[a-z0-9,-]+\]\]/', $reply) !== 1) {
+        // An empty marker is the model stating that no catalogue document supports the answer, which
+        // it does when the question falls outside the library. Honour that by dropping the marker,
+        // instead of reading it as a missing one and pinning all fourteen laws to a "not covered"
+        // reply. A reply with no marker at all is a forgetful model, so there the full library still
+        // keeps the answer verifiable.
+        $declaredNoSources = $legalMode && preg_match('/\[\[LEGAL_SOURCES:\s*\]\]/', $reply) === 1;
+        if ($declaredNoSources) {
+            $reply = trim((string) preg_replace('/\[\[LEGAL_SOURCES:\s*\]\]/', '', $reply));
+        }
+        if ($legalMode && ! $declaredNoSources && filled($reply) && preg_match('/\[\[LEGAL_SOURCES:[a-z0-9,-]+\]\]/', $reply) !== 1) {
             $reply .= "\n[[LEGAL_SOURCES:".collect(app(LegalSourceCatalog::class)->sources())->pluck('id')->implode(',').']]';
         }
         if ($legalMode && $latestMessageHasFileAttachment && ! $guidedAction && ! str_contains($reply, '[[LENA_OPTIONS:')) {
