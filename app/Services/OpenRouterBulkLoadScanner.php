@@ -31,7 +31,9 @@ class OpenRouterBulkLoadScanner
 
         $content = [
             ['type' => 'text', 'text' => $userPrompt],
-            ...array_map(fn (array $file) => ($file['mimeType'] ?? '') === 'application/pdf'
+            ...array_map(fn (array $file) => ($file['mimeType'] ?? '') === 'text/plain'
+                ? ['type' => 'text', 'text' => ($file['filename'] ?? 'spreadsheet')."\n".base64_decode($file['base64'])]
+                : (($file['mimeType'] ?? '') === 'application/pdf'
                 ? [
                     'type' => 'file',
                     'file' => [
@@ -44,7 +46,7 @@ class OpenRouterBulkLoadScanner
                     'image_url' => [
                         'url' => 'data:'.($file['mimeType'] ?? 'image/jpeg').';base64,'.$file['base64'],
                     ],
-                ], $images),
+                ]), $images),
         ];
 
         return $this->run($this->documentSystemPrompt(), $content, 'images', 'bulk_scan');

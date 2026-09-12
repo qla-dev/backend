@@ -1,8 +1,11 @@
 <?php
 
 return array (
+  'legal_welcome' => 'Willkommen. Ich bin LenaAI, Ihr Disponent für Gesetzesfragen.',
+  'legal_upload_question' => 'Möchten Sie, dass ich das neue Dokument zu rechtlichen Fragen analysiere und die Informationen in die aktuelle Unterhaltung aufnehme, oder daraus eine neue Ladung erstelle?',
   'ui' => 
   array (
+    'Select up to 5 files at once.' => 'Wählen Sie bis zu 5 Dateien gleichzeitig aus.',
     'documents.tab' => 'Dokumente',
     'common.loading' => 'Wird geladen…',
     'documents.noneAttached' => 'Noch keine Dateien',
@@ -713,7 +716,7 @@ Sie können mir in jeder Sprache schreiben. Ich antworte ausschließlich in der 
     'booking' => 'Ladung reservieren',
     'hs' => 'HS-Code prüfen',
       'free' => 'Fragen zu Freightbook.ai',
-      'legal' => 'Rechtsberatung',
+      'legal' => 'KI-Disponent für Gesetzesfragen',
     'legal_upload_analyze' => 'Dokument für Rechtsfragen analysieren',
     'legal_upload_load' => 'Neue Ladung daraus erstellen',
     'upload_yes' => 'Ja',

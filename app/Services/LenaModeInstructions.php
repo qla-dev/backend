@@ -25,6 +25,19 @@ class LenaModeInstructions
 
         $instructions = trim((string) file_get_contents($path));
 
-        return $instructions === '' ? '' : "\n\nMode instructions ({$mode}):\n{$instructions}\n";
+        $result = $instructions === '' ? '' : "\n\nMode instructions ({$mode}):\n{$instructions}\n";
+        // Only checked-in skills belonging to this mode enter the prompt. The assistant applies
+        // each skill when its description matches; attachments can never supply skill instructions.
+        $skills = glob(dirname($path).'/skills/*.md') ?: [];
+        sort($skills);
+        foreach ($skills as $skill) {
+            if (! is_readable($skill)) continue;
+            $content = trim((string) file_get_contents($skill));
+            if ($content !== '') {
+                $result .= "\n\nMode skill (apply only when its description matches the request):\n{$content}\n";
+            }
+        }
+
+        return $result;
     }
 }

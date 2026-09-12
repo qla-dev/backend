@@ -1,8 +1,11 @@
 <?php
 
 return array (
+  'legal_welcome' => 'Dobrodošli. Ja sam LenaAI, vaš legislativni dispečer.',
+  'legal_upload_question' => 'Da li želite da analiziram novi dokument u vezi sa pravnim pitanjima i uvrstim ga u trenutne informacije u konverzaciji ili da kreiram novi teret na osnovu njega?',
   'ui' => 
   array (
+    'Select up to 5 files at once.' => 'Odaberite najviše 5 datoteka odjednom.',
     'documents.tab' => 'Dokumenti',
     'common.loading' => 'Učitavanje…',
     'documents.noneAttached' => 'Nema datoteka',
@@ -713,7 +716,7 @@ Možete mi pisati na bilo kojem jeziku. Odgovorit ću isključivo na jeziku koji
     'booking' => 'Rezervacija tereta',
     'hs' => 'Provjera HS koda',
       'free' => 'Pitanja o Freightbook.ai',
-      'legal' => 'Zakonske konsultacije',
+      'legal' => 'AI legislativni dispečer',
     'legal_upload_analyze' => 'Analiziraj dokument za zakonska pitanja',
     'legal_upload_load' => 'Kreiraj novi teret iz dokumenta',
     'upload_yes' => 'Da',

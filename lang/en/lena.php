@@ -1,8 +1,11 @@
 <?php
 
 return array (
+  'legal_welcome' => 'Welcome. I am LenaAI, your legislative dispatcher.',
+  'legal_upload_question' => 'Would you like me to analyse the new document for legal questions and incorporate it into the current conversation, or create a new load from it?',
   'ui' => 
   array (
+    'Select up to 5 files at once.' => 'Select up to 5 files at once.',
     'documents.tab' => 'Documents',
     'common.loading' => 'Loading…',
     'documents.noneAttached' => 'No files yet',
@@ -713,7 +716,7 @@ You can write to me in any language. I will reply exclusively in the language yo
     'booking' => 'Reserve a load',
     'hs' => 'Check HS code',
       'free' => 'Ask about Freightbook.ai',
-      'legal' => 'Legal consultations',
+      'legal' => 'AI Legislative Dispatcher',
     'legal_upload_analyze' => 'Analyse document for legal questions',
     'legal_upload_load' => 'Create a new load from it',
     'upload_yes' => 'Yes',

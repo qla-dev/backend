@@ -15,6 +15,7 @@ use App\Services\LenaGuidedAnswerResponder;
 use App\Services\LenaLoadQuestionnaire;
 use App\Services\LenaLoadDetailsContext;
 use App\Services\LenaModeInstructions;
+use App\Services\LenaIntent;
 use App\Services\LegalSourceCatalog;
 use App\Services\LoadDraftScanMapper;
 use App\Services\OpenRouterDispatchAssistant;
@@ -62,6 +63,7 @@ class DispatchChatController extends Controller
         $latestUserMessage = $latestUserMessageModel?->body;
         $guidedAction = $this->guidedAction($latestUserMessage);
         $activeGuidedMode = $this->activeGuidedMode($userMessages);
+        $explicitPaymentRequest = LenaIntent::isPaymentRequest($latestUserMessage);
         // A legal upload is deliberately not freight-document input. The user explicitly chooses
         // whether it should become a legal analysis or start a new load afterwards.
         $legalMode = $guidedAction !== 'legal_upload_load'
@@ -72,6 +74,7 @@ class DispatchChatController extends Controller
         // only from the narrow "new load"/"novi teret" phrasing asksToOpenLoadCanvas looks for.
         // This must keep working even while a different guided mode (tracking, hs, ...) is active.
         $detectedLoadCreationRequest = ! $legalMode
+            && LenaIntent::detect($latestUserMessage) !== 'free'
             && ! $load
             && ! $wasCanvasEnabled
             && ! $guidedAction
@@ -96,7 +99,7 @@ class DispatchChatController extends Controller
         $latestMessageHasFileAttachment = $latestUserMessageModel && collect($latestUserMessageModel->attachments ?? [])
             ->contains(fn ($attachment) => is_array($attachment)
                 && ($attachment['name'] ?? null) !== 'LenaAI conversation'
-                && is_array($attachment['loadScan'] ?? null));
+                && (is_array($attachment['loadScan'] ?? null) || is_array($attachment['bulkRows'] ?? null) || filled($attachment['documentText'] ?? null)));
         $priorLoadDraft = $this->latestLoadDraft($conversation->messages->reject(
             fn (Message $message) => $latestUserMessageModel && $message->is($latestUserMessageModel)
         ));
@@ -146,7 +149,7 @@ class DispatchChatController extends Controller
         $contextLoad = $load ?? $matchedGeneralLoad;
         $requestedLoadCanvas = in_array($guidedAction, ['add', 'storage', 'start_add_yes', 'legal_upload_load'], true) || $autoStartFromDocument;
         $canvasBlockedByExistingLoad = $requestedLoadCanvas && $load;
-        $canvasEnabled = $wasCanvasEnabled;
+        $canvasEnabled = $legalMode ? false : $wasCanvasEnabled;
         if ($canvasBlockedByExistingLoad || $guidedAction === 'continue_add_no') {
             $canvasEnabled = false;
         } elseif ($requestedLoadCanvas) {
@@ -298,15 +301,16 @@ class DispatchChatController extends Controller
             .$languageInstruction
             .'Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. Write plain text only. Do not use Markdown, asterisks, Markdown headings, or Markdown emphasis. If a list is necessary, use short numbered lines without Markdown symbols. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
             .$modeInstructions->for($instructionMode)
+            .' When the user requests calculations, start solving with available values immediately. Show the formula, substituted numbers, units and result. Ask only for missing inputs. Use facts from all previous messages and documents, retaining source filenames and distinguishing conflicting versions. Never invent unavailable values or rates.'
             .($legalMode ? ' You are in Legal consultations mode. Give practical, careful information about Bosnian customs, tariff, declaration, origin and trade rules using only the supplied legal-source catalogue below. Do not present yourself as a lawyer, do not invent article numbers, and say when the supplied material does not establish an answer. At the end of every substantive legal answer, select the relevant source IDs from the catalogue and put them on one separate line exactly as [[LEGAL_SOURCES:id,id]]. Catalogue: '.app(LegalSourceCatalog::class)->promptCatalog().'. ' : '')
-            .($legalMode && $latestMessageHasFileAttachment && ! $guidedAction
-                ? ' A document was just uploaded while Legal consultations mode is active. Do not create a load or activate the load-post canvas. Briefly confirm that the document is available, then ask the user to choose whether Lena should analyse it for legal questions or create a new load from it. End with exactly [[LENA_OPTIONS:legal_upload_analyze,legal_upload_load]].'
+            .($legalMode && $latestMessageHasFileAttachment && ! $guidedAction && ! $explicitPaymentRequest
+                ? ' A document was just uploaded while Legal consultations mode is active. Do not create a load or activate the load-post canvas. Briefly confirm that the new documents are available. Ask whether to analyse them and incorporate their information into the current conversation, or create a new load. Use this exact question in the interface language: '.trans('lena.legal_upload_question', [], $interfaceLang).' End with exactly [[LENA_OPTIONS:legal_upload_analyze,legal_upload_load]].'
                 : '')
             .($guidedAction === 'legal_upload_analyze'
-                ? ' The user chose to analyse their uploaded document for legal questions. Analyse its available attachment context under the legal-source rules. Do not create a load, do not activate the canvas, and do not ask a load-field question. Briefly state that the document analysis is ready and invite a specific legal question.'
+                ? ' The user chose to analyse their uploaded document for legal questions. Analyse its available attachment context under the legal-source rules. Do not create a load, do not activate the canvas, and do not ask a load-field question. Actually analyse all available documents together with the earlier conversation now. Compare calculations, line items, bases, rates and totals where available. Show useful findings and ask only for missing inputs. Do not merely claim the analysis is ready. Retain earlier facts; identify conflicting document versions instead of silently overwriting them.'
                 : '')
             .($guidedAction === 'legal'
-                ? ' The user just entered Legal consultations mode. Welcome them briefly, explain that they can ask about the supplied Bosnian customs and trade rules, and explicitly say that they can upload a document at any time for legal analysis. Do not mention load posting unless the user asks for it.'
+                ? ' The user just entered Legal consultations mode. Start with this exact welcome in the interface language: '.trans('lena.legal_welcome', [], $interfaceLang).'. Then explain that they can ask about the supplied Bosnian customs and trade rules, and explicitly say that they can upload a document at any time for legal analysis. Do not mention load posting unless the user asks for it.'
                 : '')
             .'Bosnian freight terminology is strict: translate the logistics noun "load" as "teret". Never call a load "opterećenje" in Bosnian. Use the correct grammatical form of "teret" for the sentence. '
             .($canvasEnabled
@@ -494,16 +498,12 @@ class DispatchChatController extends Controller
         // An empty marker is the model stating that no catalogue document supports the answer, which
         // it does when the question falls outside the library. Honour that by dropping the marker,
         // instead of reading it as a missing one and pinning all fourteen laws to a "not covered"
-        // reply. A reply with no marker at all is a forgetful model, so there the full library still
-        // keeps the answer verifiable.
+        // reply. Missing citations also do not authorize attaching unrelated catalogue entries.
         $declaredNoSources = $legalMode && preg_match('/\[\[LEGAL_SOURCES:\s*\]\]/', $reply) === 1;
         if ($declaredNoSources) {
             $reply = trim((string) preg_replace('/\[\[LEGAL_SOURCES:\s*\]\]/', '', $reply));
         }
-        if ($legalMode && ! $declaredNoSources && filled($reply) && preg_match('/\[\[LEGAL_SOURCES:[a-z0-9,-]+\]\]/', $reply) !== 1) {
-            $reply .= "\n[[LEGAL_SOURCES:".collect(app(LegalSourceCatalog::class)->sources())->pluck('id')->implode(',').']]';
-        }
-        if ($legalMode && $latestMessageHasFileAttachment && ! $guidedAction && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+        if ($legalMode && $latestMessageHasFileAttachment && ! $guidedAction && ! $explicitPaymentRequest && ! str_contains($reply, '[[LENA_OPTIONS:')) {
             $reply .= "\n[[LENA_OPTIONS:legal_upload_analyze,legal_upload_load]]";
         }
         if (in_array($guidedAction, ['add', 'storage', 'start_add_yes', 'legal_upload_load'], true) && ! $hasExistingLoadDraftData && ! str_contains($reply, '[[LENA_OPTIONS:')) {
@@ -951,6 +951,13 @@ class DispatchChatController extends Controller
             }
         }
 
+        foreach ($userMessages->reverse() as $message) {
+            $context = ($message->body ?? '').$this->attachmentContext($message);
+            if ($mode = LenaIntent::detect($context)) {
+                return $mode;
+            }
+        }
+
         return null;
     }
 
@@ -966,6 +973,7 @@ class DispatchChatController extends Controller
                 'type' => $attachment['type'] ?? null,
                 'loadScan' => $attachment['loadScan'] ?? null,
                 'bulkRows' => $attachment['bulkRows'] ?? null,
+                'documentText' => $attachment['documentText'] ?? null,
             ], fn ($value) => $value !== null && $value !== [] && $value !== '');
         })->filter()->values()->all();
 

@@ -14,7 +14,7 @@ class BulkLoadScanController extends Controller
         $validated = $request->validate([
             'images' => ['required', 'array', 'min:1', 'max:5'],
             'images.*.base64' => ['required', 'string'],
-            'images.*.mimeType' => ['sometimes', 'nullable', 'string', 'in:image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf'],
+            'images.*.mimeType' => ['sometimes', 'nullable', 'string', 'in:image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,text/plain'],
             'images.*.filename' => ['sometimes', 'nullable', 'string', 'max:255'],
         ], [
             'images.required' => 'Add at least one photo.',
