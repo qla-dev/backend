@@ -16,6 +16,18 @@ class LenaCatalog
         return trans('lena', [], in_array($locale, self::LOCALES, true) ? $locale : 'en');
     }
 
+    public function answerLabel(string $step, string $value, string $locale, string $transport = 'road'): string
+    {
+        $schema = $this->schema();
+        $definition = $schema['steps'][$step] ?? null;
+        if (! $definition) return $value;
+        $definition['group'] = $definition['groups_by_transport'][$transport] ?? $definition['group'];
+        $choices = collect($this->choices($step, $definition, $schema, $this->text($locale)))->keyBy('value');
+        $values = $definition['multiple'] ? array_map('trim', explode(',', $value)) : [$value];
+
+        return implode(', ', array_map(fn ($entry) => $choices->get($entry)['label'] ?? $entry, $values));
+    }
+
     public function payload(): array
     {
         $schema = $this->schema();

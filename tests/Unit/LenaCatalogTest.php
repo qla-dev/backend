@@ -32,4 +32,22 @@ class LenaCatalogTest extends TestCase
         $this->assertSame('title', $step['key']);
         $this->assertSame(app(LenaCatalog::class)->schema()['steps']['title']['description'], $step['description']);
     }
+
+    public function test_public_catalog_is_localized_and_does_not_require_a_conversation(): void
+    {
+        $response = $this->getJson('/api/lena/catalog')->assertOk();
+        $this->assertSame(app(LenaCatalog::class)->payload()['revision'], $response->json('data.revision'));
+        $this->assertSame('Weight', $response->json('data.locales.en.form_fields.weightKg.label'));
+        $this->assertSame('kg', $response->json('data.locales.bs.steps.weight.unit'));
+        $road = $response->json('data.locales.en.steps.loadingEquipment.choices_by_transport.road');
+        $air = $response->json('data.locales.en.steps.loadingEquipment.choices_by_transport.air');
+        $this->assertContains('Vehicle with ramp', array_column($road, 'value'));
+        $this->assertContains('Cargo Lift / High Loader Required', array_column($air, 'value'));
+        foreach (['en', 'bs', 'de'] as $locale) {
+            $text = $response->json('data.locales.'.$locale);
+            foreach ($text['ui'] as $key => $value) {
+                $this->assertNotSame('', $value, "Empty $locale translation: $key");
+            }
+        }
+    }
 }

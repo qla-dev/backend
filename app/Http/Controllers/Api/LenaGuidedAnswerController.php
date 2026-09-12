@@ -134,7 +134,7 @@ class LenaGuidedAnswerController extends Controller
         // confirmation sentence should reflect that same resolved value, not the literal pill label.
         $confirmedValue = $validated['step'] === 'contact' && $validated['value'] === 'Current user'
             ? ($draft['contactName'] ?? $validated['display_text'])
-            : $validated['display_text'];
+            : app(\App\Services\LenaCatalog::class)->answerLabel($validated['step'], (string) $validated['value'], $lang, $draft['transportType'] ?? 'road');
         $replyText = $responder->respond($validated['step'], $lang, $skip ? null : $confirmedValue, $nextStep);
 
         $assistantMessage = Message::query()->create([
