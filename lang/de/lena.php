@@ -725,9 +725,16 @@ Sie können mir in jeder Sprache schreiben. Ich antworte ausschließlich in der 
     'general' => 'Hallo, ich bin LenaAI, Ihre KI-Disponentin in Freightbook.ai.
 
 Sie können mir in jeder Sprache schreiben. Ich antworte ausschließlich in der Sprache, die Sie verwenden. Wobei kann ich Ihnen heute helfen?',
-    'load' => 'Frag mich zu dieser Ladung. Ich unterstütze Fahrer und Disponenten bei Abholung und Lieferung, Fracht, Terminen, Dokumenten und den nächsten Schritten.
+    'load' => 'Hallo, ich bin LenaAI, Ihre KI-Disponentin für diese Ladung.
 
-Bei jeder Antwort prüfe ich die neuesten verfügbaren Ladungsdaten. Frag mich nach dem aktuellen Status oder bitte mich, eine Mitteilung zu formulieren.',
+Fragen Sie mich zu dieser Ladung. Ich unterstütze Fahrer und Disponenten bei Abholung und Lieferung, Fracht, Terminen, Dokumenten und den nächsten Schritten.
+
+Bei jeder Antwort prüfe ich die neuesten verfügbaren Ladungsdaten.',
+    'load_named' => 'Hallo, ich bin LenaAI, Ihre KI-Disponentin für die Ladung :load.
+
+Fragen Sie mich zu dieser Ladung. Ich unterstütze Fahrer und Disponenten bei Abholung und Lieferung, Fracht, Terminen, Dokumenten und den nächsten Schritten.
+
+Bei jeder Antwort prüfe ich die neuesten verfügbaren Ladungsdaten.',
   ),
   'prefixes' => 
   array (

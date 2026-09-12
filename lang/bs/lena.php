@@ -725,9 +725,16 @@ Možete mi pisati na bilo kojem jeziku. Odgovorit ću isključivo na jeziku koji
     'general' => 'Zdravo, ja sam LenaAI, vaš AI dispečer u aplikaciji Freightbook.ai.
 
 Možete mi pisati na bilo kojem jeziku. Odgovorit ću isključivo na jeziku kojim mi se obratite. U čemu vam treba pomoć danas?',
-    'load' => 'Pitaj me o ovom teretu. Pomažem vozačima i dispečerima s utovarom i istovarom, robom, terminima, dokumentima i narednim koracima.
+    'load' => 'Zdravo, ja sam LenaAI, vaš AI dispečer za ovaj teret.
 
-Pri svakom odgovoru provjeravam najnovije dostupne podatke o teretu. Pitaj me za trenutni status ili pomoć pri sastavljanju obavijesti.',
+Pitajte me o ovom teretu. Pomažem vozačima i dispečerima s utovarom i istovarom, robom, terminima, dokumentima i narednim koracima.
+
+Pri svakom odgovoru provjeravam najnovije dostupne podatke o teretu.',
+    'load_named' => 'Zdravo, ja sam LenaAI, vaš AI dispečer za teret :load.
+
+Pitajte me o ovom teretu. Pomažem vozačima i dispečerima s utovarom i istovarom, robom, terminima, dokumentima i narednim koracima.
+
+Pri svakom odgovoru provjeravam najnovije dostupne podatke o teretu.',
   ),
   'prefixes' => 
   array (

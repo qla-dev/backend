@@ -725,9 +725,16 @@ You can write to me in any language. I will reply exclusively in the language yo
     'general' => 'Hello, I am LenaAI, your AI dispatcher in Freightbook.ai.
 
 You can write to me in any language. I will reply exclusively in the language you use. How can I help you today?',
-    'load' => 'Ask me about this load. I help drivers and dispatchers with pickup and delivery, cargo, timing, documents, and next steps.
+    'load' => 'Hello, I am LenaAI, your AI dispatcher for this load.
 
-I check the latest available load data with every reply. Ask me for its current status or help preparing an update.',
+Ask me about this load. I help drivers and dispatchers with pickup and delivery, cargo, timing, documents, and next steps.
+
+I check the latest available load data with every reply.',
+    'load_named' => 'Hello, I am LenaAI, your AI dispatcher for load :load.
+
+Ask me about this load. I help drivers and dispatchers with pickup and delivery, cargo, timing, documents, and next steps.
+
+I check the latest available load data with every reply.',
   ),
   'prefixes' => 
   array (
