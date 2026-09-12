@@ -15,7 +15,11 @@ class LenaCatalogTest extends TestCase
         $this->assertSame(['en', 'de', 'bs'], array_keys($catalog['locales']));
         foreach ($catalog['locales'] as $lang => $text) {
             $this->assertStringContainsString('[[LENA_OPTIONS:', $text['welcome']['general']);
+            // A load chat greets the way the general one does, and names the load when the client
+            // knows its reference.
             $this->assertNotEmpty($text['welcome']['load']);
+            $this->assertStringContainsString(':load', $text['welcome']['load_named']);
+            $this->assertStringNotContainsString(':load', $text['welcome']['load']);
             foreach ($catalog['steps'] as $key => $step) {
                 $this->assertNotEmpty($text['steps'][$key]['label']);
                 $this->assertSame(app(LenaGuidedAnswerResponder::class)->askStep($key, $step['options'], $lang), $text['steps'][$key]['question']);
