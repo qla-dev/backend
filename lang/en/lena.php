@@ -5,6 +5,10 @@ return array (
   'legal_upload_question' => 'Would you like me to analyse the new document for legal questions and incorporate it into the current conversation, or create a new load from it?',
   'ui' => 
   array (
+    'lena.thinkingPhrase' => 'is thinking',
+    'lena.analyzingPhrase' => 'is analysing',
+    'lena.reviewingPhrase' => 'is reviewing information',
+    'lena.patiencePhrase' => 'asks for your patience',
     'Select up to 5 files at once.' => 'Select up to 5 files at once.',
     'documents.tab' => 'Documents',
     'common.loading' => 'Loading…',

@@ -5,6 +5,10 @@ return array (
   'legal_upload_question' => 'Da li želite da analiziram novi dokument u vezi sa pravnim pitanjima i uvrstim ga u trenutne informacije u konverzaciji ili da kreiram novi teret na osnovu njega?',
   'ui' => 
   array (
+    'lena.thinkingPhrase' => 'razmišlja',
+    'lena.analyzingPhrase' => 'analizira',
+    'lena.reviewingPhrase' => 'pregleda informacije',
+    'lena.patiencePhrase' => 'vas moli za strpljenje',
     'Select up to 5 files at once.' => 'Odaberite najviše 5 datoteka odjednom.',
     'documents.tab' => 'Dokumenti',
     'common.loading' => 'Učitavanje…',

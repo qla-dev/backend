@@ -5,6 +5,10 @@ return array (
   'legal_upload_question' => 'Möchten Sie, dass ich das neue Dokument zu rechtlichen Fragen analysiere und die Informationen in die aktuelle Unterhaltung aufnehme, oder daraus eine neue Ladung erstelle?',
   'ui' => 
   array (
+    'lena.thinkingPhrase' => 'denkt nach',
+    'lena.analyzingPhrase' => 'analysiert',
+    'lena.reviewingPhrase' => 'prüft Informationen',
+    'lena.patiencePhrase' => 'bittet um Geduld',
     'Select up to 5 files at once.' => 'Wählen Sie bis zu 5 Dateien gleichzeitig aus.',
     'documents.tab' => 'Dokumente',
     'common.loading' => 'Wird geladen…',
