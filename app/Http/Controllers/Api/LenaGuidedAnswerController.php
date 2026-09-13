@@ -77,6 +77,7 @@ class LenaGuidedAnswerController extends Controller
     public function store(Request $request, LenaLoadQuestionnaire $questionnaire, LenaGuidedAnswerResponder $responder, AiCallLogger $logger): JsonResponse
     {
         $validated = $request->validate([
+            'input_mode' => ['nullable', 'in:text,voice'],
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
             // Every LenaLoadQuestionnaire::STEPS key is accepted here, even the plain free-text
             // ones with no value-setting logic below (title, goodsType, pickup, delivery, notes,

@@ -36,6 +36,7 @@ class DispatchChatController extends Controller
     public function store(Request $request, OpenRouterDispatchAssistant $assistant, LenaLoadQuestionnaire $questionnaire, HsCodeSearchService $hsCodeSearch, OpenRouterLoadScanner $loadScanner, LenaGuidedAnswerResponder $stepLabels, LenaModeInstructions $modeInstructions): JsonResponse
     {
         $validated = $request->validate([
+            'input_mode' => ['nullable', 'in:text,voice'],
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
             'lang' => ['nullable', 'string', 'in:bs,hr,sr,de,en'],
         ]);

@@ -1,5 +1,7 @@
 # Lena speech playback
 
+User allowance: a successful reply submitted with `input_mode: voice` costs **two LenaAI messages total**, including its text and audio. The dispatch/guided reply applies this charge once; speech generation, chunks, and replay do not add allowance charges. Typed dispatch replies cost one and scripted button answers remain free. Provider USD costs remain the actual provider amounts, without the user allowance multiplier. The Usage page shows a Voice messages card after LenaAI Messages, counting successful voice-submitted replies from this change onward; older speech logs lack the input mode needed to identify spoken turns reliably.
+
 Signed-in web chat requests `POST /api/dispatch-chat/speech` with `text` (at most 2,000 characters), `lang` (`en`, `de`, `bs`, `hr`, `sr`), and the saved `conversation_id`. The route uses Sanctum, conversation participation checks, and a 30-request-per-minute throttle. It records one `speech` AI call for each generation, replay, or chunk, but does not save audio.
 
 The backend uses the existing `OPENROUTER_API_KEY`, Gemini `google/gemini-3.1-flash-tts-preview`, and the female **Kore** voice. The provider detects the language from the supplied text. Bosnian uses the same voice as Croatian and Serbian. Gemini returns 24 kHz mono 16-bit PCM; the backend adds a WAV header and returns private, non-cacheable audio. Provider usage is billed to the existing OpenRouter account. The model is a preview model.
