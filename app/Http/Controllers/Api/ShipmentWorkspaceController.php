@@ -49,7 +49,7 @@ class ShipmentWorkspaceController extends Controller
             'operational_checklist.*.required_for_status' => ['sometimes', 'required', Rule::in(['in_delivery', 'received', 'review', 'finished'])],
             'operational_checklist.*.status' => ['required_with:operational_checklist', 'in:pending,in_progress,completed,blocked'],
             'operational_checklist.*.due_date' => ['nullable', 'date'],
-            'operational_checklist.*.action_value' => ['nullable', 'string', 'max:2000'],
+            'operational_checklist.*.action_value' => ['nullable', 'string', 'max:8000'],
             'operational_checklist.*.completed_at' => ['nullable', 'date'],
             'operational_checklist.*.completed_by_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'cancellation_reason' => ['nullable', 'string', 'max:2000', 'required_if:status,cancelled'],

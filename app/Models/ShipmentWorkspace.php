@@ -37,7 +37,12 @@ class ShipmentWorkspace extends BaseModel
             $items = array_values(array_filter($items, fn ($item) => !in_array(
                 $item['key'] ?? '', ['vgm', 'terminal_and_cutoff'], true
             )));
-            $order = array_flip(['booking_confirmation', 'shipping_line_and_agent', 'container_details', 'vessel_and_voyage', 'shipping_instructions', 'draft_bill_of_lading', 'approve_draft', 'final_bill_of_lading']);
+            // The carrier's approval of the instructions was added later; existing sea
+            // workspaces pick it up on read, in its place in the sequence below.
+            if (!collect($items)->contains('key', 'approve_shipping_instructions')) {
+                $items[] = ['key' => 'approve_shipping_instructions', 'status' => 'pending', 'action_value' => null, 'completed_at' => null, 'completed_by_user_id' => null];
+            }
+            $order = array_flip(['booking_confirmation', 'shipping_line_and_agent', 'container_details', 'vessel_and_voyage', 'shipping_instructions', 'approve_shipping_instructions', 'draft_bill_of_lading', 'approve_draft', 'final_bill_of_lading']);
             usort($items, fn ($a, $b) => ($order[$a['key'] ?? ''] ?? PHP_INT_MAX) <=> ($order[$b['key'] ?? ''] ?? PHP_INT_MAX));
         }
 
