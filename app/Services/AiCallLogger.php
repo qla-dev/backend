@@ -37,7 +37,8 @@ class AiCallLogger
     // row - e.g. superadmin/master, who have unlimited access instead of a plan.
     private function decrementSubscriptionMessage(?int $userId, array $attributes): void
     {
-        if (! $userId || ($attributes['is_success'] ?? true) !== true || ($attributes['service'] ?? null) === 'guided_answer') {
+        // Audio is part of the same reply; replays/chunks must not charge another plan message.
+        if (! $userId || ($attributes['is_success'] ?? true) !== true || in_array($attributes['service'] ?? null, ['guided_answer', 'speech'], true)) {
             return;
         }
 
