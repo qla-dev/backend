@@ -48,6 +48,8 @@ class VehicleReturnInspectionController extends Controller
             'has_damage' => ['required', 'boolean'],
             'damage_notes' => ['nullable', 'required_if:has_damage,1,true', 'string', 'max:5000'],
             'parking_location' => ['nullable', 'string', 'max:255'],
+            'parking_latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:parking_longitude'],
+            'parking_longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:parking_latitude'],
             'photos' => ['required', 'array', 'min:3', 'max:10'],
             'photos.*' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/heic,image/heif', 'max:12288'],
         ], [
@@ -78,6 +80,8 @@ class VehicleReturnInspectionController extends Controller
                     'has_damage' => $data['has_damage'],
                     'damage_notes' => trim((string) ($data['damage_notes'] ?? '')) ?: null,
                     'parking_location' => trim((string) ($data['parking_location'] ?? '')) ?: null,
+                    'parking_latitude' => $data['parking_latitude'] ?? null,
+                    'parking_longitude' => $data['parking_longitude'] ?? null,
                     'inspected_at' => now(),
                 ]);
 

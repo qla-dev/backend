@@ -13,6 +13,8 @@ class VehicleReturnInspection extends BaseModel
             'mileage_km' => 'integer',
             'fuel_level_percent' => 'integer',
             'has_damage' => 'boolean',
+            'parking_latitude' => 'float',
+            'parking_longitude' => 'float',
             'inspected_at' => 'datetime',
         ];
     }
