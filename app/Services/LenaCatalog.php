@@ -12,7 +12,9 @@ class LenaCatalog
 
     public function schema(): array
     {
-        return json_decode(file_get_contents(resource_path('lena/schema.json')), true, flags: JSON_THROW_ON_ERROR);
+        return (new ContainerTypeCatalog)->applyToSchema(
+            json_decode(file_get_contents(resource_path('lena/schema.json')), true, flags: JSON_THROW_ON_ERROR),
+        );
     }
 
     public function text(string $locale): array

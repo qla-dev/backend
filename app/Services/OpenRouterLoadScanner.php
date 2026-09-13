@@ -159,6 +159,10 @@ class OpenRouterLoadScanner
     // silently wipe out earlier turns' answers.
     private function mergeWithCurrent(array $result, array $current): array
     {
+        // Container choices are changed only by the user's picker/copy action, not by extraction.
+        if (array_key_exists('containerSelections', $current)) {
+            $result['containerSelections'] = $current['containerSelections'];
+        }
         // These describe THIS scan, not accumulated draft data, so they must always reflect
         // what was actually just read - never backfilled from an earlier, unrelated scan.
         $ownFields = ['isDocument', 'documentType', 'documentText', 'confidence', 'warnings'];
@@ -449,6 +453,8 @@ class OpenRouterLoadScanner
             'widthM' => $this->numericValue($result['widthM'] ?? 0),
             'heightM' => $this->numericValue($result['heightM'] ?? 0),
             'volumeM3' => $this->numericValue($result['volumeM3'] ?? 0),
+            'quantityMeasure' => $this->stringValue($result['quantityMeasure'] ?? ''),
+            'dimensionScope' => in_array($result['dimensionScope'] ?? '', ['overall', 'per_unit'], true) ? $result['dimensionScope'] : '',
             'vehicleType' => $this->stringValue($result['vehicleType'] ?? ''),
             'loadingEquipment' => $loadingEquipment,
             'characteristics' => $this->stringValue($result['characteristics'] ?? ''),
@@ -671,7 +677,7 @@ class OpenRouterLoadScanner
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['documentText', 'isDocument', 'documentType', 'sender', 'receiver', 'customerCandidates', 'consigneeName', 'consigneeTaxNumber', 'consigneeCity', 'consigneeCountryCode', 'title', 'transportType', 'cargoType', 'goodsType', 'hsSearchTerms', 'hsCodes', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupLatitude', 'pickupLongitude', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryLatitude', 'deliveryLongitude', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
+            'required' => ['quantityMeasure', 'dimensionScope', 'documentText', 'isDocument', 'documentType', 'sender', 'receiver', 'customerCandidates', 'consigneeName', 'consigneeTaxNumber', 'consigneeCity', 'consigneeCountryCode', 'title', 'transportType', 'cargoType', 'goodsType', 'hsSearchTerms', 'hsCodes', 'weightKg', 'pallets', 'bodyType', 'lengthM', 'widthM', 'heightM', 'volumeM3', 'vehicleType', 'loadingEquipment', 'characteristics', 'specialRequirements', 'transportMode', 'deliveryProof', 'requiresTracking', 'pickupCity', 'pickupCountryCode', 'pickupAddress', 'pickupLatitude', 'pickupLongitude', 'pickupDate', 'pickupDateTo', 'pickupTimeFrom', 'pickupTimeTo', 'deliveryCity', 'deliveryCountryCode', 'deliveryAddress', 'deliveryLatitude', 'deliveryLongitude', 'deliveryDate', 'deliveryDateTo', 'deliveryTimeFrom', 'deliveryTimeTo', 'currency', 'budget', 'priceTerms', 'declaredValue', 'declaredValueCurrency', 'incoterm', 'paymentDueDays', 'temperatureMin', 'temperatureMax', 'requiresAdr', 'requiresTailLift', 'tollRoadsIncluded', 'ferryIncluded', 'cmrRequired', 'palletExchangeRequired', 'customsRequired', 'insuranceRequired', 'certificationRequired', 'inspectionServicesRequired', 'isUrgent', 'contactName', 'contactPhone', 'contactMobile', 'contactFax', 'contactEmail', 'bookingReference', 'notes', 'customFields', 'confidence', 'warnings'],
             'properties' => [
                 'isDocument' => ['type' => 'boolean', 'description' => 'True only when the image shows a freight/shipping document.'],
                 'documentType' => ['type' => 'string', 'description' => 'Which kind of paperwork the file is, as one of the listed codes, or an empty string when unclear.'],
@@ -724,7 +730,9 @@ class OpenRouterLoadScanner
                 'lengthM' => ['type' => 'number'],
                 'widthM' => ['type' => 'number'],
                 'heightM' => ['type' => 'number'],
-                'volumeM3' => ['type' => 'number'],
+                'volumeM3' => ['type' => 'number', 'description' => 'Total shipment volume in CBM, never per-piece CBM. Convert stated per-piece volume using its explicit piece count. Zero if total cannot be established.'],
+                'quantityMeasure' => ['type' => 'string', 'description' => 'Packaging method explicitly stated (e.g. PX for pallets, CT for cartons). Pieces alone do not mean pallets. Empty if unknown.'],
+                'dimensionScope' => ['type' => 'string', 'enum' => ['overall', 'per_unit', ''], 'description' => 'per_unit only when length/width/height explicitly describe each identical piece and pallets is their total count. Mixed-size packing lists must not be reduced to one per-unit size. overall for whole-shipment dimensions; empty if unspecified.'],
                 'vehicleType' => ['type' => 'string'],
                 'loadingEquipment' => ['type' => 'string', 'enum' => [...self::LOADING_EQUIPMENT_TYPES, ''], 'description' => 'Loading/unloading equipment, or empty string if not stated.'],
                 'characteristics' => ['type' => 'string', 'description' => 'Road/air handling characteristics such as ADR, CMR, GDP, TIR, Lift, Express, Non-DG, DG, TCG, MED, VAL.'],

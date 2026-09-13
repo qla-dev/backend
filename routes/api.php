@@ -166,6 +166,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('lena-guided-answer', [LenaGuidedAnswerController::class, 'store'])->middleware('throttle:30,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
     Route::post('load-scans/text', [LoadScanController::class, 'scanText'])->middleware('throttle:10,1');
+    Route::post('container-recommendations', \App\Http\Controllers\Api\ContainerRecommendationController::class)->middleware('throttle:60,1');
     Route::post('message-attachments', [MessageAttachmentController::class, 'store'])->middleware('throttle:20,1');
     Route::get('message-attachments/{conversation}/{filename}', [MessageAttachmentController::class, 'show'])
         ->where('filename', '[a-f0-9\-]+\.[a-zA-Z0-9]+');

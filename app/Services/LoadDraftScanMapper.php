@@ -36,7 +36,11 @@ class LoadDraftScanMapper
             'lengthM' => (float) ($draft->length_m ?? 0),
             'widthM' => (float) ($draft->width_m ?? 0),
             'heightM' => (float) ($draft->height_m ?? 0),
-            'volumeM3' => (float) ($draft->volume_m3 ?? 0),
+            // The form's per_unit CBM becomes total CBM in the extraction/planning contract.
+            'volumeM3' => (float) ($draft->volume_m3 ?? 0) * ($draft->dimension_scope === 'per_unit' ? (int) ($draft->pallets ?? 0) : 1),
+            'dimensionScope' => (string) ($draft->dimension_scope ?? 'overall'),
+            'quantityMeasure' => (string) ($draft->quantity_measure ?? ''),
+            'containerSelections' => $draft->container_selections ?? [],
             'vehicleType' => (string) ($draft->vehicle_type ?? ''),
             'loadingEquipment' => (string) (($draft->loading_methods ?? [])[0] ?? ''),
             'characteristics' => (string) (($draft->characteristics ?? [])[0] ?? ''),

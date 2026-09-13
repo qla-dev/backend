@@ -1,0 +1,362 @@
+{
+    "version": "1.1",
+    "about": "Container registry used by the form and Lena. Specifications are sourced carrier examples, not universal or booking limits. Dimensions are in metres, weights in kilograms and volumes in CBM. Null means not applicable or not published. Translated labels stay in lang/en, lang/de and lang/bs/lena.php. Alias entries reuse the canonical specifications and must not create duplicate recommendations.",
+    "planning": {
+        "version": "1.0",
+        "about": "Operational planning assumptions, distinct from carrier maximum payload and nominal volume. Dry usable volumes reserve packing space; 25000 kg is a planning payload. Special equipment has researched reference data but requires a dedicated loading model and carrier approval before automatic recommendations.",
+        "weights": {
+            "volumeFit": 20,
+            "weightFit": 20,
+            "dimensionFit": 15,
+            "palletFit": 10,
+            "cargoCompatibility": 15,
+            "routeAvailability": 5,
+            "carrierAvailability": 5,
+            "costEfficiency": 10
+        }
+    },
+    "types": {
+        "20GP": {
+            "category": "Standard",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/en/services-information/cargo-fleet/container/20-standard.html",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 5.9,
+                "widthM": 2.352,
+                "heightM": 2.395,
+                "doorWidthM": 2.34,
+                "doorHeightM": 2.292,
+                "maxGrossKg": 30480,
+                "tareKg": 2350,
+                "maxPayloadKg": 28130,
+                "nominalVolumeM3": 33.2,
+                "isoSizeType": "22G1",
+                "notes": []
+            },
+            "planning": {
+                "usableVolumeM3": 28,
+                "payloadKg": 25000
+            }
+        },
+        "20STD": {
+            "category": "Standard",
+            "icon": "Container",
+            "aliasOf": "20GP",
+            "notes": [
+                "Existing application synonym for a standard 20-foot dry container; reuse 20GP specifications."
+            ]
+        },
+        "40HC": {
+            "category": "Standard",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/en/services-information/cargo-fleet/container/40-standard-high-cube.html",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 12.032,
+                "widthM": 2.35,
+                "heightM": 2.7,
+                "doorWidthM": 2.34,
+                "doorHeightM": 2.597,
+                "maxGrossKg": 32500,
+                "tareKg": 3900,
+                "maxPayloadKg": 28600,
+                "nominalVolumeM3": 76.3,
+                "isoSizeType": "45G1",
+                "notes": []
+            },
+            "planning": {
+                "usableVolumeM3": 70,
+                "payloadKg": 25000
+            }
+        },
+        "40STD": {
+            "category": "Standard",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/en/services-information/cargo-fleet/container/40-standard.html",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 12.032,
+                "widthM": 2.352,
+                "heightM": 2.395,
+                "doorWidthM": 2.34,
+                "doorHeightM": 2.292,
+                "maxGrossKg": 32500,
+                "tareKg": 3750,
+                "maxPayloadKg": 28750,
+                "nominalVolumeM3": 67.7,
+                "isoSizeType": "42G1",
+                "notes": []
+            },
+            "planning": {
+                "usableVolumeM3": 60,
+                "payloadKg": 25000
+            }
+        },
+        "20OT": {
+            "category": "Open Top",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/en/services-information/cargo-fleet/container/20-open-top.html",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 5.895,
+                "widthM": 2.35,
+                "heightM": 2.34,
+                "doorWidthM": 2.338,
+                "doorHeightM": 2.28,
+                "maxGrossKg": 32500,
+                "tareKg": 2450,
+                "maxPayloadKg": 30050,
+                "nominalVolumeM3": 32.5,
+                "roofOpeningLengthM": 5.338,
+                "roofOpeningWidthM": 2.23,
+                "isoSizeType": "22U1",
+                "notes": [
+                    "Top-loading access; oversize clearance and securing require carrier approval."
+                ]
+            }
+        },
+        "40OT": {
+            "category": "Open Top",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/en/services-information/cargo-fleet/container/40-open-top.html",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 12.029,
+                "widthM": 2.35,
+                "heightM": 2.344,
+                "doorWidthM": 2.34,
+                "doorHeightM": 2.276,
+                "maxGrossKg": 32500,
+                "tareKg": 4050,
+                "maxPayloadKg": 28450,
+                "nominalVolumeM3": 66.8,
+                "roofOpeningLengthM": 11.552,
+                "roofOpeningWidthM": 2.23,
+                "heightWithoutRoofBarsM": 2.42,
+                "isoSizeType": "42U1",
+                "notes": [
+                    "Uses the published dimension table; the illustration gives a different height. Confirm the actual unit."
+                ]
+            }
+        },
+        "40OTHC": {
+            "category": "Open Top",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/en/services-information/cargo-fleet/container/40-open-top-high-cube.html",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 12.029,
+                "widthM": 2.352,
+                "heightM": 2.649,
+                "doorWidthM": 2.352,
+                "doorHeightM": 2.57,
+                "maxGrossKg": 32500,
+                "tareKg": 4250,
+                "maxPayloadKg": 28250,
+                "nominalVolumeM3": 74.9,
+                "roofOpeningLengthM": 11.552,
+                "roofOpeningWidthM": 2.192,
+                "heightWithoutRoofBarsM": 2.72,
+                "isoSizeType": "45U1",
+                "notes": [
+                    "Uses the published dimension table; illustration heights differ. Confirm the actual unit."
+                ]
+            }
+        },
+        "20RF": {
+            "category": "Reefer",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.cmacgm-group.com/fr/activites/vos-marchandises/marchandises-refrigerees/specifications-techniques",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 5.456,
+                "widthM": 2.294,
+                "heightM": 2.273,
+                "doorWidthM": 2.29,
+                "doorHeightM": 2.264,
+                "maxGrossKg": 30480,
+                "tareKg": 3010,
+                "maxPayloadKg": 27470,
+                "nominalVolumeM3": 28.6,
+                "usableUnderLoadLineM3": 27.3,
+                "maxStowageHeightM": 2.158,
+                "notes": [
+                    "Reefer load-line volume reserves ventilation space; temperature, power and commodity suitability require confirmation."
+                ]
+            }
+        },
+        "40RH": {
+            "category": "Reefer",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.cmacgm-group.com/fr/activites/vos-marchandises/marchandises-refrigerees/specifications-techniques",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 11.584,
+                "widthM": 2.294,
+                "heightM": 2.557,
+                "doorWidthM": 2.29,
+                "doorHeightM": 2.569,
+                "maxGrossKg": 34000,
+                "tareKg": 4740,
+                "maxPayloadKg": 29260,
+                "nominalVolumeM3": 68,
+                "usableUnderLoadLineM3": 65.3,
+                "maxStowageHeightM": 2.394,
+                "notes": [
+                    "Reefer load-line volume reserves ventilation space; temperature, power and commodity suitability require confirmation."
+                ]
+            }
+        },
+        "45RH": {
+            "category": "Reefer",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.cma-cgm.com/assets/public/documents/Container%20Technical%20Brochures.pdf#page=5",
+                "additionalSources": [
+                    "https://www.cmacgm-group.com/fr/activites/vos-marchandises/marchandises-refrigerees/specifications-techniques"
+                ],
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example_with_source_discrepancy",
+                "lengthM": 13.28,
+                "widthM": 2.44,
+                "heightM": 2.582,
+                "doorWidthM": 2.44,
+                "doorHeightM": 2.567,
+                "maxGrossKg": 34000,
+                "tareKg": 6180,
+                "maxPayloadKg": 27820,
+                "nominalVolumeM3": 83.7,
+                "usableUnderLoadLineM3": 80.42,
+                "maxStowageHeightM": 2.482,
+                "notes": [
+                    "Pallet-wide reefer example. Volumes follow the technical brochure; the HTML page reverses nominal and usable figures. Confirm with the carrier before planning."
+                ]
+            }
+        },
+        "20FR": {
+            "category": "Flat Rack",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/en/services-information/cargo-fleet/container/20-flatrack.html",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 5.638,
+                "widthM": 2.194,
+                "heightM": 2.233,
+                "doorWidthM": null,
+                "doorHeightM": null,
+                "maxGrossKg": 45000,
+                "tareKg": 2900,
+                "maxPayloadKg": 42100,
+                "nominalVolumeM3": null,
+                "floorWidthM": 2.438,
+                "bottomHeightM": 0.37,
+                "isoSizeType": "22P3",
+                "notes": [
+                    "Length and width are minimum clearances between posts; floor width is separate. Payload depends on load distribution."
+                ]
+            }
+        },
+        "40FR": {
+            "category": "Flat Rack",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.cma-cgm.com/assets/public/documents/Container%20Technical%20Brochures.pdf#page=6",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 11.652,
+                "widthM": 2.227,
+                "heightM": 1.959,
+                "doorWidthM": null,
+                "doorHeightM": null,
+                "maxGrossKg": 45000,
+                "tareKg": 4900,
+                "maxPayloadKg": 40100,
+                "lengthBetweenEndHeadersM": 12.054,
+                "floorWidthM": 2.374,
+                "nominalVolumeM3": null,
+                "isoSizeType": "42P3",
+                "notes": [
+                    "Standard-height collapsible flat rack. Uses the 45000 kg gross / 4900 kg tare variant; brochure also lists a heavier-duty variant."
+                ]
+            }
+        },
+        "40FRHC": {
+            "category": "Flat Rack",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/en/services-information/cargo-fleet/container/40-flatrack-high-cube.html",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 11.652,
+                "widthM": 2.245,
+                "heightM": 2.265,
+                "doorWidthM": null,
+                "doorHeightM": null,
+                "maxGrossKg": 55000,
+                "tareKg": 5900,
+                "maxPayloadKg": 49100,
+                "nominalVolumeM3": null,
+                "floorWidthM": 2.347,
+                "bottomHeightM": 0.648,
+                "isoSizeType": "45P3",
+                "notes": [
+                    "High-cube flat rack, minimum clearances. Payload depends on support length and load distribution."
+                ]
+            }
+        },
+        "20PL": {
+            "category": "Platform",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/content/dam/website/downloads/pdf/17038_Update_Container_Specification_engl_sRGB.pdf#page=38",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 6.058,
+                "widthM": 2.438,
+                "heightM": null,
+                "doorWidthM": null,
+                "doorHeightM": null,
+                "maxGrossKg": 34000,
+                "tareKg": 2740,
+                "maxPayloadKg": 31260,
+                "bottomHeightM": 0.37,
+                "nominalVolumeM3": null,
+                "notes": [
+                    "Collapsed flat-rack platform example, series HLXU 268800-269199. Height is not an enclosed cargo limit. Carrier approval is required for loading and securing."
+                ]
+            }
+        },
+        "40PL": {
+            "category": "Platform",
+            "icon": "Container",
+            "specifications": {
+                "source": "https://www.hapag-lloyd.com/content/dam/website/downloads/pdf/17038_Update_Container_Specification_engl_sRGB.pdf#page=38",
+                "checkedAt": "2026-09-13",
+                "status": "carrier_example",
+                "lengthM": 12.192,
+                "widthM": 2.245,
+                "heightM": null,
+                "doorWidthM": null,
+                "doorHeightM": null,
+                "maxGrossKg": 50000,
+                "tareKg": 5950,
+                "maxPayloadKg": 44050,
+                "bottomHeightM": 0.648,
+                "nominalVolumeM3": null,
+                "notes": [
+                    "Collapsed flat-rack platform example, series HLXU 669800-669899. Width follows this specific series; other series differ. Height is not an enclosed cargo limit."
+                ]
+            }
+        }
+    }
+}

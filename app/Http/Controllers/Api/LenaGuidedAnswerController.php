@@ -147,6 +147,9 @@ class LenaGuidedAnswerController extends Controller
         $confirmedValue = $validated['step'] === 'contact' && $validated['value'] === 'Current user'
             ? ($draft['contactName'] ?? $validated['display_text'])
             : app(\App\Services\LenaCatalog::class)->answerLabel($validated['step'], (string) $validated['value'], $lang, $draft['transportType'] ?? 'road');
+        if (! $skip && $validated['step'] === 'containers') {
+            $confirmedValue = implode(', ', array_map(fn ($row) => $row['quantity'].' × '.app(\App\Services\LenaCatalog::class)->answerLabel('containers', $row['type'], $lang, $draft['transportType'] ?? 'sea'), $draft['containerSelections']));
+        }
         $replyText = $responder->respond($validated['step'], $lang, $skip ? null : $confirmedValue, $nextStep);
 
         $assistantMessage = Message::query()->create([
@@ -197,8 +200,17 @@ class LenaGuidedAnswerController extends Controller
             } elseif ($step === 'characteristics') {
                 $draft['characteristics'] = array_values($values);
             } elseif ($step === 'containers') {
-                // One of each chosen type; the form's quantity stepper adjusts the count later.
-                $draft['containerSelections'] = array_map(fn ($type) => ['type' => $type, 'quantity' => '1'], array_values($values));
+                // Plain picker codes still mean one. An explicitly copied recommendation carries
+                // CODE:COUNT, so copying five containers cannot silently turn into one.
+                $types = array_keys(app(\App\Services\LenaCatalog::class)->schema()['container_categories']);
+                $draft['containerSelections'] = array_map(function ($value) use ($types) {
+                    $parts = explode(':', $value);
+                    $type = $parts[0];
+                    $quantity = $parts[1] ?? '1';
+                    abort_unless(count($parts) <= 2 && in_array($type, $types, true)
+                        && preg_match('/^[1-9][0-9]{0,7}$/', $quantity), 422, 'Invalid container type or quantity.');
+                    return ['type' => $type, 'quantity' => (string) $quantity];
+                }, array_values($values));
             } elseif ($step === 'storageEquipment') {
                 $draft['warehouseEquipment'] = array_values($values);
             } elseif ($step === 'storageServices') {
@@ -321,7 +333,12 @@ class LenaGuidedAnswerController extends Controller
             'delivery_longitude' => $draft['deliveryLongitude'] ?? null,
         ];
 
-        LoadDraft::query()->whereKey($conversation->load_draft_id)->update($fields);
+        if (array_key_exists('containerSelections', $draft)) {
+            $fields['container_selections'] = $draft['containerSelections'];
+        }
+
+        // Use the model so container_selections is serialized by its array cast.
+        LoadDraft::query()->findOrFail($conversation->load_draft_id)->update($fields);
     }
 
     // "05.12.2026" (DD.MM.YYYY, matching the frontend mask) -> "2026-12-05" (the Y-m-d format
