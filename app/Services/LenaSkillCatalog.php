@@ -14,38 +14,34 @@ class LenaSkillCatalog
             glob($root.'/skills/*.md') ?: [],
         );
         sort($paths);
-        $legalSources = app(LegalSourceCatalog::class);
+        $resources = app(LenaSkillResources::class);
         $rows = [];
         foreach (array_unique($paths) as $path) {
             $resolved = realpath($path);
             if (! $resolved || ! str_starts_with($resolved, $root.DIRECTORY_SEPARATOR) || ! is_readable($resolved)) continue;
-            ['prompt' => $content, 'names' => $names, 'sources' => $sourceEntries] = LenaModeInstructions::split((string) file_get_contents($resolved));
+            ['prompt' => $content, 'names' => $names] = LenaModeInstructions::split((string) file_get_contents($resolved));
             if ($content === '') continue;
             $relative = str_replace('\\', '/', substr($resolved, strlen($root) + 1));
             // The folder an item belongs to: an AGENT.md's own directory, and for skills/*.md the directory above.
             $folder = preg_replace('#/skills$#', '', dirname($relative));
             // agents/lena/skills holds the skills every mode loads.
             $shared = dirname($relative) === 'skills';
-            $kind = basename($relative) === 'AGENT.md' ? 'instructions' : 'skill';
+            // instructions: a skill (an AGENT.md, or a shared skill, which belongs to no single mode); skill: a subskill of a mode.
+            $kind = basename($relative) === 'AGENT.md' || $shared ? 'instructions' : 'skill';
             preg_match('/^name:\s*(.+)$/m', $content, $name);
             preg_match('/^description:\s*(.+)$/m', $content, $description);
             preg_match('/^#\s+(.+)$/m', $content, $heading);
             $plain = preg_replace('/\A---\R.*?\R---\R/s', '', $content);
             $paragraphs = preg_split('/\R\s*\R/', trim($plain));
             $summary = $description[1] ?? current(array_filter($paragraphs, fn ($p) => ! str_starts_with($p, '#'))) ?: '';
-            // Web pages and app screens pass through; legal ids resolve against legal-sources.json, and unknown
-            // ids are dropped here and reported by LenaSkillCatalogTest.
-            $sources = array_values(array_filter(array_map(function (array $entry) use ($legalSources): ?array {
-                if ($entry['type'] !== 'legal') return $entry;
-                $source = $legalSources->find($entry['id']);
-
-                return $source ? ['type' => 'legal', 'id' => $entry['id'], 'title' => $source['title'], 'file' => $source['file'], 'jurisdiction' => $source['jurisdiction']] : null;
-            }, $sourceEntries)));
             // The display name comes from the file's "## Name" section; the slug is only a fallback.
             $rows[] = ['id' => $relative, 'name' => $names['en'] ?? trim($name[1] ?? $heading[1] ?? $folder), 'names' => $names,
                 'description' => trim($summary), 'folder' => $folder, 'kind' => $kind, 'shared' => $shared,
                 'modes' => $shared ? ['general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load'] : [explode('/', $folder)[0]],
-                'scanners' => $relative === 'skills/hs-detection.md', 'content' => $content, 'sources' => $sources, 'bytes' => filesize($resolved),
+                'scanners' => $relative === 'skills/hs-detection.md', 'content' => $content,
+                // Kept in the folder's resources/resources.json, keyed by the file's path inside the folder.
+                'sources' => $resources->for($folder, substr($relative, strlen($folder) + 1)),
+                'bytes' => filesize($resolved),
                 'updatedAt' => gmdate('c', filemtime($resolved))];
         }
         return $rows;

@@ -13,13 +13,16 @@ class LenaModeInstructions
         return $this->sharedSkill(self::SHARED_SKILLS.'/hs-detection.md');
     }
 
-    /** Every skill in agents/lena/skills, in file-name order. */
+    /** The shared skills overview (agents/lena/skills/AGENT.md), then every other skill there in file-name order. */
     public function shared(): string
     {
-        $paths = glob(self::SHARED_SKILLS.'/*.md') ?: [];
+        $overviewPath = self::SHARED_SKILLS.'/AGENT.md';
+        $overview = is_readable($overviewPath) ? self::split((string) file_get_contents($overviewPath))['prompt'] : '';
+        $paths = array_filter(glob(self::SHARED_SKILLS.'/*.md') ?: [], fn (string $path) => basename($path) !== 'AGENT.md');
         sort($paths);
 
-        return implode('', array_map(fn (string $path) => $this->sharedSkill($path), $paths));
+        return ($overview === '' ? '' : "\n\nShared skills (every mode):\n{$overview}\n")
+            .implode('', array_map(fn (string $path) => $this->sharedSkill($path), $paths));
     }
 
     private function sharedSkill(string $path): string
@@ -42,36 +45,18 @@ class LenaModeInstructions
     ];
 
     /**
-     * An instruction file is its prompt followed by optional closing sections for the skills screen, which
-     * never enter the prompt (legal mode already supplies the full source catalogue):
-     *   "## Name"     the display name per language, one "- bs: ...", "- en: ...", "- de: ..." line each
-     *   "## Sources"  one resource per line:
-     *                   - legal-source-id            a document from legal-sources.json
-     *                   - [Title](https://...)       a web page
-     *                   - [Title](app:view-id)       a screen of this app, such as the internal tariff catalogue
+     * An instruction file is its prompt followed by an optional closing "## Name" section for the skills screen, one
+     * "- bs: ...", "- en: ...", "- de: ..." line each, which never enters the prompt. Resources are kept apart from the
+     * prompts, in each folder's resources/resources.json (see LenaSkillResources).
      *
-     * @return array{prompt: string, names: array<string, string>, sources: list<array{type: 'legal', id: string}|array{type: 'link', title: string, url: string}|array{type: 'app', title: string, view: string}>}
+     * @return array{prompt: string, names: array<string, string>}
      */
     public static function split(string $content): array
     {
-        $parts = preg_split('/^##\s+(Name|Sources)\s*$/mi', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
-        $sections = ['name' => '', 'sources' => ''];
-        for ($i = 1; $i < count($parts); $i += 2) {
-            $sections[strtolower($parts[$i])] .= $parts[$i + 1] ?? '';
-        }
-        preg_match_all('/^\s*-\s*(bs|en|de)\s*:\s*(\S.*?)\s*$/m', $sections['name'], $names, PREG_SET_ORDER);
-        $sources = [];
-        foreach (preg_split('/\R/', $sections['sources']) as $line) {
-            if (preg_match('/^\s*-\s*\[([^\]]+)\]\((?:app:([a-z0-9-]+)|(https:\/\/\S+))\)\s*$/', $line, $link)) {
-                $sources[] = ($link[2] ?? '') !== ''
-                    ? ['type' => 'app', 'title' => trim($link[1]), 'view' => $link[2]]
-                    : ['type' => 'link', 'title' => trim($link[1]), 'url' => $link[3]];
-            } elseif (preg_match('/^\s*-\s*([a-z0-9-]+)\s*$/', $line, $id)) {
-                $sources[] = ['type' => 'legal', 'id' => $id[1]];
-            }
-        }
+        $parts = preg_split('/^##\s+Name\s*$/mi', $content, 2);
+        preg_match_all('/^\s*-\s*(bs|en|de)\s*:\s*(\S.*?)\s*$/m', $parts[1] ?? '', $names, PREG_SET_ORDER);
 
-        return ['prompt' => trim($parts[0]), 'names' => array_column($names, 2, 1), 'sources' => $sources];
+        return ['prompt' => trim($parts[0]), 'names' => array_column($names, 2, 1)];
     }
 
     public function for(string $mode): string

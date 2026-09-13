@@ -1,0 +1,40 @@
+{
+    "about": "Resources shown in the Resursi tab of the LenaAI skills screen for the files in this folder. Keys name a file in this folder (AGENT.md, skills/*.md). Each entry is a legal source ({\"type\": \"legal\", \"id\"} from agents/lena/legal-sources.json), a web page ({\"type\": \"link\", \"title\", \"url\"}) or a screen of this app ({\"type\": \"app\", \"title\", \"view\"}). Resources never enter the prompt.",
+    "resources": {
+        "AGENT.md": [
+            {
+                "type": "app",
+                "title": "Internal tariff catalogue (hs_code_catalog): BiH customs tariff with Bosnian, English and German names",
+                "view": "tariffs-hs"
+            },
+            {
+                "type": "legal",
+                "id": "customs-tariff-2026"
+            },
+            {
+                "type": "legal",
+                "id": "rs-tariff-nomenclature-2026"
+            },
+            {
+                "type": "link",
+                "title": "WCO HS Nomenclature 2022 edition",
+                "url": "https://www.wcoomd.org/en/topics/nomenclature/instrument-and-tools/hs-nomenclature-2022-edition/hs-nomenclature-2022-edition.aspx"
+            },
+            {
+                "type": "link",
+                "title": "WCO HS Nomenclature 2028 edition, in force from 1 January 2028",
+                "url": "https://www.wcoomd.org/en/topics/nomenclature/instrument-and-tools/hs-nomenclature-2028-edition.aspx"
+            },
+            {
+                "type": "link",
+                "title": "EU TARIC consultation",
+                "url": "https://ec.europa.eu/taxation_customs/dds2/taric/taric_consultation.jsp?Lang=en"
+            },
+            {
+                "type": "link",
+                "title": "EU Access2Markets, product search by HS code",
+                "url": "https://trade.ec.europa.eu/access-to-markets/en/home"
+            }
+        ]
+    }
+}

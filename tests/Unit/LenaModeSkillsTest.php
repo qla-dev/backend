@@ -16,7 +16,11 @@ class LenaModeSkillsTest extends TestCase
         $this->assertFileExists(base_path('agents/lena/skills/hs-detection.md'));
         $this->assertFileDoesNotExist(base_path('agents/lena/hs/hs-detection.md'));
         foreach (['hs', 'post-load', 'storage'] as $mode) {
-            $this->assertSame(1, substr_count($loader->for($mode), 'name: hs-detection'));
+            $prompt = $loader->for($mode);
+            $this->assertSame(1, substr_count($prompt, 'name: hs-detection'));
+            // The shared skills overview comes once, before the shared skills it introduces.
+            $this->assertSame(1, substr_count($prompt, 'Shared skills (every mode):'));
+            $this->assertLessThan(strpos($prompt, 'name: hs-detection'), strpos($prompt, 'Shared skills (every mode):'));
         }
         foreach ([\App\Services\OpenRouterLoadScanner::class, \App\Services\OpenRouterBulkLoadScanner::class] as $class) {
             $reflection = new \ReflectionClass($class);
@@ -53,6 +57,32 @@ class LenaModeSkillsTest extends TestCase
         $this->assertLessThan(strpos($instructions, 'Mode instructions (legal, legal-ba):'), strpos($instructions, 'Mode instructions (legal):'));
         $this->assertStringContainsString('9. Confirmations and corrections', $instructions);
         $this->assertStringNotContainsString('legal-eu', (new LenaModeInstructions)->for('general'));
+    }
+
+    public function test_general_and_free_hand_tasks_to_their_modes(): void
+    {
+        new Application(dirname(__DIR__, 2));
+        $loader = new LenaModeInstructions;
+        foreach (['general', 'free'] as $mode) {
+            $prompt = $loader->for($mode);
+            foreach (['start_add_yes,start_add_no', 'storage', 'tracking', 'booking', 'hs', 'legal', 'add,storage'] as $options) {
+                $this->assertStringContainsString("[[LENA_OPTIONS:{$options}]]", $prompt, "{$mode} mode does not offer {$options}");
+            }
+        }
+    }
+
+    public function test_every_button_a_prompt_offers_is_a_guided_action(): void
+    {
+        new Application(dirname(__DIR__, 2));
+        $actions = (new \App\Services\LenaCatalog)->schema()['actions'];
+        foreach (['general', 'free', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'about-load'] as $mode) {
+            preg_match_all('/\[\[LENA_OPTIONS:([a-z_,]+)\]\]/', (new LenaModeInstructions)->for($mode), $matches);
+            foreach ($matches[1] as $list) {
+                foreach (explode(',', $list) as $key) {
+                    $this->assertContains($key, $actions, "{$mode} mode offers unknown action {$key}");
+                }
+            }
+        }
     }
 
     public function test_manifest_entries_are_unique_and_stored_files_exist(): void

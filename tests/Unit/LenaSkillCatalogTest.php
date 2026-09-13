@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Services\LegalSourceCatalog;
 use App\Services\LenaModeInstructions;
 use App\Services\LenaSkillCatalog;
+use App\Services\LenaSkillResources;
 use Illuminate\Foundation\Application;
 use PHPUnit\Framework\TestCase;
 
@@ -21,6 +22,8 @@ class LenaSkillCatalogTest extends TestCase
         $this->assertSame('skill', $byId['post-load/skills/container-recommendation.md']['kind']);
         $hs = $byId['skills/hs-detection.md'];
         $this->assertSame('skills', $hs['folder']);
+        $this->assertSame('instructions', $hs['kind'], 'A shared skill is a skill of its own, not a subskill');
+        $this->assertSame($byId['hs/AGENT.md']['sources'], $hs['sources'], 'HS code detection lists the same resources as the HS mode');
         $this->assertTrue($hs['shared']);
         $this->assertTrue($hs['scanners']);
         $this->assertContains('storage', $hs['modes']);
@@ -36,6 +39,9 @@ class LenaSkillCatalogTest extends TestCase
             $this->assertSame(['bs', 'de', 'en'], array_keys($names), "{$row['id']} needs a bs, en and de name");
         }
         $this->assertSame('AI legislativni dispečer', $byId['legal/AGENT.md']['names']['bs']);
+        $sharedOverview = $byId['skills/AGENT.md'];
+        $this->assertSame(['instructions', 'skills', true], [$sharedOverview['kind'], $sharedOverview['folder'], $sharedOverview['shared']]);
+        $this->assertSame('Prepoznavanje HS kodova', $hs['names']['bs']);
         $this->assertSame('rs-customs-law', $byId['legal/legal-srb/AGENT.md']['sources'][0]['id']);
         $this->assertSame('legal/legal-srb', $byId['legal/legal-srb/AGENT.md']['folder']);
         $this->assertSame(['legal'], $byId['legal/legal-srb/AGENT.md']['modes']);
@@ -58,17 +64,18 @@ class LenaSkillCatalogTest extends TestCase
     {
         new Application(dirname(__DIR__, 2));
         foreach ((new LenaSkillCatalog)->rows() as $row) {
-            if ($row['kind'] === 'instructions') {
+            if (basename($row['id']) === 'AGENT.md') {
                 $this->assertStringStartsWith('You are LenaAI', $row['content'], $row['id']);
             }
         }
     }
 
     /**
-     * Every Sources line parses, every legal id exists, and each manifest entry is listed by the AGENT.md
-     * of the folder that stores it. Other folders may cite the same document too.
+     * Every folder with an AGENT.md keeps its resources in resources/resources.json: valid JSON whose keys name files
+     * in that folder and whose entries are well formed. Every legal id exists, and each manifest document is listed by
+     * the AGENT.md of the folder that stores it. The md files themselves carry no resources.
      */
-    public function test_sources_sections_match_the_legal_source_manifest(): void
+    public function test_resources_live_in_each_folders_json(): void
     {
         new Application(dirname(__DIR__, 2));
         $catalog = new LegalSourceCatalog;
@@ -76,36 +83,46 @@ class LenaSkillCatalogTest extends TestCase
         foreach ($catalog->sources() as $source) {
             $byFolder[$source['folder']][] = $source['id'];
         }
-        $root = base_path('agents/lena');
-        $paths = array_merge(glob($root.'/*/AGENT.md') ?: [], glob($root.'/*/*/AGENT.md') ?: []);
         $this->assertNotEmpty($byFolder);
-        foreach ($paths as $path) {
-            $folder = str_replace('\\', '/', substr(dirname($path), strlen($root) + 1));
-            $content = (string) file_get_contents($path);
-            $entries = LenaModeInstructions::split($content)['sources'];
-            $parts = preg_split('/^##\s+(Name|Sources)\s*$/mi', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
-            $sourcesText = '';
-            for ($i = 1; $i < count($parts); $i += 2) {
-                if (strtolower($parts[$i]) === 'sources') $sourcesText .= $parts[$i + 1] ?? '';
-            }
-            preg_match_all('/^\s*-\s/m', $sourcesText, $lines);
-            $this->assertCount(count($lines[0]), $entries, "{$folder}/AGENT.md has a Sources line that does not parse");
-            $legal = [];
-            foreach ($entries as $entry) {
-                if ($entry['type'] === 'legal') {
-                    $this->assertNotNull($catalog->find($entry['id']), "{$folder}/AGENT.md lists unknown source {$entry['id']}");
-                    $legal[] = $entry['id'];
-                } elseif ($entry['type'] === 'link') {
-                    $this->assertStringStartsWith('https://', $entry['url']);
-                } else {
-                    $this->assertMatchesRegularExpression('/^[a-z0-9-]+$/', $entry['view']);
+        $root = base_path('agents/lena');
+        $agents = array_merge(glob($root.'/*/AGENT.md') ?: [], glob($root.'/*/*/AGENT.md') ?: []);
+        $this->assertNotEmpty($agents);
+        foreach ($agents as $agent) {
+            $folder = str_replace('\\', '/', substr(dirname($agent), strlen($root) + 1));
+            $json = LenaSkillResources::path($folder);
+            $this->assertFileExists($json, "{$folder} has no ".LenaSkillResources::FILE);
+            $data = json_decode((string) file_get_contents($json), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertIsArray($data['resources'] ?? null, "{$folder} resources.json has no resources map");
+            $this->assertArrayHasKey('AGENT.md', $data['resources']);
+            $listedByAgent = [];
+            foreach ($data['resources'] as $file => $entries) {
+                $this->assertFileExists(dirname($agent).'/'.$file, "{$folder} resources.json names a missing file {$file}");
+                $this->assertIsArray($entries);
+                foreach ($entries as $entry) {
+                    $type = $entry['type'] ?? null;
+                    if ($type === 'legal') {
+                        $this->assertNotNull($catalog->find((string) ($entry['id'] ?? '')), "{$folder}/{$file} lists an unknown legal source");
+                        if ($file === 'AGENT.md') $listedByAgent[] = $entry['id'];
+                    } elseif ($type === 'link') {
+                        $this->assertNotEmpty($entry['title'] ?? null, "{$folder}/{$file} has a link without a title");
+                        $this->assertStringStartsWith('https://', (string) ($entry['url'] ?? ''));
+                    } else {
+                        $this->assertSame('app', $type, "{$folder}/{$file} has a resource of unknown type");
+                        $this->assertNotEmpty($entry['title'] ?? null, "{$folder}/{$file} has an app screen without a title");
+                        $this->assertMatchesRegularExpression('/^[a-z0-9-]+$/', (string) ($entry['view'] ?? ''));
+                    }
                 }
             }
             foreach ($byFolder[$folder] ?? [] as $id) {
-                $this->assertContains($id, $legal, "{$folder}/AGENT.md Sources section is missing {$id} from legal-sources.json");
+                $this->assertContains($id, $listedByAgent, "{$folder} resources.json is missing {$id} from legal-sources.json");
             }
             unset($byFolder[$folder]);
         }
         $this->assertSame([], $byFolder, 'legal-sources.json names folders without an AGENT.md');
+
+        $markdown = array_merge($agents, glob($root.'/*/skills/*.md') ?: [], glob($root.'/*/*/skills/*.md') ?: [], glob($root.'/skills/*.md') ?: []);
+        foreach ($markdown as $path) {
+            $this->assertStringNotContainsString('## Sources', (string) file_get_contents($path), "{$path} still carries resources");
+        }
     }
 }

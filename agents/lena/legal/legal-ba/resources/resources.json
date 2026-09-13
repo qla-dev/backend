@@ -1,0 +1,171 @@
+{
+    "about": "Resources shown in the Resursi tab of the LenaAI skills screen for the files in this folder. Keys name a file in this folder (AGENT.md, skills/*.md). Each entry is a legal source ({\"type\": \"legal\", \"id\"} from agents/lena/legal-sources.json), a web page ({\"type\": \"link\", \"title\", \"url\"}) or a screen of this app ({\"type\": \"app\", \"title\", \"view\"}). Resources never enter the prompt.",
+    "resources": {
+        "AGENT.md": [
+            {
+                "type": "legal",
+                "id": "customs-tariff-law"
+            },
+            {
+                "type": "legal",
+                "id": "customs-policy-law-58-15"
+            },
+            {
+                "type": "legal",
+                "id": "customs-policy-decision-13-19"
+            },
+            {
+                "type": "legal",
+                "id": "customs-policy-amendment-54-19"
+            },
+            {
+                "type": "legal",
+                "id": "customs-policy-amendment-21-20"
+            },
+            {
+                "type": "legal",
+                "id": "customs-policy-amendment-6-23"
+            },
+            {
+                "type": "legal",
+                "id": "customs-policy-amendment-2026"
+            },
+            {
+                "type": "legal",
+                "id": "customs-offences-law"
+            },
+            {
+                "type": "legal",
+                "id": "customs-tariff-2026"
+            },
+            {
+                "type": "legal",
+                "id": "customs-declaration-instructions"
+            },
+            {
+                "type": "legal",
+                "id": "jci-amendment-43-24"
+            },
+            {
+                "type": "legal",
+                "id": "jci-amendment-69-25"
+            },
+            {
+                "type": "legal",
+                "id": "jci-amendment-16-26"
+            },
+            {
+                "type": "legal",
+                "id": "jci-fields"
+            },
+            {
+                "type": "legal",
+                "id": "jci-export"
+            },
+            {
+                "type": "legal",
+                "id": "jci-import"
+            },
+            {
+                "type": "legal",
+                "id": "customs-value"
+            },
+            {
+                "type": "legal",
+                "id": "customs-debt-security"
+            },
+            {
+                "type": "legal",
+                "id": "customs-debt-security-amendment-9-25"
+            },
+            {
+                "type": "legal",
+                "id": "transit-ncts"
+            },
+            {
+                "type": "legal",
+                "id": "transit-security"
+            },
+            {
+                "type": "legal",
+                "id": "customs-warehouse"
+            },
+            {
+                "type": "legal",
+                "id": "inward-processing"
+            },
+            {
+                "type": "legal",
+                "id": "home-import-clearance"
+            },
+            {
+                "type": "legal",
+                "id": "temporary-import"
+            },
+            {
+                "type": "legal",
+                "id": "duty-relief-decision"
+            },
+            {
+                "type": "legal",
+                "id": "vat-law"
+            },
+            {
+                "type": "legal",
+                "id": "excise-law"
+            },
+            {
+                "type": "legal",
+                "id": "excise-law-amendment-49-14"
+            },
+            {
+                "type": "legal",
+                "id": "excise-law-amendment-60-14"
+            },
+            {
+                "type": "legal",
+                "id": "excise-law-amendment-91-17"
+            },
+            {
+                "type": "legal",
+                "id": "excise-law-amendment-50-22"
+            },
+            {
+                "type": "legal",
+                "id": "efta-agreement"
+            },
+            {
+                "type": "legal",
+                "id": "cefta-origin"
+            },
+            {
+                "type": "legal",
+                "id": "cefta-origin-amendment"
+            },
+            {
+                "type": "legal",
+                "id": "cefta-joint-committee"
+            },
+            {
+                "type": "legal",
+                "id": "cefta-decision-3-2015"
+            },
+            {
+                "type": "legal",
+                "id": "cefta-decision-1-2021"
+            },
+            {
+                "type": "legal",
+                "id": "saa-trade-aspects"
+            },
+            {
+                "type": "legal",
+                "id": "saa-diagonal-cumulation"
+            },
+            {
+                "type": "legal",
+                "id": "turkey-fta"
+            }
+        ]
+    }
+}

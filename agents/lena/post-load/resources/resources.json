@@ -1,0 +1,42 @@
+{
+    "about": "Resources shown in the Resursi tab of the LenaAI skills screen for the files in this folder. Keys name a file in this folder (AGENT.md, skills/*.md). Each entry is a legal source ({\"type\": \"legal\", \"id\"} from agents/lena/legal-sources.json), a web page ({\"type\": \"link\", \"title\", \"url\"}) or a screen of this app ({\"type\": \"app\", \"title\", \"view\"}). Resources never enter the prompt.",
+    "resources": {
+        "AGENT.md": [
+            {
+                "type": "link",
+                "title": "ICC Incoterms rules, Incoterms 2020",
+                "url": "https://iccwbo.org/business-solutions/incoterms-rules/"
+            },
+            {
+                "type": "link",
+                "title": "UNECE CMR Convention on the Contract for the International Carriage of Goods by Road",
+                "url": "https://unece.org/fileadmin/DAM/trans/conventn/cmr_e.pdf"
+            },
+            {
+                "type": "link",
+                "title": "UNECE ADR 2025, dangerous goods by road",
+                "url": "https://unece.org/transport/publications/agreement-concerning-international-carriage-dangerous-goods-road-adr-2025"
+            },
+            {
+                "type": "link",
+                "title": "OTIF RID, dangerous goods by rail",
+                "url": "https://otif.org/en/?page_id=1105"
+            },
+            {
+                "type": "link",
+                "title": "IMO IMDG Code, dangerous goods by sea",
+                "url": "https://www.imo.org/en/OurWork/Safety/Pages/DangerousGoods-default.aspx"
+            },
+            {
+                "type": "link",
+                "title": "IATA Dangerous Goods Regulations, 67th edition 2026",
+                "url": "https://www.iata.org/en/programs/cargo/dgr/"
+            },
+            {
+                "type": "link",
+                "title": "UNECE ATP 2024, perishable foodstuffs and special equipment",
+                "url": "https://unece.org/transport/publications/agreement-international-carriage-perishable-foodstuffs-and-special-6"
+            }
+        ]
+    }
+}
