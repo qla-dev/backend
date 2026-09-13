@@ -36,6 +36,7 @@ return [
     ],
 
     'openrouter' => [
+        'speech_model' => env('OPENROUTER_SPEECH_MODEL', 'google/gemini-3.1-flash-tts-preview'),
         'api_key' => env('OPENROUTER_API_KEY'),
         'model' => env('OPENROUTER_MODEL', 'google/gemini-2.5-flash'),
         // Used by OpenRouterDispatchAssistant when the primary model's response comes back empty
