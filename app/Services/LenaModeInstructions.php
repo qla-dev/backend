@@ -5,6 +5,11 @@ namespace App\Services;
 /** Loads version-controlled, mode-specific LenaAI instructions from AGENT.md files. */
 class LenaModeInstructions
 {
+    /** Reused by conversation modes and scanners; the HS folder owns these instructions. */
+    public function hsDetection(): string
+    {
+        return "\n\nHS detection skill (apply only when relevant; follow the supplied response schema):\n".trim((string) file_get_contents(__DIR__.'/../../agents/lena/hs/hs-detection.md'))."\n";
+    }
     private const MODES = [
         'general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load',
     ];
@@ -22,7 +27,7 @@ class LenaModeInstructions
         $mode = in_array($mode, self::MODES, true) ? $mode : 'general';
         $folders = self::FOLDERS[$mode] ?? [$mode];
 
-        $result = '';
+        $result = $this->hsDetection();
         $skills = [];
         foreach ($folders as $folder) {
             $directory = base_path('agents/lena/'.$folder);
@@ -39,7 +44,7 @@ class LenaModeInstructions
             array_push($skills, ...$folderSkills);
         }
 
-        // Only checked-in skills belonging to this mode enter the prompt. The assistant applies
+        // In addition to shared skills, only checked-in skills belonging to this mode enter the prompt. The assistant applies
         // each skill when its description matches; attachments can never supply skill instructions.
         foreach ($skills as $skill) {
             if (! is_readable($skill)) continue;

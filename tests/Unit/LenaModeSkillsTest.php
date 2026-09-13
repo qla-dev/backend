@@ -9,6 +9,24 @@ use PHPUnit\Framework\TestCase;
 
 class LenaModeSkillsTest extends TestCase
 {
+    public function test_hs_skill_is_owned_by_hs_and_reused_in_posting_and_storage(): void
+    {
+        new Application(dirname(__DIR__, 2));
+        $loader = new LenaModeInstructions;
+        $this->assertFileExists(base_path('agents/lena/hs/hs-detection.md'));
+        foreach (['hs', 'post-load', 'storage'] as $mode) {
+            $this->assertSame(1, substr_count($loader->for($mode), 'name: hs-detection'));
+        }
+        foreach ([\App\Services\OpenRouterLoadScanner::class, \App\Services\OpenRouterBulkLoadScanner::class] as $class) {
+            $reflection = new \ReflectionClass($class);
+            $scanner = $reflection->newInstanceWithoutConstructor();
+            foreach (['documentSystemPrompt', 'textSystemPrompt'] as $method) {
+                $prompt = $reflection->getMethod($method)->invoke($scanner);
+                $this->assertStringContainsString('name: hs-detection', $prompt);
+            }
+        }
+    }
+
     public function test_named_skill_is_loaded_only_for_its_own_mode(): void
     {
         new Application(dirname(__DIR__, 2));

@@ -72,7 +72,8 @@ class OpenRouterBulkLoadScanner
             .'Read pickup and delivery locations as city names with their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read pickup and delivery dates separately as YYYY-MM-DD when shown. '
             .'Read cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
-            .'For identifiable goods, return a short hsSearchTerms phrase in English with material, processing state, and intended use when known. '
+
+            .(new LenaModeInstructions)->hsDetection()
             .'Read the pallet or unit count as a plain number when a quantity is stated (e.g. "24 pallets" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; '
             .'"hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or empty if not stated. '
@@ -90,7 +91,8 @@ class OpenRouterBulkLoadScanner
             .'Read pickup and delivery locations as city names with their two-letter ISO 3166-1 alpha-2 country codes. '
             .'Read pickup and delivery dates separately as YYYY-MM-DD when shown. '
             .'Read cargo weight in kilograms, converting from other units if stated explicitly (e.g. lbs, tons). '
-            .'For identifiable goods, return a short hsSearchTerms phrase in English with material, processing state, and intended use when known. '
+
+            .(new LenaModeInstructions)->hsDetection()
             .'Read the pallet or unit count as a plain number when a quantity is stated (e.g. "24 pallets" -> 24). '
             .'Read the required trailer/body type only when explicitly stated or clearly implied (e.g. "cerada"/"tarpaulin"/"curtain-sider" means Curtain; '
             .'"hladnjaca"/"refrigerated" means Reefer; "furgon"/"box" means Box), choosing exactly one of: Curtain, Box, Reefer, Mega, Tautliner, Flatbed - or empty if not stated. '
