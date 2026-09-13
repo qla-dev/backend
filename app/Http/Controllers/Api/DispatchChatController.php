@@ -345,6 +345,10 @@ class DispatchChatController extends Controller
                         : ' You are not currently scoped to a specific load. You can help search the actual load database by booking reference; the application performs that lookup from the reference in the user\'s latest message. If the user wants to find, book, take, or reserve a load but has not supplied its booking reference, ask for the booking reference first. Do not send them to browse the marketplace instead. If the conversation indicates they just supplied a reference and no matching visible load was found, clearly say that no load was found for that reference and ask them to check it. ')
                         .'The app also has a freight marketplace for browsing available loads, a section for tracking the user\'s own loads with shipment details, a live map, return-route suggestions, invoices and reports, a Messages inbox, fleet management for companies, and analytics. Answer questions about how the platform works and freight logistics generally. If earlier turns described you as limited to one load, ignore that limitation in this general conversation.'));
 
+        // Keep this as the final instruction so mode-specific examples above cannot override the
+        // user's selected application language. The model must treat this as a hard output rule.
+        $systemPrompt .= "\n\nFINAL OUTPUT RULE: Reply only in {$interfaceLangName} (locale {$interfaceLang}). This rule overrides every example, previous message, detected transcript language, and conversation-history language. Do not reply in Bosnian, Croatian, Serbian, German, or English unless that is the selected application language. Never mix languages.";
+
         $history = $conversation->messages
             ->sortBy('sent_at')
             ->map(function (Message $message) use ($aiDispatcherId): array {
