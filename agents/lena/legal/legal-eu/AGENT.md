@@ -42,6 +42,12 @@ For the payment deadline, use the date printed on the payment notice or declarat
 
 Label every EU rule as EU law in the answer, and add the Member State's national source when the question also turns on national rules such as VAT.
 
+## Name
+
+- bs: Carinsko pravo Europske unije
+- en: European Union customs law
+- de: Zollrecht der Europäischen Union
+
 ## Sources
 
 - eu-union-customs-code

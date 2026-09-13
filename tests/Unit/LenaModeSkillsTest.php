@@ -13,7 +13,8 @@ class LenaModeSkillsTest extends TestCase
     {
         new Application(dirname(__DIR__, 2));
         $loader = new LenaModeInstructions;
-        $this->assertFileExists(base_path('agents/lena/hs/hs-detection.md'));
+        $this->assertFileExists(base_path('agents/lena/skills/hs-detection.md'));
+        $this->assertFileDoesNotExist(base_path('agents/lena/hs/hs-detection.md'));
         foreach (['hs', 'post-load', 'storage'] as $mode) {
             $this->assertSame(1, substr_count($loader->for($mode), 'name: hs-detection'));
         }
@@ -47,6 +48,9 @@ class LenaModeSkillsTest extends TestCase
         }
         // The Sources sections feed the skills screen; legal mode gets the catalogue separately.
         $this->assertStringNotContainsString('## Sources', $instructions);
+        $this->assertStringNotContainsString('## Name', $instructions);
+        // The legal overview comes first, before the jurisdictions.
+        $this->assertLessThan(strpos($instructions, 'Mode instructions (legal, legal-ba):'), strpos($instructions, 'Mode instructions (legal):'));
         $this->assertStringContainsString('9. Confirmations and corrections', $instructions);
         $this->assertStringNotContainsString('legal-eu', (new LenaModeInstructions)->for('general'));
     }

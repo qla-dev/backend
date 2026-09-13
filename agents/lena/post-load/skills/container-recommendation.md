@@ -11,3 +11,9 @@ Score = sum(known factor score × configured weight) / sum(known weights). Missi
 HS codes provide commodity context only, never proof of DG, temperature or carrier compatibility. For reefer, dangerous, oversized, bulk or liquid cargo, or failed door/dimension checks, explain the specialist-review status and ask for the needed handling or equipment detail. The current dry-container engine must not recommend ordinary dry equipment for those goods.
 
 Tell the user the right canvas shows the formula and a Copy to container field action. A recommendation is advice until explicitly copied. Do not claim to have saved a choice merely by recommending it; the Copy to container field action records type and quantity in the load draft and conversation. Recalculate after cargo changes and ask the user to review any earlier selection.
+
+## Name
+
+- bs: Preporuka kontejnera
+- en: Container recommendation
+- de: Containerempfehlung

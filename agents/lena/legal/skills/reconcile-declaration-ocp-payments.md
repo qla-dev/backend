@@ -22,3 +22,9 @@ Lead with the number of requested transfers and total. For each transfer provide
 Determine jurisdiction per MRN from the declaration, customs office and MRN, not from this skill's folder name or the supplier's address. Use the legal instructions of that jurisdiction: legal-ba for BiH, legal-eu for EU customs debt, guarantees and payment deadlines, legal-cro for Croatian national rules such as obračunski PDV, and legal-srb for Serbian customs debt, payment deadlines and import VAT. A conversation may mix jurisdictions; keep each MRN's legal explanation with its own sources. After the payment breakdown, add a short legal explanation of each separately listed VAT, guarantee or deadline figure only where a catalogued source supports it, naming the source and article or section; otherwise identify what needs clarification. Put the IDs of the sources actually used in [[LEGAL_SOURCES:...]]. For a purely arithmetic answer with no legal explanation, cite filenames/pages and emit [[LEGAL_SOURCES:]] rather than unrelated laws.
 
 Never reuse amounts, accounts, references or deadlines from an earlier example. Derive every result from the documents in the current conversation, reconcile corrections explicitly, and answer in the user's active language (Bosnian, English or German).
+
+## Name
+
+- bs: Usklađivanje deklaracija i OCP uplata
+- en: Reconciling declarations with OCP payments
+- de: Abgleich von Zollanmeldungen mit OCP-Zahlungen

@@ -19,7 +19,8 @@ class LenaSkillCatalogTest extends TestCase
         $byId = array_column($rows, null, 'id');
         $this->assertSame('instructions', $byId['storage/AGENT.md']['kind']);
         $this->assertSame('skill', $byId['post-load/skills/container-recommendation.md']['kind']);
-        $hs = $byId['hs/hs-detection.md'];
+        $hs = $byId['skills/hs-detection.md'];
+        $this->assertSame('skills', $hs['folder']);
         $this->assertTrue($hs['shared']);
         $this->assertTrue($hs['scanners']);
         $this->assertContains('storage', $hs['modes']);
@@ -29,7 +30,12 @@ class LenaSkillCatalogTest extends TestCase
             $this->assertNotEmpty($row['description']);
             $this->assertStringNotContainsString('..', $row['id']);
             $this->assertStringNotContainsString('## Sources', $row['content']);
+            $this->assertStringNotContainsString('## Name', $row['content']);
+            $names = $row['names'];
+            ksort($names);
+            $this->assertSame(['bs', 'de', 'en'], array_keys($names), "{$row['id']} needs a bs, en and de name");
         }
+        $this->assertSame('AI legislativni dispečer', $byId['legal/AGENT.md']['names']['bs']);
         $this->assertSame('rs-customs-law', $byId['legal/legal-srb/AGENT.md']['sources'][0]['id']);
         $this->assertSame('legal/legal-srb', $byId['legal/legal-srb/AGENT.md']['folder']);
         $this->assertSame(['legal'], $byId['legal/legal-srb/AGENT.md']['modes']);
@@ -41,6 +47,11 @@ class LenaSkillCatalogTest extends TestCase
         $this->assertContains('link', $hsTypes);
         $this->assertContains('legal', $hsTypes);
         $this->assertStringNotContainsString('taric', (new LenaModeInstructions)->for('hs'));
+        // Post a load cites web regulations only; its prompt stays a fallback for the guided questionnaire.
+        $postLoad = $byId['post-load/AGENT.md'];
+        $this->assertSame(['link'], array_values(array_unique(array_column($postLoad['sources'], 'type'))));
+        $this->assertStringContainsString('Guided answers come first', $postLoad['content']);
+        $this->assertStringNotContainsString('iccwbo.org', (new LenaModeInstructions)->for('post-load'));
     }
 
     public function test_every_main_prompt_introduces_lena(): void
@@ -72,7 +83,12 @@ class LenaSkillCatalogTest extends TestCase
             $folder = str_replace('\\', '/', substr(dirname($path), strlen($root) + 1));
             $content = (string) file_get_contents($path);
             $entries = LenaModeInstructions::split($content)['sources'];
-            preg_match_all('/^\s*-\s/m', preg_split('/^##\s+Sources\s*$/mi', $content, 2)[1] ?? '', $lines);
+            $parts = preg_split('/^##\s+(Name|Sources)\s*$/mi', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
+            $sourcesText = '';
+            for ($i = 1; $i < count($parts); $i += 2) {
+                if (strtolower($parts[$i]) === 'sources') $sourcesText .= $parts[$i + 1] ?? '';
+            }
+            preg_match_all('/^\s*-\s/m', $sourcesText, $lines);
             $this->assertCount(count($lines[0]), $entries, "{$folder}/AGENT.md has a Sources line that does not parse");
             $legal = [];
             foreach ($entries as $entry) {

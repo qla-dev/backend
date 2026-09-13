@@ -62,6 +62,12 @@ For the payment deadline, use the date printed on the payment notice or declarat
 
 Calculate Serbian amounts in RSD unless the documents are in another currency, and never invent an exchange rate: per član 22 stav 2 of the VAT law, a VAT base on import expressed in foreign currency is converted under the customs rules on customs value valid on the day the tax liability arose.
 
+## Name
+
+- bs: Propisi Republike Srbije
+- en: Serbian national rules
+- de: Serbische Vorschriften
+
 ## Sources
 
 - rs-customs-law

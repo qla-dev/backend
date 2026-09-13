@@ -5,38 +5,63 @@ namespace App\Services;
 /** Loads version-controlled, mode-specific LenaAI instructions from AGENT.md files. */
 class LenaModeInstructions
 {
-    /** Reused by conversation modes and scanners; the HS folder owns these instructions. */
+    /** Skills shared by every mode. The document and text scanners also reuse hs-detection on its own. */
+    private const SHARED_SKILLS = __DIR__.'/../../agents/lena/skills';
+
     public function hsDetection(): string
     {
-        return "\n\nHS detection skill (apply only when relevant; follow the supplied response schema):\n".self::split((string) file_get_contents(__DIR__.'/../../agents/lena/hs/hs-detection.md'))['prompt']."\n";
+        return $this->sharedSkill(self::SHARED_SKILLS.'/hs-detection.md');
+    }
+
+    /** Every skill in agents/lena/skills, in file-name order. */
+    public function shared(): string
+    {
+        $paths = glob(self::SHARED_SKILLS.'/*.md') ?: [];
+        sort($paths);
+
+        return implode('', array_map(fn (string $path) => $this->sharedSkill($path), $paths));
+    }
+
+    private function sharedSkill(string $path): string
+    {
+        $content = is_readable($path) ? self::split((string) file_get_contents($path))['prompt'] : '';
+
+        return $content === '' ? '' : "\n\nShared skill (apply only when relevant; follow any supplied response schema):\n{$content}\n";
     }
     private const MODES = [
         'general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load',
     ];
 
     /**
-     * Modes whose instructions live in folders named differently from the mode key. Legal mode loads
-     * every jurisdiction under agents/lena/legal at once, so one conversation can involve BiH, EU, Croatian
-     * and Serbian rules together.
+     * Modes whose instructions live in more than one folder. Legal mode loads its overview in
+     * agents/lena/legal first and then every jurisdiction at once, so one conversation can involve BiH,
+     * EU, Croatian and Serbian rules together.
      */
     private const FOLDERS = [
-        'legal' => ['legal/legal-ba', 'legal/legal-eu', 'legal/legal-cro', 'legal/legal-srb'],
+        'legal' => ['legal', 'legal/legal-ba', 'legal/legal-eu', 'legal/legal-cro', 'legal/legal-srb'],
     ];
 
     /**
-     * An instruction file is its prompt followed by an optional closing "## Sources" section, one resource per line:
-     *   - legal-source-id            a document from legal-sources.json
-     *   - [Title](https://...)       a web page
-     *   - [Title](app:view-id)       a screen of this app, such as the internal tariff catalogue
-     * The section is for the skills screen and never enters the prompt: legal mode already supplies the full catalogue.
+     * An instruction file is its prompt followed by optional closing sections for the skills screen, which
+     * never enter the prompt (legal mode already supplies the full source catalogue):
+     *   "## Name"     the display name per language, one "- bs: ...", "- en: ...", "- de: ..." line each
+     *   "## Sources"  one resource per line:
+     *                   - legal-source-id            a document from legal-sources.json
+     *                   - [Title](https://...)       a web page
+     *                   - [Title](app:view-id)       a screen of this app, such as the internal tariff catalogue
      *
-     * @return array{prompt: string, sources: list<array{type: 'legal', id: string}|array{type: 'link', title: string, url: string}|array{type: 'app', title: string, view: string}>}
+     * @return array{prompt: string, names: array<string, string>, sources: list<array{type: 'legal', id: string}|array{type: 'link', title: string, url: string}|array{type: 'app', title: string, view: string}>}
      */
     public static function split(string $content): array
     {
-        $parts = preg_split('/^##\s+Sources\s*$/mi', $content, 2);
+        $parts = preg_split('/^##\s+(Name|Sources)\s*$/mi', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
+        $sections = ['name' => '', 'sources' => ''];
+        for ($i = 1; $i < count($parts); $i += 2) {
+            $sections[strtolower($parts[$i])] .= $parts[$i + 1] ?? '';
+        }
+        preg_match_all('/^\s*-\s*(bs|en|de)\s*:\s*(\S.*?)\s*$/m', $sections['name'], $names, PREG_SET_ORDER);
         $sources = [];
-        foreach (preg_split('/\R/', $parts[1] ?? '') as $line) {
+        foreach (preg_split('/\R/', $sections['sources']) as $line) {
             if (preg_match('/^\s*-\s*\[([^\]]+)\]\((?:app:([a-z0-9-]+)|(https:\/\/\S+))\)\s*$/', $line, $link)) {
                 $sources[] = ($link[2] ?? '') !== ''
                     ? ['type' => 'app', 'title' => trim($link[1]), 'view' => $link[2]]
@@ -46,7 +71,7 @@ class LenaModeInstructions
             }
         }
 
-        return ['prompt' => trim($parts[0]), 'sources' => $sources];
+        return ['prompt' => trim($parts[0]), 'names' => array_column($names, 2, 1), 'sources' => $sources];
     }
 
     public function for(string $mode): string
@@ -54,13 +79,13 @@ class LenaModeInstructions
         $mode = in_array($mode, self::MODES, true) ? $mode : 'general';
         $folders = self::FOLDERS[$mode] ?? [$mode];
 
-        $result = $this->hsDetection();
+        $result = $this->shared();
         $skills = [];
         foreach ($folders as $folder) {
             $path = base_path('agents/lena/'.$folder.'/AGENT.md');
             if (is_file($path) && is_readable($path)) {
                 $instructions = self::split((string) file_get_contents($path))['prompt'];
-                $label = count($folders) > 1 ? "{$mode}, ".basename($folder) : $mode;
+                $label = count($folders) > 1 && $folder !== $mode ? "{$mode}, ".basename($folder) : $mode;
                 if ($instructions !== '') {
                     $result .= "\n\nMode instructions ({$label}):\n{$instructions}\n";
                 }

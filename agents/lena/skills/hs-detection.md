@@ -12,3 +12,9 @@ The backend performs the actual catalogue lookup using the extracted terms. Sear
 Conversation context: use supplied catalogue candidates as the primary source. Explain the best fit briefly using known product facts. State assumptions and uncertainty; when multiple candidates are plausible, ask for the one missing fact that distinguishes them. If no relevant candidate is supplied, explain that the catalogue match is unconfirmed and ask for the missing product detail rather than presenting a guessed code as verified. Do not claim a database year, size or lookup result unless supplied by the system.
 
 When the user chooses HS assistance, explain that you can search the catalogue and request only missing product description, composition, processing, intended use or country context. During posting or storage, reuse the extracted goods and available matches and respect the current questionnaire order. HS classification does not establish dangerous-goods, temperature, container, storage or carrier compatibility.
+
+## Name
+
+- bs: Prepoznavanje HS kodova
+- en: HS code detection
+- de: HS-Code-Erkennung

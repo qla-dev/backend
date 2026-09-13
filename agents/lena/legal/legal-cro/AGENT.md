@@ -28,6 +28,12 @@ Without obračunski PDV, import VAT is paid within the customs-debt deadline: 10
 
 When a Croatian declaration lists import VAT but the payment notice (OCP) shows no VAT to pay, obračunski PDV is a possible explanation. Present it as confirmed only when the declaration shows FR7 in data element 13 16 or the user confirms it. Otherwise state the difference and ask the forwarder or importer to confirm. Never describe it as a VAT exemption: the VAT still has to be reported in the VAT return.
 
+## Name
+
+- bs: Propisi Republike Hrvatske
+- en: Croatian national rules
+- de: Kroatische Vorschriften
+
 ## Sources
 
 - hr-import-vat-instruction

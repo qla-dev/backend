@@ -11,7 +11,7 @@ class LenaSkillCatalog
         $paths = array_merge(
             glob($root.'/*/AGENT.md') ?: [], glob($root.'/*/*/AGENT.md') ?: [],
             glob($root.'/*/skills/*.md') ?: [], glob($root.'/*/*/skills/*.md') ?: [],
-            [$root.'/hs/hs-detection.md'],
+            glob($root.'/skills/*.md') ?: [],
         );
         sort($paths);
         $legalSources = app(LegalSourceCatalog::class);
@@ -19,12 +19,13 @@ class LenaSkillCatalog
         foreach (array_unique($paths) as $path) {
             $resolved = realpath($path);
             if (! $resolved || ! str_starts_with($resolved, $root.DIRECTORY_SEPARATOR) || ! is_readable($resolved)) continue;
-            ['prompt' => $content, 'sources' => $sourceEntries] = LenaModeInstructions::split((string) file_get_contents($resolved));
+            ['prompt' => $content, 'names' => $names, 'sources' => $sourceEntries] = LenaModeInstructions::split((string) file_get_contents($resolved));
             if ($content === '') continue;
             $relative = str_replace('\\', '/', substr($resolved, strlen($root) + 1));
             // The folder an item belongs to: an AGENT.md's own directory, and for skills/*.md the directory above.
             $folder = preg_replace('#/skills$#', '', dirname($relative));
-            $shared = $relative === 'hs/hs-detection.md';
+            // agents/lena/skills holds the skills every mode loads.
+            $shared = dirname($relative) === 'skills';
             $kind = basename($relative) === 'AGENT.md' ? 'instructions' : 'skill';
             preg_match('/^name:\s*(.+)$/m', $content, $name);
             preg_match('/^description:\s*(.+)$/m', $content, $description);
@@ -40,10 +41,11 @@ class LenaSkillCatalog
 
                 return $source ? ['type' => 'legal', 'id' => $entry['id'], 'title' => $source['title'], 'file' => $source['file'], 'jurisdiction' => $source['jurisdiction']] : null;
             }, $sourceEntries)));
-            $rows[] = ['id' => $relative, 'name' => trim($name[1] ?? $heading[1] ?? $folder),
+            // The display name comes from the file's "## Name" section; the slug is only a fallback.
+            $rows[] = ['id' => $relative, 'name' => $names['en'] ?? trim($name[1] ?? $heading[1] ?? $folder), 'names' => $names,
                 'description' => trim($summary), 'folder' => $folder, 'kind' => $kind, 'shared' => $shared,
                 'modes' => $shared ? ['general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load'] : [explode('/', $folder)[0]],
-                'scanners' => $shared, 'content' => $content, 'sources' => $sources, 'bytes' => filesize($resolved),
+                'scanners' => $relative === 'skills/hs-detection.md', 'content' => $content, 'sources' => $sources, 'bytes' => filesize($resolved),
                 'updatedAt' => gmdate('c', filemtime($resolved))];
         }
         return $rows;
