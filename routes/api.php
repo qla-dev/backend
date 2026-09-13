@@ -162,6 +162,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('customers/mine', [CustomerController::class, 'index'])->name('customers.mine');
     Route::apiResource('customers', CustomerController::class)->only(['index', 'show']);
     Route::get('customer-options', [CustomerController::class, 'options']);
+    Route::post('dispatch-chat/skills', [DispatchChatController::class, 'skills'])->middleware('throttle:60,1');
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
     Route::post('lena-guided-answer', [LenaGuidedAnswerController::class, 'store'])->middleware('throttle:30,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');

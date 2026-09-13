@@ -15,6 +15,8 @@ use App\Services\LenaGuidedAnswerResponder;
 use App\Services\LenaLoadQuestionnaire;
 use App\Services\LenaLoadDetailsContext;
 use App\Services\LenaModeInstructions;
+use App\Services\LenaSkillCatalog;
+use App\Services\LenaSkillUsage;
 use App\Services\LenaIntent;
 use App\Services\LegalSourceCatalog;
 use App\Services\LoadDraftScanMapper;
@@ -61,33 +63,13 @@ class DispatchChatController extends Controller
             ->values();
         $latestUserMessageModel = $userMessages->first();
         $latestUserMessage = $latestUserMessageModel?->body;
-        $guidedAction = $this->guidedAction($latestUserMessage);
-        $activeGuidedMode = $this->activeGuidedMode($userMessages);
-        $explicitPaymentRequest = LenaIntent::isPaymentRequest($latestUserMessage);
-        // A legal upload is deliberately not freight-document input. The user explicitly chooses
-        // whether it should become a legal analysis or start a new load afterwards.
-        $legalMode = $guidedAction !== 'legal_upload_load'
-            && ($guidedAction === 'legal' || $activeGuidedMode === 'legal');
-        $wasCanvasEnabled = (bool) $conversation->canvas;
-        // Auto-detect load-creation intent from an attached document (already scanned regardless
-        // of canvas state, see attachFile in useLenaAiChat.ts) or from cargo-shaped free text, not
-        // only from the narrow "new load"/"novi teret" phrasing asksToOpenLoadCanvas looks for.
-        // This must keep working even while a different guided mode (tracking, hs, ...) is active.
-        $detectedLoadCreationRequest = ! $legalMode
-            && LenaIntent::detect($latestUserMessage) !== 'free'
-            && ! $load
-            && ! $wasCanvasEnabled
-            && ! $guidedAction
-            && (
-                $this->asksToOpenLoadCanvas($latestUserMessage)
-                || $this->mentionsCargoDetails($latestUserMessage)
-                || $this->messageHasCargoSignal($latestUserMessageModel)
-            );
-        // A just-uploaded document already carries concrete, structured cargo data (the scanner
-        // itself flagged isDocument=true), unlike a bare text mention such as "100kg jabuka" which
-        // is still ambiguous and should keep asking permission first. Skip the "do you want to
-        // start?" gate entirely for the document case and open the canvas immediately.
-        $autoStartFromDocument = $detectedLoadCreationRequest && $this->messageHasCargoSignal($latestUserMessageModel);
+        [
+            'guidedAction' => $guidedAction, 'activeGuidedMode' => $activeGuidedMode, 'explicitPaymentRequest' => $explicitPaymentRequest,
+            'legalMode' => $legalMode, 'wasCanvasEnabled' => $wasCanvasEnabled, 'detectedLoadCreationRequest' => $detectedLoadCreationRequest,
+            'autoStartFromDocument' => $autoStartFromDocument, 'trackingMode' => $trackingMode, 'requestedLoadCanvas' => $requestedLoadCanvas,
+            'canvasBlockedByExistingLoad' => $canvasBlockedByExistingLoad, 'canvasEnabled' => $canvasEnabled, 'storageMode' => $storageMode,
+            'hsMode' => $hsMode, 'instructionMode' => $instructionMode,
+        ] = $this->resolveTurn($conversation, $userMessages);
         // OpenRouterLoadScanner classifies the file itself (CMR, invoice, packing list, ...) as well
         // as reading the load out of it. Naming that back is what turns "your file was uploaded"
         // into "your CMR was uploaded", which is the thing the user actually recognises.
@@ -121,7 +103,6 @@ class DispatchChatController extends Controller
         $currentConversationTitle = Str::startsWith($conversationSubject, 'AI Dispatch —')
             ? trim(Str::after($conversationSubject, 'AI Dispatch —'))
             : $conversationSubject;
-        $trackingMode = $guidedAction === 'tracking' || $activeGuidedMode === 'tracking';
         $matchedGeneralLoad = $load
             ? null
             : ($trackingMode
@@ -147,14 +128,6 @@ class DispatchChatController extends Controller
             }
         }
         $contextLoad = $load ?? $matchedGeneralLoad;
-        $requestedLoadCanvas = in_array($guidedAction, ['add', 'storage', 'start_add_yes', 'legal_upload_load'], true) || $autoStartFromDocument;
-        $canvasBlockedByExistingLoad = $requestedLoadCanvas && $load;
-        $canvasEnabled = $legalMode ? false : $wasCanvasEnabled;
-        if ($canvasBlockedByExistingLoad || $guidedAction === 'continue_add_no') {
-            $canvasEnabled = false;
-        } elseif ($requestedLoadCanvas) {
-            $canvasEnabled = true;
-        }
         if ($canvasEnabled !== (bool) $conversation->canvas) {
             $conversation->update(['canvas' => $canvasEnabled]);
         }
@@ -167,7 +140,6 @@ class DispatchChatController extends Controller
         if ($canvasEnabled && ! $conversation->load_draft_id) {
             $conversation->update(['load_draft_id' => LoadDraft::query()->create()->id]);
         }
-        $storageMode = $guidedAction === 'storage' || $activeGuidedMode === 'storage';
         if ($canvasEnabled && $storageMode && $conversation->load_draft_id) {
             LoadDraft::query()->whereKey($conversation->load_draft_id)->update(['transport_type' => 'warehouse']);
             $conversation->load('freightLoadDraft');
@@ -228,9 +200,6 @@ class DispatchChatController extends Controller
         );
         $origin = $contextLoad?->stops->firstWhere('type', 'pickup')?->city;
         $destination = $contextLoad?->stops->firstWhere('type', 'delivery')?->city;
-        $hsMode = $guidedAction === 'hs'
-            || $activeGuidedMode === 'hs'
-            || preg_match('/\b(?:hs\s*(?:code|kod|nummer)?|customs?\s+code|tariff\s+code|zolltarifnummer)\b/i', (string) $latestUserMessage) === 1;
         $hsQuery = trim(implode(' ', array_filter([
             $contextLoad?->goods_type,
             $latestUserMessage,
@@ -284,20 +253,7 @@ class DispatchChatController extends Controller
         $languageInstruction = $isPreparedTrigger
             ? 'The latest user message is a guided action or skip selection, not typed text, so reply entirely in '.$interfaceLangName.', the user\'s current interface language. '
             : 'Determine the language of the user\'s latest message and write your ENTIRE reply in that language. ';
-        $instructionMode = $legalMode
-            ? 'legal'
-            : ($load
-                ? 'about-load'
-                : ($canvasEnabled
-                    ? ($storageMode ? 'storage' : 'post-load')
-                    : ($trackingMode
-                        ? 'tracking'
-                        : ($hsMode
-                            ? 'hs'
-                            : ($activeGuidedMode === 'booking'
-                                ? 'booking'
-                                : ($activeGuidedMode === 'free' ? 'free' : 'general'))))));
-        $systemPrompt = 'You are LenaAI, the assistant for the Freightbook.ai freight logistics platform. '
+        $systemPrompt ='You are LenaAI, the assistant for the Freightbook.ai freight logistics platform. '
             .$languageInstruction
             .'Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. Write plain text only. Do not use Markdown, asterisks, Markdown headings, or Markdown emphasis. If a list is necessary, use short numbered lines without Markdown symbols. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
             .$modeInstructions->for($instructionMode)
@@ -833,6 +789,123 @@ class DispatchChatController extends Controller
         return $load->status === 'posted'
             && ! $load->is_negotiable
             && ! $load->assigned_driver_user_id;
+    }
+
+    /**
+     * The skills the conversation's next reply uses, named in the interface language. The chat asks for them right
+     * after saving the user's message, alongside the reply itself, so LenaAI can name the skill it is using while it
+     * thinks. It only reads: the conversation, its canvas and its draft stay as they are.
+     */
+    public function skills(Request $request, LenaSkillCatalog $catalog, LenaSkillUsage $usage): JsonResponse
+    {
+        $validated = $request->validate([
+            'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
+            'lang' => ['nullable', 'string', 'in:bs,de,en'],
+        ]);
+
+        if (! $this->userIsConversationParticipant($validated['conversation_id'], $request->user()?->id)) {
+            return $this->unavailable('You are not part of this conversation.', 403);
+        }
+
+        $aiDispatcherId = User::query()->where('username', 'ai_dispatcher')->value('id');
+        if (! $aiDispatcherId) {
+            return response()->json(['message' => 'AI dispatcher is not configured.', 'data' => [], 'meta' => [], 'errors' => []]);
+        }
+
+        $conversation = Conversation::query()->with(['messages', 'freightLoad', 'freightLoadDraft'])->findOrFail($validated['conversation_id']);
+        $userMessages = $conversation->messages
+            ->where('sender_user_id', '!=', $aiDispatcherId)
+            ->sortByDesc('sent_at')
+            ->values();
+        $latestScans = collect($userMessages->first()?->attachments ?? [])
+            ->map(fn ($attachment) => is_array($attachment) ? ($attachment['loadScan'] ?? null) : null)
+            ->filter(fn ($scan) => is_array($scan))
+            ->values()
+            ->all();
+        $transport = $this->latestLoadDraft($conversation->messages)['transportType'] ?? $conversation->freightLoadDraft?->transport_type;
+        $files = $usage->files($this->resolveTurn($conversation, $userMessages), $latestScans, $transport);
+
+        $lang = $validated['lang'] ?? 'en';
+        $rows = collect($catalog->rows())->keyBy('id');
+        $skills = collect($files)
+            ->map(fn (string $id) => $rows->get($id))
+            ->filter()
+            ->map(fn (array $row) => ['id' => $row['id'], 'name' => $row['names'][$lang] ?? $row['name']])
+            ->values();
+
+        return response()->json(['message' => 'Skills resolved.', 'data' => $skills, 'meta' => [], 'errors' => []]);
+    }
+
+    /**
+     * Which mode this turn runs in, decided only from the conversation and its saved messages. Both the reply and the
+     * skills endpoint read it, so the skills named while LenaAI thinks are the ones the reply uses.
+     */
+    private function resolveTurn(Conversation $conversation, Collection $userMessages): array
+    {
+        $latestUserMessageModel = $userMessages->first();
+        $latestUserMessage = $latestUserMessageModel?->body;
+        $load = $conversation->freightLoad;
+        $guidedAction = $this->guidedAction($latestUserMessage);
+        $activeGuidedMode = $this->activeGuidedMode($userMessages);
+        $explicitPaymentRequest = LenaIntent::isPaymentRequest($latestUserMessage);
+        // A legal upload is deliberately not freight-document input. The user explicitly chooses
+        // whether it should become a legal analysis or start a new load afterwards.
+        $legalMode = $guidedAction !== 'legal_upload_load'
+            && ($guidedAction === 'legal' || $activeGuidedMode === 'legal');
+        $wasCanvasEnabled = (bool) $conversation->canvas;
+        // Auto-detect load-creation intent from an attached document (already scanned regardless
+        // of canvas state, see attachFile in useLenaAiChat.ts) or from cargo-shaped free text, not
+        // only from the narrow "new load"/"novi teret" phrasing asksToOpenLoadCanvas looks for.
+        // This must keep working even while a different guided mode (tracking, hs, ...) is active.
+        $detectedLoadCreationRequest = ! $legalMode
+            && LenaIntent::detect($latestUserMessage) !== 'free'
+            && ! $load
+            && ! $wasCanvasEnabled
+            && ! $guidedAction
+            && (
+                $this->asksToOpenLoadCanvas($latestUserMessage)
+                || $this->mentionsCargoDetails($latestUserMessage)
+                || $this->messageHasCargoSignal($latestUserMessageModel)
+            );
+        // A just-uploaded document already carries concrete, structured cargo data (the scanner
+        // itself flagged isDocument=true), unlike a bare text mention such as "100kg jabuka" which
+        // is still ambiguous and should keep asking permission first. Skip the "do you want to
+        // start?" gate entirely for the document case and open the canvas immediately.
+        $autoStartFromDocument = $detectedLoadCreationRequest && $this->messageHasCargoSignal($latestUserMessageModel);
+        $trackingMode = $guidedAction === 'tracking' || $activeGuidedMode === 'tracking';
+        $requestedLoadCanvas = in_array($guidedAction, ['add', 'storage', 'start_add_yes', 'legal_upload_load'], true) || $autoStartFromDocument;
+        $canvasBlockedByExistingLoad = $requestedLoadCanvas && $load;
+        $canvasEnabled = $legalMode ? false : $wasCanvasEnabled;
+        if ($canvasBlockedByExistingLoad || $guidedAction === 'continue_add_no') {
+            $canvasEnabled = false;
+        } elseif ($requestedLoadCanvas) {
+            $canvasEnabled = true;
+        }
+        $storageMode = $guidedAction === 'storage' || $activeGuidedMode === 'storage';
+        $hsMode = $guidedAction === 'hs'
+            || $activeGuidedMode === 'hs'
+            || preg_match('/\b(?:hs\s*(?:code|kod|nummer)?|customs?\s+code|tariff\s+code|zolltarifnummer)\b/i', (string) $latestUserMessage) === 1;
+        $instructionMode = $legalMode
+            ? 'legal'
+            : ($load
+                ? 'about-load'
+                : ($canvasEnabled
+                    ? ($storageMode ? 'storage' : 'post-load')
+                    : ($trackingMode
+                        ? 'tracking'
+                        : ($hsMode
+                            ? 'hs'
+                            : ($activeGuidedMode === 'booking'
+                                ? 'booking'
+                                : ($activeGuidedMode === 'free' ? 'free' : 'general'))))));
+
+        return [
+            'guidedAction' => $guidedAction, 'activeGuidedMode' => $activeGuidedMode, 'explicitPaymentRequest' => $explicitPaymentRequest,
+            'legalMode' => $legalMode, 'wasCanvasEnabled' => $wasCanvasEnabled, 'detectedLoadCreationRequest' => $detectedLoadCreationRequest,
+            'autoStartFromDocument' => $autoStartFromDocument, 'trackingMode' => $trackingMode, 'requestedLoadCanvas' => $requestedLoadCanvas,
+            'canvasBlockedByExistingLoad' => (bool) $canvasBlockedByExistingLoad, 'canvasEnabled' => $canvasEnabled, 'storageMode' => $storageMode,
+            'hsMode' => $hsMode, 'instructionMode' => $instructionMode,
+        ];
     }
 
     private function asksToOpenLoadCanvas(?string $message): bool

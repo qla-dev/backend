@@ -6,6 +6,7 @@ return array (
   'ui' => 
   array (
     'lena.thinkingPhrase' => 'razmišlja',
+    'lena.usingSkillPhrase' => 'koristi skill',
     'lena.analyzingPhrase' => 'analizira',
     'lena.reviewingPhrase' => 'pregleda informacije',
     'lena.patiencePhrase' => 'vas moli za strpljenje',

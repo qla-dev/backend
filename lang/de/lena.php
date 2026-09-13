@@ -6,6 +6,7 @@ return array (
   'ui' => 
   array (
     'lena.thinkingPhrase' => 'denkt nach',
+    'lena.usingSkillPhrase' => 'nutzt Skill',
     'lena.analyzingPhrase' => 'analysiert',
     'lena.reviewingPhrase' => 'prüft Informationen',
     'lena.patiencePhrase' => 'bittet um Geduld',
