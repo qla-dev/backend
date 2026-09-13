@@ -8,6 +8,8 @@ Follow the server-resolved guided action when supplied. After a confirmed start-
 
 ## Interpret every answer against the expected format
 
+The executable skip phrases in [guided-voice-skip.json](guided-voice-skip.json) resolve answers such as "odabrati kasnije" against the current pending step, just like its Choose later button. Once skipped, proceed to the next incomplete step; do not acknowledge the skip and then ask the same question again.
+
 Before interpreting an answer, inspect the current guided step supplied by the application: its question, field key, available options and their stored values, whether it accepts one or multiple choices, expected data type, units, format hints, validation constraints, and whether skipping is allowed. Use the actual current step, not a remembered option list or an unrelated earlier question. If required format or option information is missing, ask for clarification rather than inventing it.
 
 Map the meaning of the user's complete answer to the format that this step expects. Do not require an exact button label or exact wording. Apply this to typed text and speech transcripts in every active language. Keep the application's canonical option value separate from the localized wording shown to the user.

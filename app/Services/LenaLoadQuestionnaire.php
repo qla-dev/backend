@@ -45,6 +45,7 @@ class LenaLoadQuestionnaire
 
         foreach ($messages->sortBy('sent_at') as $message) {
             if ((int) $message->sender_user_id === $aiDispatcherId) {
+                $pendingStep = null;
                 if (preg_match('/\[\[LENA_STEP:([a-zA-Z]+)\]\]/', (string) $message->body, $match) === 1) {
                     $pendingStep = $match[1];
                 }
@@ -62,6 +63,7 @@ class LenaLoadQuestionnaire
 
             if ($pendingStep && $this->isNegativeOrEmptyAnswer((string) $message->body)) {
                 $answered[$pendingStep] = true;
+                $pendingStep = null;
             }
         }
 
@@ -71,6 +73,9 @@ class LenaLoadQuestionnaire
     private function isNegativeOrEmptyAnswer(string $answer): bool
     {
         $normalized = mb_strtolower(trim($answer));
+        $skipPhrases = json_decode(file_get_contents(__DIR__.'/../../agents/lena/post-load/skills/guided-voice-skip.json'), true, 512, JSON_THROW_ON_ERROR);
+        $normalizedSkip = trim(preg_replace('/[\p{P}\s]+/u', ' ', $normalized));
+        if (in_array($normalizedSkip, $skipPhrases, true)) return true;
 
         return preg_match('/^(?:0|ne|nema|nemam|nikakv\w*|bez|ništa|nista|nije potrebno|nije poznato|nije navedeno|no|none|nothing|unknown|not needed|not specified|no preference|nein|keine|keiner|keins|nichts|unbekannt|nicht erforderlich|nicht angegeben)(?:\b.*)?[.!]?$/ui', $normalized) === 1;
     }
