@@ -47,7 +47,15 @@ class LenaSkillCatalogTest extends TestCase
         $this->assertSame(['legal'], $byId['legal/legal-srb/AGENT.md']['modes']);
         $ocp = $byId['legal/skills/reconcile-declaration-ocp-payments.md'];
         $this->assertSame(['skill', 'legal', ['legal']], [$ocp['kind'], $ocp['folder'], $ocp['modes']]);
-        $this->assertSame([], $byId['storage/AGENT.md']['sources']);
+        $this->assertSame(['file'], array_column($byId['storage/AGENT.md']['sources'], 'type'));
+        $containers = $byId['post-load/skills/container-recommendation.md']['sources'];
+        $this->assertSame('resources/lena/container-types.json', $containers[0]['path'] ?? null, 'Container recommendation lists the container types catalogue');
+        $this->assertGreaterThan(0, $containers[0]['bytes']);
+        $referenced = app(LenaSkillResources::class)->referencedFiles();
+        $this->assertContains('resources/lena/container-types.json', $referenced);
+        $this->assertContains('agents/lena/legal-sources.json', $referenced);
+        $this->assertFalse(LenaSkillResources::isAllowedFile('resources/lena/../../.env'));
+        $this->assertFalse(LenaSkillResources::isAllowedFile('composer.json'));
         $hsTypes = array_column($byId['hs/AGENT.md']['sources'], 'type');
         $this->assertContains('app', $hsTypes);
         $this->assertContains('link', $hsTypes);
@@ -55,7 +63,7 @@ class LenaSkillCatalogTest extends TestCase
         $this->assertStringNotContainsString('taric', (new LenaModeInstructions)->for('hs'));
         // Post a load cites web regulations only; its prompt stays a fallback for the guided questionnaire.
         $postLoad = $byId['post-load/AGENT.md'];
-        $this->assertSame(['link'], array_values(array_unique(array_column($postLoad['sources'], 'type'))));
+        $this->assertSame(['link', 'file'], array_values(array_unique(array_column($postLoad['sources'], 'type'))));
         $this->assertStringContainsString('Guided answers come first', $postLoad['content']);
         $this->assertStringNotContainsString('iccwbo.org', (new LenaModeInstructions)->for('post-load'));
     }
@@ -106,6 +114,9 @@ class LenaSkillCatalogTest extends TestCase
                     } elseif ($type === 'link') {
                         $this->assertNotEmpty($entry['title'] ?? null, "{$folder}/{$file} has a link without a title");
                         $this->assertStringStartsWith('https://', (string) ($entry['url'] ?? ''));
+                    } elseif ($type === 'file') {
+                        $this->assertNotEmpty($entry['title'] ?? null, "{$folder}/{$file} has a data file without a title");
+                        $this->assertTrue(LenaSkillResources::isAllowedFile((string) ($entry['path'] ?? '')), "{$folder}/{$file} points to a missing or disallowed file");
                     } else {
                         $this->assertSame('app', $type, "{$folder}/{$file} has a resource of unknown type");
                         $this->assertNotEmpty($entry['title'] ?? null, "{$folder}/{$file} has an app screen without a title");

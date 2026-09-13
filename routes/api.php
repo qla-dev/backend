@@ -248,6 +248,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         // The legal-source manifest behind Lena's citations, listed for the "Zakoni" screen.
         Route::get('legal-sources', [\App\Http\Controllers\Api\LegalSourceController::class, 'index']);
         Route::get('lena-skills', [\App\Http\Controllers\Api\LenaSkillController::class, 'index']);
+        Route::get('lena-skills/file', [\App\Http\Controllers\Api\LenaSkillController::class, 'file']);
         Route::post('user-subscriptions/{user}', [UserSubscriptionController::class, 'store']);
         Route::delete('user-subscriptions/{userSubscription}', [UserSubscriptionController::class, 'destroy']);
         Route::apiResources([
