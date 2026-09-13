@@ -115,7 +115,11 @@ class LenaCatalog
         // Cyrillic for clients whose native language setting requests that script.
         $locales['sr_cyrl'] = SerbianCyrillic::convert($locales['sr']);
 
-        $payload = [...$schema, 'locales' => $locales];
+        // Titles for the source links under Lena's legal answers. Served here so clients deployed
+        // without the backend checkout still resolve every catalogue entry.
+        $legalSources = collect(app(LegalSourceCatalog::class)->sources())->mapWithKeys(fn (array $source) => [$source['id'] => $source['file']])->all();
+
+        $payload = [...$schema, 'legal_sources' => $legalSources, 'locales' => $locales];
         $payload['revision'] = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
 
         return $payload;

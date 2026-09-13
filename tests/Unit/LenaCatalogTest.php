@@ -128,6 +128,7 @@ class LenaCatalogTest extends TestCase
         $this->assertSame(app(LenaCatalog::class)->payload()['revision'], $response->json('data.revision'));
         $this->assertSame('Weight', $response->json('data.locales.en.form_fields.weightKg.label'));
         $this->assertSame('kg', $response->json('data.locales.bs.steps.weight.unit'));
+        $this->assertSame('B-3-Zakon-o-carinskoj-tarifi-5812.pdf', $response->json('data.legal_sources.customs-tariff-law'));
         $road = $response->json('data.locales.en.steps.loadingEquipment.choices_by_transport.road');
         $air = $response->json('data.locales.en.steps.loadingEquipment.choices_by_transport.air');
         $this->assertContains('Vehicle with ramp', array_column($road, 'value'));
