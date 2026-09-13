@@ -245,14 +245,10 @@ class DispatchChatController extends Controller
         );
 
         $interfaceLangName = ['bs' => 'Bosnian', 'de' => 'German', 'en' => 'English'][$interfaceLang] ?? 'English';
-        // A guided action click or a skip marker is not typed text and carries no language of its
-        // own - deciding those deterministically from the app's interface language (instead of
-        // leaving the model to infer one from nothing) is what actually fixes replies randomly
-        // defaulting to Bosnian on a fresh conversation. Real typed text still gets detected below.
-        $isPreparedTrigger = (bool) $guidedAction || preg_match('/\[\[LENA_SKIP:[a-zA-Z]+\]\]/', (string) $latestUserMessage) === 1;
-        $languageInstruction = $isPreparedTrigger
-            ? 'The latest user message is a guided action or skip selection, not typed text, so reply entirely in '.$interfaceLangName.', the user\'s current interface language. '
-            : 'Determine the language of the user\'s latest message and write your ENTIRE reply in that language. ';
+        // Lena always follows the application's selected language. Do not infer the reply
+        // language from typed or transcribed text: speech recognition can misclassify short
+        // messages, and the user's language preference is the authoritative contract.
+        $languageInstruction = 'Write your ENTIRE reply in '.$interfaceLangName.', the user\'s current application language. Never switch languages based on the language of the latest message, voice transcript, conversation history, or model guess. ';
         $systemPrompt ='You are LenaAI, the assistant for the Freightbook.ai freight logistics platform. '
             .$languageInstruction
             .'Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. Write plain text only. Do not use Markdown, asterisks, Markdown headings, or Markdown emphasis. If a list is necessary, use short numbered lines without Markdown symbols. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
