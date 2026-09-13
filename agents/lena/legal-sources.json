@@ -4,7 +4,7 @@
         {
             "id": "customs-tariff-law",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-3-Zakon-o-carinskoj-tarifi-5812.pdf",
             "title": "Zakon o carinskoj tarifi",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -16,7 +16,7 @@
         {
             "id": "customs-policy-law-58-15",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-Zakon-o-car-pol-58-15-b.pdf",
             "title": "Zakon o carinskoj politici u BiH, Sl. glasnik BiH 58/15",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -28,7 +28,7 @@
         {
             "id": "customs-policy-decision-13-19",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-H-S-1-Odluka-o-sprovodenju-carinske-politike-13-19.pdf",
             "title": "Odluka o provođenju Zakona o carinskoj politici u BiH, Sl. glasnik BiH 13/19",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -40,7 +40,7 @@
         {
             "id": "customs-policy-amendment-54-19",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-1-Odluk-o-izm-odluk-o-provod-car-politik-u-BiH-sl-glasnik-54-09-08-2019.pdf",
             "title": "Izmjena Odluke o provođenju Zakona o carinskoj politici u BiH, Sl. glasnik BiH 54/19",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -52,7 +52,7 @@
         {
             "id": "customs-policy-amendment-21-20",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-2-Odluka-o-izmj-Odluk-o-sprovoden-car-polit-BiH-sl-list-B-H-S-21-20-10-04-20.pdf",
             "title": "Izmjena Odluke o provođenju Zakona o carinskoj politici u BiH, Sl. glasnik BiH 21/20",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -64,7 +64,7 @@
         {
             "id": "customs-policy-amendment-6-23",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-H-S-1-6-O-o-izmj-i-dop-O-o-sprovodj-Z-o-car-politici-u-BiH-slist-6-23-27-01-23.pdf",
             "title": "Izmjene i dopune Odluke o provođenju Zakona o carinskoj politici u BiH, Sl. glasnik BiH 6/23",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -76,7 +76,7 @@
         {
             "id": "customs-policy-amendment-2026",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-H-S-1-7-O-o-izmj-i-dop-Odluke-o-provvodenju-Zakona-o-carinskoj-politici-u-BiH-Sl-list-28-26-21-04-2026.pdf",
             "title": "Izmjene Odluke o provođenju Zakona o carinskoj politici u BiH, Sl. glasnik BiH 28/26",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -88,7 +88,7 @@
         {
             "id": "customs-offences-law",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-8-Zakon-o-carinskim-prekrsajima-s-list-28-22-06-05-22.pdf",
             "title": "Zakon o carinskim prekršajima BiH, Sl. glasnik BiH 28/22",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -100,7 +100,7 @@
         {
             "id": "customs-tariff-2026",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "Carinska_tarifa_za_2026_-_bosanski.pdf",
             "title": "Odluka o utvrđivanju Carinske tarife BiH za 2026. godinu, Sl. glasnik BiH 80/25",
             "publisher": "Ministarstvo vanjske trgovine i ekonomskih odnosa BiH",
@@ -112,7 +112,7 @@
         {
             "id": "customs-declaration-instructions",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-U-o-popunjavanju-car-prijave-i-deklaracije-za-priv-smjestajslist-9-23-10-02-23.pdf",
             "title": "Uputstvo o popunjavanju carinske prijave i deklaracije za privremeni smještaj",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -124,7 +124,7 @@
         {
             "id": "jci-amendment-43-24",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-H-S-1-11-U-o-izmj-i-dop-Uputst-o-popunjavanju-carin-deklaracije-i-dekl-za-privremen-smjestaj-slist-43-21-06-2024.pdf",
             "title": "Izmjene i dopune Uputstva o popunjavanju carinske deklaracije, Sl. glasnik BiH 43/24",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -136,7 +136,7 @@
         {
             "id": "jci-amendment-69-25",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-H-S-1-12-U-o-izmj-i-dop-uputst-o-pop-car-deklarac-i-deklar-za-priv-smjestaj-Frontex-Sl-list-69-25-17-11-2025.pdf",
             "title": "Izmjene i dopune Uputstva o popunjavanju carinske deklaracije, Sl. glasnik BiH 69/25",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -148,7 +148,7 @@
         {
             "id": "jci-amendment-16-26",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-H-S-1-13-Uputstvo-o-izmjenama-i-dopunama-Uputstva-o-JCI-sl-list-16-26-27-02-2026.pdf",
             "title": "Izmjene i dopune Uputstva o JCI, Sl. glasnik BiH 16/26",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -160,7 +160,7 @@
         {
             "id": "jci-fields",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-1-Prilog-1-Polja-za-popunjavanje-JCI.pdf",
             "title": "Prilog 1: Polja za popunjavanje JCI",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -172,7 +172,7 @@
         {
             "id": "jci-export",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-2-Prilog-2-Izvoz-Uputstva-o-JCI.pdf",
             "title": "Prilog 2: Izvoz, uputstva o JCI",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -184,7 +184,7 @@
         {
             "id": "jci-import",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-3-Prilog-3-Uvoz-Uputstva-o-JCI.pdf",
             "title": "Prilog 3: Uvoz, uputstva o JCI",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -196,7 +196,7 @@
         {
             "id": "customs-value",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-Uputstvo-o-utvrdivanju-carinske-vrijednosti-Sluzbeni-glasnik-BiH-broj-7407.pdf",
             "title": "Uputstvo o utvrđivanju carinske vrijednosti",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -208,7 +208,7 @@
         {
             "id": "customs-debt-security",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-H-S-1-Uputstvo-o-osiguranju-carinskog-duga-s-list-30-23-28-04-23.pdf",
             "title": "Uputstvo o osiguranju carinskog duga, Sl. glasnik BiH 30/23",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -220,7 +220,7 @@
         {
             "id": "customs-debt-security-amendment-9-25",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-H-S-1-1-Uputst-o-izmj-i-dop-Uputs-o-osiguranj-carinsk-duga-s-list-9-25-21-02-2025.pdf",
             "title": "Izmjene i dopune Uputstva o osiguranju carinskog duga, Sl. glasnik BiH 9/25",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -232,7 +232,7 @@
         {
             "id": "transit-ncts",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-30-U-za-provodd-nac-postupk-provoz-uz-upotrb-NCTS-sistem-B-H-S-slist-38-22-06-21.pdf",
             "title": "Uputstvo za provođenje nacionalnog postupka provoza uz upotrebu NCTS, Sl. glasnik BiH 38/21",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -244,7 +244,7 @@
         {
             "id": "transit-security",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-37-U-o-upotrebi-osiguranja-u-postupku-provoza-B-H-S-slist-40-21-29-06-21.pdf",
             "title": "Uputstvo o upotrebi osiguranja u postupku provoza, Sl. glasnik BiH 40/21",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -256,7 +256,7 @@
         {
             "id": "customs-warehouse",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-H-S-5N-U-o-carinskom-skladistu-i-postupku-carinskog-skladistenja-s-list-46-22-15-07.pdf",
             "title": "Uputstvo o carinskom skladištu i postupku carinskog skladištenja",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -268,7 +268,7 @@
         {
             "id": "inward-processing",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-6-U-o-postupku-unutrasnje-obrade-i-prilozi-s-list-53-22-09-08-22.pdf",
             "title": "Uputstvo o postupku unutrašnje obrade",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -280,7 +280,7 @@
         {
             "id": "home-import-clearance",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-17-U-o-kucnom-uvoznom-carinjenju-s-list-57-22-23-08-22.pdf",
             "title": "Uputstvo o kućnom uvoznom carinjenju",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -292,7 +292,7 @@
         {
             "id": "temporary-import",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-9-Uputstvo-o-privremenom-uvozu-Sluzbeni-glasnik-BiH-broj-6112.pdf",
             "title": "Uputstvo o privremenom uvozu",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -304,7 +304,7 @@
         {
             "id": "duty-relief-decision",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-11-Odluka-o-uslovima-oslobadjanja-uvoznih-i-izvoznih-dazbina-sl-glasnik-24-18-17-04-18-B.pdf",
             "title": "Odluka o uslovima i postupku oslobađanja od plaćanja uvoznih i izvoznih dažbina, Sl. glasnik BiH 24/18",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -316,7 +316,7 @@
         {
             "id": "vat-law",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "zakon-o-pdv-precisceni-tekst.pdf",
             "title": "Zakon o porezu na dodanu vrijednost BiH, neslužbeni prečišćeni tekst",
             "publisher": "Parlamentarna skupština BiH",
@@ -328,7 +328,7 @@
         {
             "id": "excise-law",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-Zakon-o-akcizama-u-Bosni-i-Hercegovini-Sluzbeni-glasnik-BiH-broj-4909.pdf",
             "title": "Zakon o akcizama u BiH, Sl. glasnik BiH 49/09",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -340,7 +340,7 @@
         {
             "id": "excise-law-amendment-49-14",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-1-Zakon-o-izmjenama-i-dopunama-z-o-trosarinama-u-BiH-49-14-B.pdf",
             "title": "Izmjene i dopune Zakona o akcizama u BiH, Sl. glasnik BiH 49/14",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -352,7 +352,7 @@
         {
             "id": "excise-law-amendment-60-14",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-2-Zakon-o-izmjenama-i-dopunama-z-o-trosarinama-u-BiH-60-14-B.pdf",
             "title": "Izmjene i dopune Zakona o akcizama u BiH, Sl. glasnik BiH 60/14",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -364,7 +364,7 @@
         {
             "id": "excise-law-amendment-91-17",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-3-zakon-o-izmj-i-dop-zakona-o-akciz-sl-glasnik-91-17-27-12-17-B-11.pdf",
             "title": "Izmjene i dopune Zakona o akcizama u BiH, Sl. glasnik BiH 91/17",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -376,7 +376,7 @@
         {
             "id": "excise-law-amendment-50-22",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-1-4-Z-o-izmj-i-dop-Z-o-akcizama-s-list-50-22-29-07-22.pdf",
             "title": "Izmjene i dopune Zakona o akcizama u BiH, Sl. glasnik BiH 50/22",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -388,7 +388,7 @@
         {
             "id": "efta-agreement",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "6-1-Ugovor-EFTA-18-02-2015.pdf",
             "title": "Ugovor EFTA",
             "publisher": "EFTA",
@@ -401,7 +401,7 @@
         {
             "id": "cefta-origin",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-2-Uputstvo-o-provedbi-pravila-o-porijeklu-u-preferencijalnoj-trgovini-u-okviru-srednjeevropskog-sporazuma-o-slobodnoj-trgovini-Sluzbeni-glasnik-B.pdf",
             "title": "Uputstvo o pravilima porijekla u CEFTA trgovini",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -413,7 +413,7 @@
         {
             "id": "cefta-origin-amendment",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-2-1-Uputstvo-o-izmjeni-i-dopuni-uputstva-o-provedbi-pravila-o-porijeklu-u-preferencijalnoj-trgovini-u-okviru-Srednjeevropskog-sporazuma-o-slobodnoj.pdf",
             "title": "Izmjena i dopuna Uputstva o pravilima porijekla u CEFTA trgovini",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -425,7 +425,7 @@
         {
             "id": "cefta-joint-committee",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "9-Odluka-o-zajednickog-odbora-centralnoevropskog-sporazuma-o-slobodn-trgovin-med-sluzb-list-9-22-26-12-22.pdf",
             "title": "Odluka Zajedničkog odbora CEFTA, Sl. glasnik BiH, Međunarodni ugovori 9/22",
             "publisher": "Službeni glasnik BiH",
@@ -438,7 +438,7 @@
         {
             "id": "cefta-decision-3-2015",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-12-1-Odluka-zajednickog-odbora-CEFTA-3-2015-sl-glasnik-43-18-26-06-18.pdf",
             "title": "Odluka Zajedničkog odbora CEFTA 3/2015, Sl. glasnik BiH 43/18",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -450,7 +450,7 @@
         {
             "id": "cefta-decision-1-2021",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "cefta-decision-1-2021-rules-of-origin.pdf",
             "title": "CEFTA Joint Committee Decision 1/2021 on Rules of Origin",
             "publisher": "CEFTA Secretariat",
@@ -462,7 +462,7 @@
         {
             "id": "saa-trade-aspects",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "trgovinski-aspekti-ssp-bih-eu.pdf",
             "title": "Trgovinski aspekti Sporazuma o stabilizaciji i pridruživanju BiH i EU",
             "publisher": "Ministarstvo vanjske trgovine i ekonomskih odnosa BiH",
@@ -474,7 +474,7 @@
         {
             "id": "saa-diagonal-cumulation",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "B-10-Obavjestenje-o-primjeni-dijagonalne-kumulacije-u-okviru-Privremenog-sporazuma.pdf",
             "title": "Obavještenje o primjeni dijagonalne kumulacije u okviru Privremenog sporazuma",
             "publisher": "Uprava za indirektno oporezivanje BiH",
@@ -486,7 +486,7 @@
         {
             "id": "turkey-fta",
             "jurisdiction": "BA",
-            "folder": "legal-ba",
+            "folder": "legal/legal-ba",
             "file": "ugovor-o-slobodnoj-trgovini-bih-turska.pdf",
             "title": "Ugovor o slobodnoj trgovini između BiH i Republike Turske",
             "publisher": "Ministarstvo vanjske trgovine i ekonomskih odnosa BiH",
@@ -498,7 +498,7 @@
         {
             "id": "eu-union-customs-code",
             "jurisdiction": "EU",
-            "folder": "legal-eu",
+            "folder": "legal/legal-eu",
             "file": "union-customs-code-952-2013-20221212.pdf",
             "title": "Uredba (EU) br. 952/2013, Carinski zakonik Unije",
             "publisher": "EUR-Lex",
@@ -511,7 +511,7 @@
         {
             "id": "eu-delegated-regulation-2446",
             "jurisdiction": "EU",
-            "folder": "legal-eu",
+            "folder": "legal/legal-eu",
             "file": "delegated-regulation-2015-2446-20250225.pdf",
             "title": "Delegirana uredba Komisije (EU) 2015/2446 o dopuni Carinskog zakonika Unije",
             "publisher": "EUR-Lex",
@@ -524,7 +524,7 @@
         {
             "id": "eu-implementing-regulation-2447",
             "jurisdiction": "EU",
-            "folder": "legal-eu",
+            "folder": "legal/legal-eu",
             "file": "implementing-regulation-2015-2447-20251101.pdf",
             "title": "Provedbena uredba Komisije (EU) 2015/2447 o pravilima za provedbu Carinskog zakonika Unije",
             "publisher": "EUR-Lex",
@@ -537,7 +537,7 @@
         {
             "id": "eu-vat-directive",
             "jurisdiction": "EU",
-            "folder": "legal-eu",
+            "folder": "legal/legal-eu",
             "file": "vat-directive-2006-112-20250320.pdf",
             "title": "Direktiva Vijeća 2006/112/EZ o zajedničkom sustavu PDV-a",
             "publisher": "EUR-Lex",
@@ -550,7 +550,7 @@
         {
             "id": "hr-import-vat-instruction",
             "jurisdiction": "HR",
-            "folder": "legal-cro",
+            "folder": "legal/legal-cro",
             "file": "uputa-8-23-obracunski-pdv.pdf",
             "title": "Uputa Carinske uprave RH br. 8/23 o obračunskom PDV-u pri uvozu",
             "publisher": "Carinska uprava RH",
@@ -562,7 +562,7 @@
         {
             "id": "hr-import-vat-leaflet",
             "jurisdiction": "HR",
-            "folder": "legal-cro",
+            "folder": "legal/legal-cro",
             "file": "obracunski-pdv-letak.pdf",
             "title": "Letak Carinske uprave RH: Obračunski PDV pri uvozu",
             "publisher": "Carinska uprava RH",
@@ -574,7 +574,7 @@
         {
             "id": "hr-eu-customs-implementation-law",
             "jurisdiction": "HR",
-            "folder": "legal-cro",
+            "folder": "legal/legal-cro",
             "file": "zakon-o-provedbi-carinskog-zakonodavstva-eu-precisceni-tekst.pdf",
             "title": "Zakon o provedbi carinskog zakonodavstva Europske unije, NN 40/16 i 52/25, neslužbeni pročišćeni tekst",
             "publisher": "Carinska uprava RH",
@@ -586,7 +586,7 @@
         {
             "id": "hr-excise-law",
             "jurisdiction": "HR",
-            "folder": "legal-cro",
+            "folder": "legal/legal-cro",
             "file": "zakon-o-trosarinama-precisceni-tekst-2023.pdf",
             "title": "Zakon o trošarinama, NN 106/18, 121/19 i 144/21, neslužbeni pročišćeni tekst",
             "publisher": "Carinska uprava RH",
@@ -598,7 +598,7 @@
         {
             "id": "rs-customs-law",
             "jurisdiction": "RS",
-            "folder": "legal-srb",
+            "folder": "legal/legal-srb",
             "file": "carinski-zakon-95-2018-138-2022.pdf",
             "title": "Carinski zakon Republike Srbije, Sl. glasnik RS 95/18 do 138/22",
             "publisher": "Ministarstvo finansija Republike Srbije",
@@ -612,7 +612,7 @@
         {
             "id": "rs-customs-procedures-regulation",
             "jurisdiction": "RS",
-            "folder": "legal-srb",
+            "folder": "legal/legal-srb",
             "file": "uredba-o-carinskim-postupcima-39-2019-12-2026.pdf",
             "title": "Uredba o carinskim postupcima i carinskim formalnostima, Sl. glasnik RS 39/19 do 12/26",
             "publisher": "Ministarstvo finansija Republike Srbije",
@@ -626,7 +626,7 @@
         {
             "id": "rs-customs-procedures-annexes",
             "jurisdiction": "RS",
-            "folder": "legal-srb",
+            "folder": "legal/legal-srb",
             "file": "uredba-o-carinskim-postupcima-prilozi-16-i-29.pdf",
             "title": "Uredba o carinskim postupcima, Prilog 16 (carinska vrijednost) i Prilog 29 (uobičajeni oblici postupanja)",
             "publisher": "Ministarstvo finansija Republike Srbije",
@@ -639,7 +639,7 @@
         {
             "id": "rs-customs-tariff-law",
             "jurisdiction": "RS",
-            "folder": "legal-srb",
+            "folder": "legal/legal-srb",
             "file": "zakon-o-carinskoj-tarifi-62-2005-91-2019.pdf",
             "title": "Zakon o Carinskoj tarifi Republike Srbije, Sl. glasnik RS 62/05 do 91/19",
             "publisher": "Ministarstvo finansija Republike Srbije",
@@ -652,7 +652,7 @@
         {
             "id": "rs-tariff-nomenclature-2026",
             "jurisdiction": "RS",
-            "folder": "legal-srb",
+            "folder": "legal/legal-srb",
             "file": "uredba-nomenklatura-carinske-tarife-2026.pdf",
             "title": "Uredba o usklađivanju nomenklature Carinske tarife za 2026. godinu, Sl. glasnik RS 107/25 i 45/26",
             "publisher": "Ministarstvo finansija Republike Srbije",
@@ -666,7 +666,7 @@
         {
             "id": "rs-vat-law",
             "jurisdiction": "RS",
-            "folder": "legal-srb",
+            "folder": "legal/legal-srb",
             "file": "zakon-o-pdv-84-2004-109-2025.pdf",
             "title": "Zakon o porezu na dodatu vrednost Republike Srbije, Sl. glasnik RS 84/04 do 109/25",
             "publisher": "Ministarstvo finansija Republike Srbije",
@@ -680,7 +680,7 @@
         {
             "id": "rs-vat-rulebook",
             "jurisdiction": "RS",
-            "folder": "legal-srb",
+            "folder": "legal/legal-srb",
             "file": "pravilnik-o-pdv-37-2021-71-2026.pdf",
             "title": "Pravilnik o porezu na dodatu vrednost Republike Srbije, Sl. glasnik RS 37/21 do 71/26",
             "publisher": "Ministarstvo finansija Republike Srbije",

@@ -79,7 +79,7 @@ class RefreshLegalSources extends Command
         }
 
         $this->table(['id', 'status', 'detail'], $rows);
-        $this->line('A changed document can move article numbers: re-check the matching agents/lena/*/AGENT.md.');
+        $this->line('A changed document can move article numbers: re-check the matching agents/lena/legal/*/AGENT.md.');
 
         return $failures > 0 ? self::FAILURE : self::SUCCESS;
     }

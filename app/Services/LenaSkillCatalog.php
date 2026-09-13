@@ -7,17 +7,23 @@ class LenaSkillCatalog
     public function rows(): array
     {
         $root = realpath(__DIR__.'/../../agents/lena');
-        $paths = array_merge(glob($root.'/*/AGENT.md') ?: [], glob($root.'/*/skills/*.md') ?: [], [$root.'/hs/hs-detection.md']);
+        // Modes sit at agents/lena/{mode}; legal groups its jurisdictions one level deeper, at legal/{jurisdiction}.
+        $paths = array_merge(
+            glob($root.'/*/AGENT.md') ?: [], glob($root.'/*/*/AGENT.md') ?: [],
+            glob($root.'/*/skills/*.md') ?: [], glob($root.'/*/*/skills/*.md') ?: [],
+            [$root.'/hs/hs-detection.md'],
+        );
         sort($paths);
         $legalSources = app(LegalSourceCatalog::class);
         $rows = [];
         foreach (array_unique($paths) as $path) {
             $resolved = realpath($path);
             if (! $resolved || ! str_starts_with($resolved, $root.DIRECTORY_SEPARATOR) || ! is_readable($resolved)) continue;
-            ['prompt' => $content, 'sources' => $sourceIds] = LenaModeInstructions::split((string) file_get_contents($resolved));
+            ['prompt' => $content, 'sources' => $sourceEntries] = LenaModeInstructions::split((string) file_get_contents($resolved));
             if ($content === '') continue;
             $relative = str_replace('\\', '/', substr($resolved, strlen($root) + 1));
-            $folder = explode('/', $relative)[0];
+            // The folder an item belongs to: an AGENT.md's own directory, and for skills/*.md the directory above.
+            $folder = preg_replace('#/skills$#', '', dirname($relative));
             $shared = $relative === 'hs/hs-detection.md';
             $kind = basename($relative) === 'AGENT.md' ? 'instructions' : 'skill';
             preg_match('/^name:\s*(.+)$/m', $content, $name);
@@ -26,13 +32,17 @@ class LenaSkillCatalog
             $plain = preg_replace('/\A---\R.*?\R---\R/s', '', $content);
             $paragraphs = preg_split('/\R\s*\R/', trim($plain));
             $summary = $description[1] ?? current(array_filter($paragraphs, fn ($p) => ! str_starts_with($p, '#'))) ?: '';
-            // Ids missing from legal-sources.json are dropped here and reported by LenaSkillCatalogTest.
-            $sources = array_values(array_filter(array_map(fn (string $id) => ($source = $legalSources->find($id))
-                ? ['id' => $id, 'title' => $source['title'], 'file' => $source['file'], 'jurisdiction' => $source['jurisdiction']]
-                : null, $sourceIds)));
+            // Web pages and app screens pass through; legal ids resolve against legal-sources.json, and unknown
+            // ids are dropped here and reported by LenaSkillCatalogTest.
+            $sources = array_values(array_filter(array_map(function (array $entry) use ($legalSources): ?array {
+                if ($entry['type'] !== 'legal') return $entry;
+                $source = $legalSources->find($entry['id']);
+
+                return $source ? ['type' => 'legal', 'id' => $entry['id'], 'title' => $source['title'], 'file' => $source['file'], 'jurisdiction' => $source['jurisdiction']] : null;
+            }, $sourceEntries)));
             $rows[] = ['id' => $relative, 'name' => trim($name[1] ?? $heading[1] ?? $folder),
                 'description' => trim($summary), 'folder' => $folder, 'kind' => $kind, 'shared' => $shared,
-                'modes' => $shared ? ['general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load'] : [str_starts_with($folder, 'legal-') ? 'legal' : $folder],
+                'modes' => $shared ? ['general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load'] : [explode('/', $folder)[0]],
                 'scanners' => $shared, 'content' => $content, 'sources' => $sources, 'bytes' => filesize($resolved),
                 'updatedAt' => gmdate('c', filemtime($resolved))];
         }
