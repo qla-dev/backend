@@ -111,8 +111,6 @@ class LenaCatalog
             $locales[$locale] = [...$text, 'steps' => $steps, 'form_fields' => $formFields];
         }
 
-        // Keep the user-facing Serbian locale Latin/Ekavian, while exposing the same catalog in
-        // Cyrillic for clients whose native language setting requests that script.
         $locales['sr_cyrl'] = SerbianCyrillic::convert($locales['sr']);
 
         // Titles for the source links under Lena's legal answers. Served here so clients deployed

@@ -15,7 +15,7 @@ class HsCodeController extends Controller
     public function categories(Request $request, HsCodeSearchService $search): JsonResponse
     {
         $validated = $request->validate([
-            'lang' => ['sometimes', 'string', 'in:en,de,bs'],
+            'lang' => ['sometimes', 'string', 'in:en,de,bs,hr,sr'],
             'section' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
         $lang = (string) ($validated['lang'] ?? 'en');
@@ -62,7 +62,7 @@ class HsCodeController extends Controller
             'query' => ['sometimes', 'nullable', 'string', 'max:300'],
             'section' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'chapter' => ['sometimes', 'nullable', 'string', 'max:1000'],
-            'lang' => ['sometimes', 'string', 'in:en,de,bs'],
+            'lang' => ['sometimes', 'string', 'in:en,de,bs,hr,sr'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:10', 'max:100'],
         ]);
@@ -106,7 +106,7 @@ class HsCodeController extends Controller
         $validated = $request->validate([
             'query' => ['required', 'string', 'min:2', 'max:300'],
             'limit' => ['sometimes', 'integer', 'min:1', 'max:25'],
-            'lang' => ['sometimes', 'string', 'in:en,de,bs'],
+            'lang' => ['sometimes', 'string', 'in:en,de,bs,hr,sr'],
         ]);
 
         $results = $search->search(
@@ -132,7 +132,7 @@ class HsCodeController extends Controller
         $validated = $request->validate([
             'codes' => ['required', 'array', 'min:1', 'max:100'],
             'codes.*' => ['string'],
-            'lang' => ['sometimes', 'string', 'in:en,de,bs'],
+            'lang' => ['sometimes', 'string', 'in:en,de,bs,hr,sr'],
         ]);
 
         $results = $search->resolveByCodes($validated['codes'], (string) ($validated['lang'] ?? 'en'));

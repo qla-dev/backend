@@ -37,7 +37,7 @@ class DispatchChatController extends Controller
     {
         $validated = $request->validate([
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
-            'lang' => ['nullable', 'string', 'in:bs,de,en'],
+            'lang' => ['nullable', 'string', 'in:bs,hr,sr,de,en'],
         ]);
         $interfaceLang = $validated['lang'] ?? 'en';
 
@@ -244,7 +244,7 @@ class DispatchChatController extends Controller
             || ($contextLoad->company_id && $askingUser->companies()->where('companies.id', $contextLoad->company_id)->exists())
         );
 
-        $interfaceLangName = ['bs' => 'Bosnian', 'de' => 'German', 'en' => 'English'][$interfaceLang] ?? 'English';
+        $interfaceLangName = ['bs' => 'Bosnian', 'hr' => 'Croatian', 'sr' => 'Serbian (Cyrillic)', 'de' => 'German', 'en' => 'English'][$interfaceLang] ?? 'English';
         // Lena always follows the application's selected language. Do not infer the reply
         // language from typed or transcribed text: speech recognition can misclassify short
         // messages, and the user's language preference is the authoritative contract.
@@ -800,7 +800,7 @@ class DispatchChatController extends Controller
     {
         $validated = $request->validate([
             'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
-            'lang' => ['nullable', 'string', 'in:bs,de,en'],
+            'lang' => ['nullable', 'string', 'in:bs,hr,sr,de,en'],
         ]);
 
         if (! $this->userIsConversationParticipant($validated['conversation_id'], $request->user()?->id)) {
