@@ -19,9 +19,9 @@ final class SerbianCyrillic
         }
 
         $tokens = [];
-        $plain = preg_replace_callback('/\[\[.*?\]\]|:[a-z_]+/', static function (array $match) use (&$tokens): string {
+        $plain = preg_replace_callback('/\[\[.*?\]\]|:[a-z_]+|freightbook(?:\.ai)?|фре(?:и|ј)г?х?тбоок(?:\.(?:аи|ај|ai))?/iu', static function (array $match) use (&$tokens): string {
             $token = "\u{E000}".count($tokens)."\u{E001}";
-            $tokens[$token] = $match[0];
+            $tokens[$token] = preg_match('/^(?:freightbook|фре)/iu', $match[0]) ? 'Freightbook.ai' : $match[0];
             return $token;
         }, $value); 
 

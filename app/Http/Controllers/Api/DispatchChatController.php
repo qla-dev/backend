@@ -249,7 +249,7 @@ class DispatchChatController extends Controller
         // Lena always follows the application's selected language. Do not infer the reply
         // language from typed or transcribed text: speech recognition can misclassify short
         // messages, and the user's language preference is the authoritative contract.
-        $languageInstruction = 'Write your ENTIRE reply in '.$interfaceLangName.', the user\'s current application language. Never switch languages based on the language of the latest message, voice transcript, conversation history, or model guess. ';
+        $languageInstruction = 'Write your ENTIRE reply in '.$interfaceLangName.', the user\'s current application language. Never switch languages based on the language of the latest message, voice transcript, conversation history, or model guess. Always spell the brand exactly Freightbook.ai in Latin script, including in Serbian Cyrillic replies. Never translate or transliterate the brand. ';
         $systemPrompt ='You are LenaAI, the assistant for the Freightbook.ai freight logistics platform. '
             .$languageInstruction
             .'Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. Write plain text only. Do not use Markdown, asterisks, Markdown headings, or Markdown emphasis. If a list is necessary, use short numbered lines without Markdown symbols. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '

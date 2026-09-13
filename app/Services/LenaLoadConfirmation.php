@@ -28,13 +28,14 @@ class LenaLoadConfirmation
             'ф'=>'f', 'х'=>'h', 'ц'=>'c', 'ч'=>'c', 'џ'=>'dz', 'ш'=>'s',
         ]);
         $text = trim(preg_replace('/[\p{P}\p{Z}\s]+/u', ' ', Str::lower(Str::ascii($normalized))));
-        // Match complete affirmative phrases, not merely a leading "yes":
-        // "yes, but not now" must never become permission to start.
-        if (preg_match('/^(?:yes(?: please| i do| i want to| let s start| lets start| go ahead| of course)?|sure(?: go ahead)?|go ahead|let s (?:start|do it)|da(?: zelim| hocu| molim| naravno| hajde| ajde| moze| kreni| pocnimo| nastavi){0,3}|zelim|hocu|(?:hajde|ajde)(?: da pocnemo| pocnimo| kreni| moze)?|moze(?: hajde| kreni)?|naravno|u redu(?: kreni| hajde)?|ja(?: bitte| gerne| ich mochte| ich will| machen wir| los geht s)?|gerne|los geht s)$/u', $text)) {
-            return $pair.'_yes';
-        }
-        if (preg_match('/^(?:no(?: thanks| thank you| not now)?|ne(?: zelim|cu| hvala)?|necu|nein(?: danke)?|not now|ne sada)$/u', $text)) {
-            return $pair.'_no';
+        // Read the post-load skill's routing resource before selecting the mode.
+        $rules = json_decode(file_get_contents(__DIR__.'/../../agents/lena/post-load/skills/guided-voice-confirmations.json'), true, 512, JSON_THROW_ON_ERROR);
+        foreach ([$pair.'_yes' => $rules[$pair.'_yes'] ?? [], $pair.'_no' => $rules[$pair.'_no'] ?? [], 'yes' => $rules['yes'], 'no' => $rules['no']] as $action => $patterns) {
+            foreach ($patterns as $pattern) {
+                if (preg_match('~^(?:'.$pattern.')$~u', $text)) {
+                    return in_array($action, ['yes', 'no'], true) ? $pair.'_'.$action : $action;
+                }
+            }
         }
         return null;
     }

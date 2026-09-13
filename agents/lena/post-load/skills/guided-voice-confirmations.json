@@ -1,0 +1,11 @@
+{
+  "start_add_yes": [
+    "(?:(?:da(?: zelim| hocu)?|zelim|hocu|hajde|ajde|moze) (?:(?:da )?(?:dodam|dodamo|kreiram|kreiramo|objavim|objavimo|unesem|unesemo) (?:novi )?teret|(?:zapoceti|zapocnem|zapocnemo|poceti|pocnem|pocnemo|pokrenuti|pokrenem|pokrenemo)(?: (?:sa )?(?:kreiranje|kreiranjem|dodavanje|dodavanjem|unos|unosom|objavu|objavljivanje)(?: (?:novog )?tereta)?)?|(?:dodati|kreirati|objaviti|uneti|unijeti) (?:novi )?teret)|(?:yes(?: i want to| please)?|i want to|please|go ahead and) (?:start|create|add|post)(?: (?:creating|adding|posting))?(?: (?:a |the )?(?:new )?load)?|(?:ja(?: ich mochte| ich will)?|ich mochte|ich will|bitte) (?:(?:eine |die )?(?:neue )?(?:ladung|fracht) (?:erstellen|hinzufugen|anlegen)|(?:mit der )?erstellung(?: einer neuen ladung)? (?:beginnen|starten)))"
+  ],
+  "yes": [
+    "(?:yes(?: please| i do| i want to| let s start| lets start| go ahead| of course)?|sure(?: go ahead)?|go ahead|let s (?:start|do it)|da(?: zelim| hocu| molim| naravno| hajde| ajde| moze| kreni| pocnimo| nastavi){0,3}|zelim|hocu|(?:hajde|ajde)(?: da pocnemo| pocnimo| kreni| moze)?|moze(?: hajde| kreni)?|naravno|u redu(?: kreni| hajde)?|ja(?: bitte| gerne| ich mochte| ich will| machen wir| los geht s)?|gerne|los geht s)"
+  ],
+  "no": [
+    "(?:no(?: thanks| thank you| not now)?|ne(?: zelim|cu| hvala)?|necu|nein(?: danke)?|not now|ne sada)"
+  ]
+}
