@@ -54,7 +54,7 @@ class LenaModeInstructions
     public static function split(string $content): array
     {
         $parts = preg_split('/^##\s+Name\s*$/mi', $content, 2);
-        preg_match_all('/^\s*-\s*(bs|en|de)\s*:\s*(\S.*?)\s*$/m', $parts[1] ?? '', $names, PREG_SET_ORDER);
+        preg_match_all('/^\s*-\s*(bs|en|de|hr|sr)\s*:\s*(\S.*?)\s*$/m', $parts[1] ?? '', $names, PREG_SET_ORDER);
 
         return ['prompt' => trim($parts[0]), 'names' => array_column($names, 2, 1)];
     }

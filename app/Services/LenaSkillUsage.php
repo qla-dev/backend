@@ -16,6 +16,9 @@ class LenaSkillUsage
     public function files(array $turn, array $latestScans, ?string $transport): array
     {
         $files = $turn['instructionMode'] === 'general' ? [] : [$turn['instructionMode'].'/AGENT.md'];
+        if ($turn['instructionMode'] === 'post-load') {
+            $files[] = 'post-load/skills/guided-voice.md';
+        }
         $scanFoundGoods = collect($latestScans)->contains(fn (array $scan) => ! empty($scan['hsCodes']) || filled($scan['hsSearchTerms'] ?? null));
         if ($turn['hsMode'] || ($turn['canvasEnabled'] && $scanFoundGoods)) {
             $files[] = 'skills/hs-detection.md';

@@ -846,6 +846,12 @@ class DispatchChatController extends Controller
         $latestUserMessage = $latestUserMessageModel?->body;
         $load = $conversation->freightLoad;
         $guidedAction = $this->guidedAction($latestUserMessage);
+        if (! $guidedAction && $latestUserMessageModel) {
+            $previous = $conversation->messages->filter(fn (Message $message) => $message->id < $latestUserMessageModel->id)->sortByDesc('id')->first();
+            if ($previous && ! $userMessages->contains('id', $previous->id)) {
+                $guidedAction = \App\Services\LenaLoadConfirmation::action($latestUserMessage, $previous->body);
+            }
+        }
         $activeGuidedMode = $this->activeGuidedMode($userMessages);
         $explicitPaymentRequest = LenaIntent::isPaymentRequest($latestUserMessage);
         // A legal upload is deliberately not freight-document input. The user explicitly chooses
