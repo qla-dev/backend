@@ -61,3 +61,13 @@ Security printed on a declaration covers a debt that exists or may arise. It is 
 For the payment deadline, use the date printed on the payment notice or declaration. Član 94 sets eight days from notification, not the ten days of the Union Customs Code, and član 97 sets 30 days for authorised deferred payment.
 
 Calculate Serbian amounts in RSD unless the documents are in another currency, and never invent an exchange rate: per član 22 stav 2 of the VAT law, a VAT base on import expressed in foreign currency is converted under the customs rules on customs value valid on the day the tax liability arose.
+
+## Sources
+
+- rs-customs-law
+- rs-customs-procedures-regulation
+- rs-customs-procedures-annexes
+- rs-customs-tariff-law
+- rs-tariff-nomenclature-2026
+- rs-vat-law
+- rs-vat-rulebook

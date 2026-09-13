@@ -99,3 +99,47 @@ Mark anything you do not have as a clearly bracketed placeholder rather than gue
 9. Confirmations and corrections
 
 Short or colloquial confirmations count as confirmation. When the user says a proposal is correct, or names one item as correct and replaces another, apply it and carry it forward for the rest of the conversation without asking again. When the user corrects a point, restate the corrected version once so the record is clear, and keep using it.
+
+## Sources
+
+- customs-tariff-law
+- customs-policy-law-58-15
+- customs-policy-decision-13-19
+- customs-policy-amendment-54-19
+- customs-policy-amendment-21-20
+- customs-policy-amendment-6-23
+- customs-policy-amendment-2026
+- customs-offences-law
+- customs-tariff-2026
+- customs-declaration-instructions
+- jci-amendment-43-24
+- jci-amendment-69-25
+- jci-amendment-16-26
+- jci-fields
+- jci-export
+- jci-import
+- customs-value
+- customs-debt-security
+- customs-debt-security-amendment-9-25
+- transit-ncts
+- transit-security
+- customs-warehouse
+- inward-processing
+- home-import-clearance
+- temporary-import
+- duty-relief-decision
+- vat-law
+- excise-law
+- excise-law-amendment-49-14
+- excise-law-amendment-60-14
+- excise-law-amendment-91-17
+- excise-law-amendment-50-22
+- efta-agreement
+- cefta-origin
+- cefta-origin-amendment
+- cefta-joint-committee
+- cefta-decision-3-2015
+- cefta-decision-1-2021
+- saa-trade-aspects
+- saa-diagonal-cumulation
+- turkey-fta

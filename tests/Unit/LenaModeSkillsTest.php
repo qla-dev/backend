@@ -45,6 +45,9 @@ class LenaModeSkillsTest extends TestCase
         foreach (['legal, legal-ba', 'legal, legal-eu', 'legal, legal-cro', 'legal, legal-srb'] as $label) {
             $this->assertStringContainsString("Mode instructions ({$label}):", $instructions);
         }
+        // The Sources sections feed the skills screen; legal mode gets the catalogue separately.
+        $this->assertStringNotContainsString('## Sources', $instructions);
+        $this->assertStringContainsString('9. Confirmations and corrections', $instructions);
         $this->assertStringNotContainsString('legal-eu', (new LenaModeInstructions)->for('general'));
     }
 

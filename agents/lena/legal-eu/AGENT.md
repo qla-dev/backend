@@ -41,3 +41,10 @@ A guarantee or security printed on a declaration covers a debt that exists or ma
 For the payment deadline, use the date printed on the payment notice or declaration. Article 108 only sets the ceiling of 10 days after notification, and Article 110 explains why an authorised importer may have a longer period.
 
 Label every EU rule as EU law in the answer, and add the Member State's national source when the question also turns on national rules such as VAT.
+
+## Sources
+
+- eu-union-customs-code
+- eu-delegated-regulation-2446
+- eu-implementing-regulation-2447
+- eu-vat-directive
