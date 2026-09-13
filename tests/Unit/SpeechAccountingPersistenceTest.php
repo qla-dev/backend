@@ -49,8 +49,11 @@ class SpeechAccountingPersistenceTest extends TestCase
             $reconciler = new class extends SpeechUsageReconciler {
                 public function fetch(string $generationId): ?array { return ['cost_usd' => 0.001304, 'total_tokens' => 69]; }
             };
-            $reconciler->reconcile('gen-one');
-            $reconciler->reconcile('gen-two');
+            $reconciler->reconcilePending(AiCallLog::where('conversation_id', 999));
+            $this->assertSame(2, AiCallLog::whereNull('cost_usd')->count());
+            $reconciler->reconcilePending(AiCallLog::where('conversation_id', 94), 1);
+            $this->assertSame(1, AiCallLog::whereNull('cost_usd')->count());
+            $reconciler->reconcilePending(AiCallLog::where('conversation_id', 94));
             $reconciler->reconcile('gen-one');
             $this->assertSame(2, AiCallLog::count());
             $this->assertEqualsWithDelta(0.002608, AiCallLog::sum('cost_usd'), 0.0000001);

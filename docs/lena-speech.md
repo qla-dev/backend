@@ -8,6 +8,8 @@ Deploy the backend route/controller/service and reconciliation command with the 
 
 Accounting captures `X-Generation-Id` immediately and fetches actual billing metadata from OpenRouter after returning audio. If metadata is not available yet, the cost stays null (pending), not a fabricated zero. Ensure the Laravel scheduler runs every minute: `lena:reconcile-speech-usage` fills pending costs and native token counts in the existing rows. AI Stats session totals and the usage service breakdown include these rows. Speech does not consume an additional subscription message. Older audio calls cannot be reconstructed automatically because their generation/conversation association was not recorded.
 
+AI Stats also reconciles up to five pending voice entries matching its filters before returning the list, so recovery does not depend exclusively on the scheduler. Each batch stops starting lookups after ten seconds (an in-flight lookup may take another ten seconds). Unresolved entries rotate through the backlog; old entries no longer expire from scheduled recovery after seven days. Provider HTTP failures other than temporarily unavailable metadata (404), and reconciliation exceptions, are logged. Actual costs remain pending until the provider supplies them.
+
 The frontend splits long replies, plays WAV chunks sequentially, aborts pending requests when a new playback or microphone recording starts, and releases audio URLs. It does not silently fall back to installed voices. Browser autoplay policies still apply; use the play button if automatic playback is blocked.
 
 Verification:

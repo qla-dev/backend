@@ -6,7 +6,7 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 $connection = Illuminate\Support\Facades\DB::connection();
 echo json_encode(['connection' => array_intersect_key($connection->getConfig(), array_flip(['driver', 'host', 'port', 'database']))], JSON_UNESCAPED_UNICODE).PHP_EOL;
 $logs = $connection->table('ai_call_logs')->where('service', 'speech')->orderByDesc('id')->limit(12)
-    ->get(['id', 'conversation_id', 'created_at', 'http_status', 'is_success', 'error_message', 'generation_id', 'response_payload']);
+    ->get(['id', 'conversation_id', 'created_at', 'http_status', 'is_success', 'error_message', 'generation_id', 'cost_usd', 'total_tokens', 'response_payload']);
 foreach ($logs as $row) {
     $payload = json_decode($row->response_payload ?? '{}', true);
     unset($row->response_payload);

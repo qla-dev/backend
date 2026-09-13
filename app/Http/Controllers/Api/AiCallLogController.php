@@ -10,6 +10,15 @@ use Illuminate\Http\Request;
 
 class AiCallLogController extends CrudController
 {
+    public function index(Request $request): JsonResponse
+    {
+        // Recover delayed billing even on installations without a running scheduler.
+        $query = AiCallLog::query();
+        $this->applyFilters($query, $request);
+        app(\App\Services\SpeechUsageReconciler::class)->reconcilePending($query);
+        return parent::index($request);
+    }
+
     protected function modelClass(): string
     {
         return AiCallLog::class;

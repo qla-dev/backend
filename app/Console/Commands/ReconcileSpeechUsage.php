@@ -13,9 +13,7 @@ class ReconcileSpeechUsage extends Command
 
     public function handle(SpeechUsageReconciler $reconciler): int
     {
-        AiCallLog::query()->where('service', 'speech')->whereNull('cost_usd')->whereNotNull('generation_id')
-            ->where('created_at', '>=', now()->subDays(7))->orderByDesc('id')->limit(100)->pluck('generation_id')
-            ->each(fn (string $id) => $reconciler->reconcile($id));
+        $reconciler->reconcilePending(AiCallLog::query(), 100);
         return self::SUCCESS;
     }
 }
