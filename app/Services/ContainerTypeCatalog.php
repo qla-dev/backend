@@ -37,4 +37,21 @@ class ContainerTypeCatalog
 
         return $equipment;
     }
+
+    /** Catalogue facts for chat answers without a load draft: planning limits beside sourced carrier reference data. */
+    public function promptContext(): array
+    {
+        $data = $this->data();
+        $planning = $this->planningEquipment();
+        $reference = [];
+        foreach ($data['types'] as $code => $type) {
+            if (isset($type['aliasOf']) || empty($type['specifications'])) continue;
+            $specification = array_diff_key($type['specifications'], array_flip(['status', 'notes']));
+            $reference[$code] = ['category' => $type['category'], ...$specification, 'automaticPlanning' => isset($planning[$code])];
+        }
+
+        return ['version' => $data['planning']['version'], 'weights' => $data['planning']['weights'],
+            'planningEquipment' => array_map(fn ($equipment) => array_intersect_key($equipment, array_flip(['usableVolumeM3', 'payloadKg'])), $planning),
+            'referenceSpecifications' => $reference];
+    }
 }

@@ -75,6 +75,8 @@ class LenaSkillSelector
                 );
                 $decoded = json_decode(preg_replace('/^```(?:json)?\s*|\s*```$/', '', trim($raw)), true);
                 $ids = is_array($decoded) && array_is_list($decoded) ? $decoded : [];
+                // The model sometimes wraps IDs as {"id": ...}; dropping those silently lost the selected skill.
+                $ids = array_map(fn ($id) => is_array($id) ? ($id['id'] ?? null) : $id, $ids);
                 $files = array_values(array_unique(array_filter($ids, fn ($id) => is_string($id) && $rows->has($id))));
                 $result = ['files' => array_slice($files, 0, 6), 'guided' => false];
             } catch (\Throwable $error) {

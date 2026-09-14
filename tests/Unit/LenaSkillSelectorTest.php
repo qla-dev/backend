@@ -51,6 +51,16 @@ class LenaSkillSelectorTest extends TestCase
         $this->assertFalse($selector->expectedGuidedAnswer($turn, '[[LENA_STEP:notes]]', 'Compare EXW and FOB'));
     }
 
+    public function test_object_shaped_and_fenced_selections_keep_their_skills(): void
+    {
+        config(['cache.stores.file' => ['driver' => 'array']]);
+        $assistant = $this->createMock(OpenRouterDispatchAssistant::class);
+        $assistant->method('reply')->willReturn("```json\n[{\"id\":\"post-load/skills/container-recommendation.md\"},{\"name\":\"no id\"}]\n```");
+        $selector = new LenaSkillSelector(app(LenaSkillCatalog::class), $assistant);
+        $result = $selector->select($this->conversation('ali imaš te informacije u bazi za preporuku kontejnera'), ['instructionMode' => 'general'], 2);
+        $this->assertSame(['post-load/skills/container-recommendation.md'], $result['files']);
+    }
+
     public function test_new_catalogue_skills_are_selectable_without_keyword_code(): void
     {
         config(['cache.stores.file' => ['driver' => 'array']]);

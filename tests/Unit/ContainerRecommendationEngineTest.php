@@ -32,8 +32,30 @@ class ContainerRecommendationEngineTest extends TestCase
     {
         $this->assertSame(5, $this->recommend(['weightKg' => 31000, 'volumeM3' => 300])['candidates'][0]['quantity']);
         $this->assertSame(3, $this->recommend(['weightKg' => 50001, 'volumeM3' => 10])['candidates'][0]['quantity']);
-        $this->assertSame(1, $this->recommend(['weightKg' => 25000, 'volumeM3' => 70])['candidates'][0]['quantity']);
-        $this->assertSame(2, $this->recommend(['weightKg' => 25000, 'volumeM3' => 70.001])['candidates'][0]['quantity']);
+        $this->assertSame(1, $this->recommend(['weightKg' => 25000, 'volumeM3' => 69])['candidates'][0]['quantity']);
+        $this->assertSame(2, $this->recommend(['weightKg' => 25000, 'volumeM3' => 69.001])['candidates'][0]['quantity']);
+    }
+
+    /** Conversation 119: LenaAI answered 8 x 40' from generic figures. The skill's worked example must match the engine. */
+    public function test_skill_worked_example_matches_the_engine(): void
+    {
+        $result = $this->recommend(['weightKg' => 65000, 'volumeM3' => 200, 'pallets' => null]);
+        $options = array_map(fn ($c) => $c['quantity'].' × '.$c['type'], $result['candidates']);
+        $this->assertSame(['3 × 40HC', '4 × 40STD', '8 × 20GP'], $options);
+        $this->assertGreaterThan(90, $result['candidates'][0]['volumeUtilization']);
+        $skill = file_get_contents(__DIR__.'/../../agents/lena/post-load/skills/container-recommendation.md');
+        foreach ([...$options, '4 × 40HC'] as $option) $this->assertStringContainsString($option, $skill);
+        $this->assertStringNotContainsString('97% score', $skill);
+    }
+
+    public function test_chat_prompt_context_separates_planning_limits_from_carrier_facts(): void
+    {
+        $context = (new \App\Services\ContainerTypeCatalog)->promptContext();
+        $this->assertSame(['20GP', '40HC', '40STD'], array_keys($context['planningEquipment']));
+        $this->assertSame(['usableVolumeM3' => 69, 'payloadKg' => 25000], $context['planningEquipment']['40HC']);
+        $this->assertArrayNotHasKey('20STD', $context['referenceSpecifications']);
+        $this->assertFalse($context['referenceSpecifications']['40OT']['automaticPlanning']);
+        $this->assertStringStartsWith('https://', $context['referenceSpecifications']['20GP']['source']);
     }
 
     public function test_specifications_enrich_existing_registered_types_without_duplicate_labels(): void
