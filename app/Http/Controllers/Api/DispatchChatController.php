@@ -69,8 +69,11 @@ class DispatchChatController extends Controller
             'legalMode' => $legalMode, 'wasCanvasEnabled' => $wasCanvasEnabled, 'detectedLoadCreationRequest' => $detectedLoadCreationRequest,
             'autoStartFromDocument' => $autoStartFromDocument, 'trackingMode' => $trackingMode, 'requestedLoadCanvas' => $requestedLoadCanvas,
             'canvasBlockedByExistingLoad' => $canvasBlockedByExistingLoad, 'canvasEnabled' => $canvasEnabled, 'storageMode' => $storageMode,
-            'hsMode' => $hsMode, 'instructionMode' => $instructionMode,
+            'hsMode' => $hsMode, 'instructionMode' => $instructionMode, 'legalSkill' => $legalSkill,
         ] = $this->resolveTurn($conversation, $userMessages);
+        $skillSelection = $latestUserMessageModel
+            ? app(\App\Services\LenaSkillSelector::class)->select($conversation, $this->resolveTurn($conversation, $userMessages), $latestUserMessageModel->id)
+            : ['files' => [], 'guided' => false];
         // OpenRouterLoadScanner classifies the file itself (CMR, invoice, packing list, ...) as well
         // as reading the load out of it. Naming that back is what turns "your file was uploaded"
         // into "your CMR was uploaded", which is the thing the user actually recognises.
@@ -254,10 +257,12 @@ class DispatchChatController extends Controller
             .$languageInstruction
             .'Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. Write plain text only. Do not use Markdown, asterisks, Markdown headings, or Markdown emphasis. If a list is necessary, use short numbered lines without Markdown symbols. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
             .$modeInstructions->for($instructionMode)
+            .app(\App\Services\LenaSkillSelector::class)->instructions($skillSelection['files'])
+            .($legalSkill ? ' The current user task automatically matches '.$legalSkill.'. Apply that supplied workflow now, including follow-up inputs and corrections. No button selection is required. If the user asks for one question at a time, ask only one missing input per reply. Do not run the generic upload-choice flow for this task.' : '')
             .($canvasEnabled ? "\nContainer planning result (advice only, copy requires user action):\n".json_encode(app(\App\Services\ContainerRecommendationEngine::class)->recommend($loadDraft), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n" : '')
             .' When the user requests calculations, start solving with available values immediately. Show the formula, substituted numbers, units and result. Ask only for missing inputs. Use facts from all previous messages and documents, retaining source filenames and distinguishing conflicting versions. Never invent unavailable values or rates.'
             .($legalMode ? ' You are in Legal consultations mode. Give practical, careful information about customs, tariff, declaration, origin, trade and import VAT rules of Bosnia and Herzegovina, the European Union, Croatia and Serbia using only the supplied legal-source catalogue below. Each entry names its jurisdiction; one answer may cite sources from several jurisdictions, but never use a source as authority outside its own jurisdiction. Do not present yourself as a lawyer, do not invent article numbers, and say when the supplied material does not establish an answer. At the end of every substantive legal answer, select the relevant source IDs from the catalogue and put them on one separate line exactly as [[LEGAL_SOURCES:id,id]]. Catalogue: '.app(LegalSourceCatalog::class)->promptCatalog().'. ' : '')
-            .($legalMode && $latestMessageHasFileAttachment && ! $guidedAction && ! $explicitPaymentRequest
+            .($legalMode && $latestMessageHasFileAttachment && ! $guidedAction && ! $explicitPaymentRequest && ! $legalSkill && ! $skillSelection['files']
                 ? ' A document was just uploaded while Legal consultations mode is active. Do not create a load or activate the load-post canvas. Briefly confirm that the new documents are available. Ask whether to analyse them and incorporate their information into the current conversation, or create a new load. Use this exact question in the interface language: '.trans('lena.legal_upload_question', [], $interfaceLang).' End with exactly [[LENA_OPTIONS:legal_upload_analyze,legal_upload_load]].'
                 : '')
             .($guidedAction === 'legal_upload_analyze'
@@ -461,7 +466,7 @@ class DispatchChatController extends Controller
         if ($declaredNoSources) {
             $reply = trim((string) preg_replace('/\[\[LEGAL_SOURCES:\s*\]\]/', '', $reply));
         }
-        if ($legalMode && $latestMessageHasFileAttachment && ! $guidedAction && ! $explicitPaymentRequest && ! str_contains($reply, '[[LENA_OPTIONS:')) {
+        if ($legalMode && $latestMessageHasFileAttachment && ! $guidedAction && ! $explicitPaymentRequest && ! $legalSkill && ! $skillSelection['files'] && ! str_contains($reply, '[[LENA_OPTIONS:')) {
             $reply .= "\n[[LENA_OPTIONS:legal_upload_analyze,legal_upload_load]]";
         }
         if (in_array($guidedAction, ['add', 'storage', 'start_add_yes', 'legal_upload_load'], true) && ! $hasExistingLoadDraftData && ! str_contains($reply, '[[LENA_OPTIONS:')) {
@@ -824,7 +829,13 @@ class DispatchChatController extends Controller
             ->values()
             ->all();
         $transport = $this->latestLoadDraft($conversation->messages)['transportType'] ?? $conversation->freightLoadDraft?->transport_type;
-        $files = $usage->files($this->resolveTurn($conversation, $userMessages), $latestScans, $transport);
+        $turn = $this->resolveTurn($conversation, $userMessages);
+        $selection = $userMessages->first()
+            ? app(\App\Services\LenaSkillSelector::class)->select($conversation, $turn, $userMessages->first()->id)
+            : ['files' => [], 'guided' => false];
+        $files = $selection['guided'] ? [] : array_values(array_unique([
+            ...$usage->files($turn, $latestScans, $transport), ...$selection['files'],
+        ]));
 
         $lang = $validated['lang'] ?? 'en';
         $rows = collect($catalog->rows())->keyBy('id');
@@ -854,11 +865,14 @@ class DispatchChatController extends Controller
             }
         }
         $activeGuidedMode = $this->activeGuidedMode($userMessages);
+        $legalSkill = \App\Services\LenaLegalSkillIntent::resolve($userMessages->pluck('body')->all());
         $explicitPaymentRequest = LenaIntent::isPaymentRequest($latestUserMessage);
         // A legal upload is deliberately not freight-document input. The user explicitly chooses
         // whether it should become a legal analysis or start a new load afterwards.
         $legalMode = $guidedAction !== 'legal_upload_load'
-            && ($guidedAction === 'legal' || $activeGuidedMode === 'legal');
+            && ($guidedAction === 'legal' || $activeGuidedMode === 'legal'
+                || ($legalSkill && ! $guidedAction && ! $load && ! $conversation->canvas));
+        if (! $legalMode) $legalSkill = null;
         $wasCanvasEnabled = (bool) $conversation->canvas;
         // Auto-detect load-creation intent from an attached document (already scanned regardless
         // of canvas state, see attachFile in useLenaAiChat.ts) or from cargo-shaped free text, not
@@ -911,7 +925,7 @@ class DispatchChatController extends Controller
             'legalMode' => $legalMode, 'wasCanvasEnabled' => $wasCanvasEnabled, 'detectedLoadCreationRequest' => $detectedLoadCreationRequest,
             'autoStartFromDocument' => $autoStartFromDocument, 'trackingMode' => $trackingMode, 'requestedLoadCanvas' => $requestedLoadCanvas,
             'canvasBlockedByExistingLoad' => (bool) $canvasBlockedByExistingLoad, 'canvasEnabled' => $canvasEnabled, 'storageMode' => $storageMode,
-            'hsMode' => $hsMode, 'instructionMode' => $instructionMode,
+            'hsMode' => $hsMode, 'instructionMode' => $instructionMode, 'legalSkill' => $legalSkill,
         ];
     }
 

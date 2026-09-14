@@ -53,7 +53,7 @@ class AiCallLogger
 
     public static function messageUnits(array $attributes): int
     {
-        if (($attributes['is_success'] ?? true) !== true || ($attributes['service'] ?? '') === 'speech') return 0;
+        if (($attributes['is_success'] ?? true) !== true || in_array($attributes['service'] ?? '', ['speech', 'skill_selection'], true)) return 0;
         if (in_array($attributes['service'] ?? '', ['dispatch_chat', 'guided_answer'], true)
             && ($attributes['request_payload']['input_mode'] ?? 'text') === 'voice') return 2;
         return ($attributes['service'] ?? '') === 'guided_answer' ? 0 : 1;

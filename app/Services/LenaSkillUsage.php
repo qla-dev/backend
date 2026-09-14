@@ -29,6 +29,9 @@ class LenaSkillUsage
         if ($turn['legalMode'] && $turn['explicitPaymentRequest']) {
             $files[] = 'legal/skills/reconcile-declaration-ocp-payments.md';
         }
+        if ($turn['legalMode'] && ! empty($turn['legalSkill'])) {
+            $files[] = $turn['legalSkill'];
+        }
 
         return $files;
     }

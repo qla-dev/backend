@@ -63,7 +63,12 @@ class LenaCatalog
             $text['legal_choices'] = array_map(fn (array $skill) => [
                 'label' => $skill['names'][$locale] ?? $skill['names']['bs'] ?? $skill['name'],
                 'value' => $skill['names'][$locale] ?? $skill['names']['bs'] ?? $skill['name'],
-                'icon' => 'FileSearch',
+                'icon' => match ($skill['id']) {
+                    'legal/skills/calculate-packing-list-cbm.md' => 'Ruler',
+                    'legal/skills/compare-lcl-fcl.md' => 'Container',
+                    'legal/skills/reconcile-declaration-ocp-payments.md' => 'Landmark',
+                    default => 'FileSearch',
+                },
             ], $legalSkills);
             $text['legal_choices'][] = ['label' => $text['legal_free_chat'], 'value' => $text['legal_free_chat'], 'icon' => 'MessageCircle'];
             $text['welcome']['general'] .= "\n\n[[LENA_OPTIONS:".implode(',', $schema['welcome_actions']).']]';

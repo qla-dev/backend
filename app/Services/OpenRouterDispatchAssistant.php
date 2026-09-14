@@ -13,7 +13,7 @@ class OpenRouterDispatchAssistant
 
     public function __construct(private readonly AiCallLogger $logger) {}
 
-    public function reply(string $systemPrompt, array $history, ?int $conversationId = null, bool $hasAttachment = false): string
+    public function reply(string $systemPrompt, array $history, ?int $conversationId = null, bool $hasAttachment = false, string $service = 'dispatch_chat'): string
     {
         $primaryModel = (string) config('services.openrouter.model');
         $fallbackModel = config('services.openrouter.fallback_model');
@@ -66,14 +66,14 @@ class OpenRouterDispatchAssistant
                         'error' => $errorMessage,
                         'body' => $response->body(),
                     ]);
-                    $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, $errorMessage);
+                    $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, $errorMessage, $service);
 
                     throw new RuntimeException($errorMessage ?: 'AI dispatcher is not available right now.');
                 }
 
                 $content = data_get($response->json(), 'choices.0.message.content');
                 if (is_string($content) && trim($content) !== '') {
-                    $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, true, null);
+                    $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, true, null, $service);
 
                     return trim($content);
                 }
@@ -84,7 +84,7 @@ class OpenRouterDispatchAssistant
                     'finish_reason' => data_get($response->json(), 'choices.0.finish_reason'),
                     'generation_id' => data_get($response->json(), 'id'),
                 ]);
-                $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, 'The AI dispatcher did not return a reply.'.($attempt < self::MAX_ATTEMPTS ? ' Retrying automatically.' : ''));
+                $this->log($payload, $response->json(), $response->status(), $conversationId, $hasAttachment, $startedAt, false, 'The AI dispatcher did not return a reply.'.($attempt < self::MAX_ATTEMPTS ? ' Retrying automatically.' : ''), $service);
 
                 if ($attempt < self::MAX_ATTEMPTS) {
                     continue;
@@ -93,7 +93,7 @@ class OpenRouterDispatchAssistant
                 throw new RuntimeException('The AI dispatcher did not return a reply.');
             } catch (ConnectionException $exception) {
                 Log::warning('AI dispatcher call failed to connect.', [...$logContext, 'error' => $exception->getMessage()]);
-                $this->log($payload, null, null, $conversationId, $hasAttachment, $startedAt, false, $exception->getMessage());
+                $this->log($payload, null, null, $conversationId, $hasAttachment, $startedAt, false, $exception->getMessage(), $service);
 
                 if ($attempt < self::MAX_ATTEMPTS) {
                     continue;
@@ -106,10 +106,10 @@ class OpenRouterDispatchAssistant
         throw new RuntimeException('AI dispatcher is not available right now. Please try again.');
     }
 
-    private function log(array $payload, ?array $response, ?int $httpStatus, ?int $conversationId, bool $hasAttachment, float $startedAt, bool $success, ?string $error): void
+    private function log(array $payload, ?array $response, ?int $httpStatus, ?int $conversationId, bool $hasAttachment, float $startedAt, bool $success, ?string $error, string $service): void
     {
         $this->logger->record([
-            'service' => 'dispatch_chat',
+            'service' => $service,
             'conversation_id' => $conversationId,
             'model' => data_get($response, 'model', $payload['model']),
             'provider' => data_get($response, 'provider'),
