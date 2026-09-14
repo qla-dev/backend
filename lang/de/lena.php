@@ -707,7 +707,7 @@ Sie können mir in jeder Sprache schreiben. Ich antworte ausschließlich in der 
     'postLoadModal.latitude' => 'Breitengrad',
     'postLoadModal.longitude' => 'Längengrad',
     'postLoadModal.dimensionScope' => 'Maßbezug',
-    'postLoadModal.recalculateVolume' => 'Aus Maßen neu berechnen',
+    'postLoadModal.recalculateVolume' => 'Neu berechnen',
     'postLoadModal.supplierContact' => 'Lieferantenkontakt',
     'lena.optionSearch' => 'Optionen durchsuchen…',
     'lena.optionNoResults' => 'Keine passenden Optionen',

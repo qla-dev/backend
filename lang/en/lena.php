@@ -707,7 +707,7 @@ You can write to me in any language. I will reply exclusively in the language yo
     'postLoadModal.latitude' => 'Latitude',
     'postLoadModal.longitude' => 'Longitude',
     'postLoadModal.dimensionScope' => 'Dimensions for',
-    'postLoadModal.recalculateVolume' => 'Recalculate from dimensions',
+    'postLoadModal.recalculateVolume' => 'Recalculate',
     'postLoadModal.supplierContact' => 'Supplier contact',
     'lena.optionSearch' => 'Search the options…',
     'lena.optionNoResults' => 'No matching options',
