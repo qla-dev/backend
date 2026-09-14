@@ -38,10 +38,12 @@ class LenaModeSkillsTest extends TestCase
         $loader = new LenaModeInstructions;
         $this->assertStringContainsString('name: reconcile-declaration-ocp-payments', $loader->for('legal'));
         $this->assertStringContainsString('name: calculate-packing-list-cbm', $loader->for('legal'));
+        $this->assertStringContainsString('name: compare-lcl-fcl', $loader->for('legal'));
         foreach (['general', 'free', 'tracking', 'booking', 'hs', 'storage', 'post-load', 'about-load'] as $mode) {
             $this->assertDirectoryExists(base_path('agents/lena/'.$mode.'/skills'));
             $this->assertStringNotContainsString('name: reconcile-declaration-ocp-payments', $loader->for($mode));
             $this->assertStringNotContainsString('name: calculate-packing-list-cbm', $loader->for($mode));
+            $this->assertStringNotContainsString('name: compare-lcl-fcl', $loader->for($mode));
         }
     }
 

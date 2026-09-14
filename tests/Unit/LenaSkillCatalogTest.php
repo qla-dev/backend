@@ -48,6 +48,9 @@ class LenaSkillCatalogTest extends TestCase
         $this->assertSame(['legal'], $byId['legal/legal-srb/AGENT.md']['modes']);
         $ocp = $byId['legal/skills/reconcile-declaration-ocp-payments.md'];
         $cbm = $byId['legal/skills/calculate-packing-list-cbm.md'];
+        $lclFcl = $byId['legal/skills/compare-lcl-fcl.md'];
+        $this->assertSame(['skill', 'legal', ['legal']], [$lclFcl['kind'], $lclFcl['folder'], $lclFcl['modes']]);
+        $this->assertSame('resources/lena/container-types.json', $lclFcl['sources'][0]['path']);
         $this->assertSame(['skill', 'legal', ['legal']], [$cbm['kind'], $cbm['folder'], $cbm['modes']]);
         $this->assertSame(['skill', 'legal', ['legal']], [$ocp['kind'], $ocp['folder'], $ocp['modes']]);
         $this->assertSame(['file'], array_column($byId['storage/AGENT.md']['sources'], 'type'));
