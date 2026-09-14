@@ -1,6 +1,7 @@
 <?php
 
 return array (
+  'legal_free_chat' => 'Slobodan razgovor',
   'legal_welcome' => 'Dobrodošli! Ja sam LenaAI, vaš legislativni dispečer. U mojoj bazi nalaze se propisi za carinjenje i transport robe Bosne i Hercegovine, Hrvatske, Srbije i Evropske unije: carinski zakoni i tarife, carinska vrijednost i deklaracije, osiguranje i plaćanje carinskog duga, PDV pri uvozu te pravila o porijeklu robe. Postavite pitanje ili u bilo kojem trenutku prenesite deklaraciju, fakturu ili drugi dokument, a ja ću ga analizirati i uz svaki odgovor navesti izvore na koje se oslanjam.',
   'legal_upload_question' => 'Da li želite da analiziram novi dokument u vezi sa pravnim pitanjima i uvrstim ga u trenutne informacije u konverzaciji ili da kreiram novi teret na osnovu njega?',
   'ui' => 

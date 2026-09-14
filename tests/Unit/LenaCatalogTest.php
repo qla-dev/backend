@@ -17,6 +17,12 @@ class LenaCatalogTest extends TestCase
         $this->assertNotSame($catalog['locales']['sr']['welcome']['general'], $catalog['locales']['sr_cyrl']['welcome']['general']);
         foreach (array_intersect_key($catalog['locales'], array_flip(['en', 'de', 'bs', 'hr', 'sr'])) as $lang => $text) {
             $this->assertStringContainsString('[[LENA_OPTIONS:', $text['welcome']['general']);
+            $this->assertCount(4, $text['legal_choices']);
+            $this->assertSame($text['legal_free_chat'], $text['legal_choices'][3]['label']);
+            foreach ($text['legal_choices'] as $choice) {
+                $this->assertNotEmpty($choice['label']);
+                $this->assertSame($choice['label'], $choice['value']);
+            }
             // A load chat greets the way the general one does, and names the load when the client
             // knows its reference.
             $this->assertNotEmpty($text['welcome']['load']);
