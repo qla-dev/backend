@@ -36,7 +36,8 @@ class LenaSkillCatalogTest extends TestCase
             $this->assertStringNotContainsString('## Name', $row['content']);
             $names = $row['names'];
             ksort($names);
-            $this->assertSame(['bs', 'de', 'en'], array_keys($names), "{$row['id']} needs a bs, en and de name");
+            $this->assertSame([], array_diff(['bs', 'de', 'en'], array_keys($names)), "{$row['id']} needs a bs, en and de name");
+            $this->assertSame([], array_diff(array_keys($names), ['bs', 'de', 'en', 'hr', 'sr']), 'Only active locales may be exposed');
         }
         $this->assertSame('AI legislativni dispečer', $byId['legal/AGENT.md']['names']['bs']);
         $sharedOverview = $byId['skills/AGENT.md'];
@@ -46,6 +47,8 @@ class LenaSkillCatalogTest extends TestCase
         $this->assertSame('legal/legal-srb', $byId['legal/legal-srb/AGENT.md']['folder']);
         $this->assertSame(['legal'], $byId['legal/legal-srb/AGENT.md']['modes']);
         $ocp = $byId['legal/skills/reconcile-declaration-ocp-payments.md'];
+        $cbm = $byId['legal/skills/calculate-packing-list-cbm.md'];
+        $this->assertSame(['skill', 'legal', ['legal']], [$cbm['kind'], $cbm['folder'], $cbm['modes']]);
         $this->assertSame(['skill', 'legal', ['legal']], [$ocp['kind'], $ocp['folder'], $ocp['modes']]);
         $this->assertSame(['file'], array_column($byId['storage/AGENT.md']['sources'], 'type'));
         $containers = $byId['post-load/skills/container-recommendation.md']['sources'];

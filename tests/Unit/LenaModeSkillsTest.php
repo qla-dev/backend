@@ -37,9 +37,11 @@ class LenaModeSkillsTest extends TestCase
         new Application(dirname(__DIR__, 2));
         $loader = new LenaModeInstructions;
         $this->assertStringContainsString('name: reconcile-declaration-ocp-payments', $loader->for('legal'));
+        $this->assertStringContainsString('name: calculate-packing-list-cbm', $loader->for('legal'));
         foreach (['general', 'free', 'tracking', 'booking', 'hs', 'storage', 'post-load', 'about-load'] as $mode) {
             $this->assertDirectoryExists(base_path('agents/lena/'.$mode.'/skills'));
             $this->assertStringNotContainsString('name: reconcile-declaration-ocp-payments', $loader->for($mode));
+            $this->assertStringNotContainsString('name: calculate-packing-list-cbm', $loader->for($mode));
         }
     }
 
