@@ -2,8 +2,13 @@
 
 namespace Tests\Unit;
 
+use App\Models\Role;
+use App\Models\User;
 use App\Services\FeatureAccess;
-use PHPUnit\Framework\TestCase;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Tests\TestCase;
 
 /**
  * The server's copy of the access table, checked against the same expectations the browser's copy is.
@@ -13,16 +18,31 @@ use PHPUnit\Framework\TestCase;
  */
 class FeatureAccessTest extends TestCase
 {
-    /** A user stub with a role and no database behind it. */
-    private function user(string $role): object
+    protected function setUp(): void
     {
-        return new class($role) {
-            public function __construct(public string $roleName) {}
-            public function __get(string $name): mixed
-            {
-                return $name === 'role' ? (object) ['name' => $this->roleName] : null;
-            }
-        };
+        parent::setUp();
+        $this->assertSame(':memory:', DB::connection()->getConfig('database'));
+        // Resolving a manager asks whether their company is warehouse-first, so the query needs
+        // somewhere (empty) to run against.
+        Schema::create('companies', function (Blueprint $table): void {
+            $table->id();
+            $table->boolean('warehouse_first')->default(false);
+            $table->timestamp('verified_at')->nullable();
+        });
+        Schema::create('company_user', function (Blueprint $table): void {
+            $table->unsignedBigInteger('company_id');
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('status')->nullable();
+            $table->unsignedBigInteger('invited_by_user_id')->nullable();
+            $table->timestamp('joined_at')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    /** An unsaved user carrying only a role (and any attributes given) - no database behind it. */
+    private function user(string $role, array $attributes = []): User
+    {
+        return (new User($attributes))->setRelation('role', new Role(['name' => $role]));
     }
 
     private function level(string $role, string $feature): string
@@ -83,6 +103,13 @@ class FeatureAccessTest extends TestCase
         foreach (['customers', 'carriers', 'finance', 'tariffs'] as $feature) {
             $this->assertSame(FeatureAccess::NONE, $this->level('driver', $feature), $feature);
         }
+    }
+
+    public function test_a_driver_runs_the_fleet_they_declare_without_a_company_to_verify(): void
+    {
+        $this->assertSame(FeatureAccess::FULL, FeatureAccess::level($this->user('driver', ['have_fleet' => true]), 'fleet'));
+        $this->assertSame(FeatureAccess::NONE, FeatureAccess::level($this->user('driver', ['have_fleet' => false]), 'fleet'));
+        $this->assertSame(FeatureAccess::NONE, FeatureAccess::level($this->user('driver'), 'fleet'));
     }
 
     public function test_a_customer_reads_rather_than_acts(): void

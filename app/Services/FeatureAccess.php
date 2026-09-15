@@ -45,7 +45,7 @@ class FeatureAccess
         'globalTracking'     => [self::F, self::F, self::F, self::F, self::F, self::F, self::F, self::F, self::F, self::N],
         'warehouse'          => [self::F, self::F, self::F, self::N, self::F, self::F, self::V, self::N, self::V, self::V],
         'docks'              => [self::F, self::V, self::V, self::N, self::F, self::F, self::N, self::N, self::V, self::N],
-        'fleet'              => [self::F, self::F, self::F, self::F, self::N, self::N, self::N, self::N, self::F, self::F],
+        'fleet'              => [self::F, self::F, self::F, self::F, self::N, self::N, self::N, self::F, self::F, self::F],
         'finance'            => [self::F, self::V, self::V, self::N, self::V, self::V, self::V, self::N, self::V, self::F],
         'emailStudio'        => [self::F, self::N, self::N, self::N, self::N, self::N, self::N, self::N, self::N, self::N],
         'documents'          => [self::F, self::F, self::F, self::F, self::F, self::F, self::F, self::F, self::F, self::F],
@@ -62,6 +62,8 @@ class FeatureAccess
      */
     private const OWNED = ['warehouse' => 'warehouse', 'docks' => 'warehouse', 'fleet' => 'fleet'];
     private const OWNERSHIP_GATED = ['company', 'manager', 'dispatcher', 'forwarder'];
+    /** Drivers run their own trucks with no company behind them to verify, so their switch alone decides. */
+    private const SELF_DECLARED = ['driver'];
 
     /** The role as the table names it, or null for a user the table does not cover. */
     public static function permissionRole(?User $user): ?string
@@ -98,6 +100,10 @@ class FeatureAccess
                 ? (bool) ($user?->have_warehouse)
                 : (bool) ($user?->have_fleet);
             if (! ($declared && self::isVerified($user))) return self::NONE;
+        }
+        if ($owned !== null && in_array($role, self::SELF_DECLARED, true)) {
+            $declared = $owned === 'warehouse' ? (bool) ($user?->have_warehouse) : (bool) ($user?->have_fleet);
+            if (! $declared) return self::NONE;
         }
 
         return $level;
