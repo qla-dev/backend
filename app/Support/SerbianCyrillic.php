@@ -23,7 +23,7 @@ final class SerbianCyrillic
             $token = "\u{E000}".count($tokens)."\u{E001}";
             $tokens[$token] = preg_match('/^(?:freightbook|фре)/iu', $match[0]) ? 'Freightbook.ai' : $match[0];
             return $token;
-        }, $value); 
+        }, $value);  
 
         $converted = strtr($plain ?? $value, [
             'DŽ' => 'Џ', 'Dž' => 'Џ', 'dž' => 'џ',
