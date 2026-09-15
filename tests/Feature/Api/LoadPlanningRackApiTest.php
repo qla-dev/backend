@@ -61,13 +61,15 @@ class LoadPlanningRackApiTest extends TestCase
         $this->assertNotContains($warehouse->id, collect($other->json('data.items'))->pluck('warehouse_id'));
     }
 
-    public function test_tracking_rack_lists_current_loads_the_account_may_see(): void
+    public function test_tracking_rack_lists_only_booked_loads_the_account_may_see(): void
     {
         $owner = User::query()->where('username', 'customer_demo')->firstOrFail();
-        Load::query()->create([
-            'public_id' => (string) Str::uuid(), 'customer_user_id' => $owner->id, 'title' => 'Rack test load',
-            'status' => 'in_delivery', 'transport_type' => 'road', 'cargo_type' => 'ltl', 'weight_kg' => 1200, 'pallets' => 4,
+        $load = fn (string $title, string $status) => Load::query()->create([
+            'public_id' => (string) Str::uuid(), 'customer_user_id' => $owner->id, 'title' => $title,
+            'status' => $status, 'transport_type' => 'road', 'cargo_type' => 'ltl', 'weight_kg' => 1200, 'pallets' => 4,
         ]);
+        $load('Rack test load', 'booked');
+        $load('Rack load on the road', 'in_delivery');
 
         $mine = $this->withToken($this->token('customer_demo'))->getJson('/api/load-planning/racks/tracking?per_page=100')
             ->assertOk()
@@ -75,6 +77,8 @@ class LoadPlanningRackApiTest extends TestCase
         $row = collect($mine->json('data'))->firstWhere('title', 'Rack test load');
         $this->assertNotNull($row);
         $this->assertSame(4, $row['pallets']);
+        $this->assertNotContains('Rack load on the road', collect($mine->json('data'))->pluck('title'));
+        $this->assertEmpty(collect($mine->json('data'))->whereNotIn('status', ['booked', 'sent']));
 
         $theirs = $this->withToken($this->token('finance_demo'))->getJson('/api/load-planning/racks/tracking?per_page=100')->assertOk();
         $this->assertNotContains('Rack test load', collect($theirs->json('data'))->pluck('title'));

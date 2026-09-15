@@ -54,8 +54,9 @@ class LoadController extends CrudController
         return $this->success($counts, 'Tracking status counts retrieved successfully.');
     }
 
-    // The load planner's tracking rack: current loads this account may see - the same visibility rules as
-    // the tracking list - newest first, trimmed to what a rack slot and its info card need.
+    // The load planner's tracking rack: booked loads this account may see - the same visibility rules as the
+    // tracking list - newest first, trimmed to what a rack slot and its info card need. Loads already in
+    // delivery or beyond have left for the road, so they never sit on the rack.
     public function rackLoads(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -64,9 +65,8 @@ class LoadController extends CrudController
         ]);
         $request->query->set('tracking', 'true');
         $request->query->remove('status');
-        if (! $request->filled('statuses')) {
-            $request->query->set('statuses', 'pending,booked,opened,in_delivery');
-        }
+        // "sent" is the booked state as well (see the status filter above).
+        $request->query->set('statuses', 'booked,sent');
 
         $query = Load::query()->with(['stops', 'shipment', 'company', 'consignee']);
         $this->applyFilters($query, $request);
@@ -83,7 +83,7 @@ class LoadController extends CrudController
                 'reference' => $load->shipment?->tracking_number ?? $load->booking_reference ?? '#'.$load->id,
                 'title' => $load->title,
                 'status' => $load->status,
-                'customer' => $load->consignee?->name ?? $load->company?->name,
+                'customer' => $load->consignee?->company_name ?? $load->company?->name,
                 'pickup_city' => $pickup?->city,
                 'delivery_city' => $delivery?->city,
                 'goods_type' => $load->goods_type,
