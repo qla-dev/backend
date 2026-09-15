@@ -25,8 +25,13 @@ class VehicleController extends CrudController
 
     protected function relations(): array
     {
-        return ['company', 'owner', 'assignedDriver', 'permittedUsers', 'locations', 'documents'];
+        // Only the newest fix: a tracked truck writes one a second, so the full trail runs to tens of
+        // thousands of rows per vehicle - far too much to ship with every fleet listing.
+        return ['company', 'owner', 'assignedDriver', 'permittedUsers', 'latestLocation', 'documents'];
     }
+
+    /** A load is on the truck, and being tracked, while it is in delivery. */
+    private const CARRYING_STATUSES = ['in_delivery'];
 
     protected function searchColumns(): array
     {
@@ -57,7 +62,14 @@ class VehicleController extends CrudController
         }
 
         if (in_array($user->role?->name, ['company', 'manager', 'dispatcher', 'customs_officer'], true)) {
-            $query->whereIn('company_id', $user->companies()->pluck('companies.id'));
+            $companyIds = $user->companies()->pluck('companies.id');
+            $carryingOurLoad = fn ($loads) => $loads->whereIn('company_id', $companyIds)->whereIn('status', self::CARRYING_STATUSES);
+            // Their own fleet, plus any partner's truck - an independent driver's, say - that is carrying
+            // one of their loads right now, so the shipment can be followed on the vehicle map too.
+            $query->where(fn (Builder $visible) => $visible
+                ->whereIn('company_id', $companyIds)
+                ->orWhereHas('loads', $carryingOurLoad))
+                ->withExists(['loads as carrying_your_load' => $carryingOurLoad]);
         }
     }
 
