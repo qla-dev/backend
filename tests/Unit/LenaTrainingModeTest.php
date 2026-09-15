@@ -15,7 +15,8 @@ class LenaTrainingModeTest extends TestCase
         $loader = new LenaModeInstructions;
         $training = $loader->for('training');
         $this->assertStringContainsString('Mode instructions (training):', $training);
-        foreach (['make-a-feature', 'training-skill', 'generate-image'] as $skill) {
+        $this->assertStringContainsString('[[LENA_PICK:conversation]]', $training, 'Referring to a conversation offers the picker');
+        foreach (['make-a-feature', 'training-skill', 'generate-image', 'refer-to-conversation'] as $skill) {
             $this->assertSame(1, substr_count($training, "name: {$skill}"), $skill);
             foreach (['general', 'free', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'about-load'] as $mode) {
                 $this->assertStringNotContainsString("name: {$skill}", $loader->for($mode), "{$mode} must not load {$skill}");
@@ -41,12 +42,12 @@ class LenaTrainingModeTest extends TestCase
         }
     }
 
-    public function test_catalog_lists_training_as_a_skill_with_three_subskills(): void
+    public function test_catalog_lists_training_as_a_skill_with_its_subskills(): void
     {
         $rows = collect(app(LenaSkillCatalog::class)->rows())->keyBy('id');
         $this->assertSame(['instructions', ['training']], [$rows['training/AGENT.md']['kind'], $rows['training/AGENT.md']['modes']]);
         $this->assertSame('AI trening', $rows['training/AGENT.md']['names']['bs']);
-        foreach (['make-a-feature', 'training-skill', 'generate-image'] as $skill) {
+        foreach (['make-a-feature', 'training-skill', 'generate-image', 'refer-to-conversation'] as $skill) {
             $row = $rows["training/skills/{$skill}.md"];
             $this->assertSame(['skill', 'training'], [$row['kind'], $row['folder']]);
             $this->assertNotEmpty($row['description']);

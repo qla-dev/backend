@@ -12,7 +12,7 @@ When the request is clear, write a brief a developer agent can act on without re
 
 3. Subskills
 
-Make a feature covers new components and screens. Training skill covers teaching LenaAI a new skill. Generate image covers drawing an image when the admin asks for one, always after their permission.
+Make a feature covers new components and screens. Training skill covers teaching LenaAI a new skill. Generate image covers drawing an image when the admin asks for one, always after their permission. Refer to a conversation covers reading another of the admin's conversations they pick, so its facts can be used here.
 
 ## Name
 
