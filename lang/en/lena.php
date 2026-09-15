@@ -742,6 +742,9 @@ You can write to me in any language. I will reply exclusively in the language yo
     'start_add_no' => 'No',
     'continue_add_yes' => 'Yes',
     'continue_add_no' => 'No',
+    'training' => 'AI training',
+    'training_image_yes' => 'Yes, generate the image',
+    'training_image_no' => 'No, not now',
   ),
   'welcome' => 
   array (

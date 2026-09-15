@@ -21,11 +21,13 @@ use App\Services\LenaIntent;
 use App\Services\LegalSourceCatalog;
 use App\Services\LoadDraftScanMapper;
 use App\Services\OpenRouterDispatchAssistant;
+use App\Services\OpenRouterImageGenerator;
 use App\Services\OpenRouterLoadScanner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -69,8 +71,13 @@ class DispatchChatController extends Controller
             'legalMode' => $legalMode, 'wasCanvasEnabled' => $wasCanvasEnabled, 'detectedLoadCreationRequest' => $detectedLoadCreationRequest,
             'autoStartFromDocument' => $autoStartFromDocument, 'trackingMode' => $trackingMode, 'requestedLoadCanvas' => $requestedLoadCanvas,
             'canvasBlockedByExistingLoad' => $canvasBlockedByExistingLoad, 'canvasEnabled' => $canvasEnabled, 'storageMode' => $storageMode,
-            'hsMode' => $hsMode, 'instructionMode' => $instructionMode, 'legalSkill' => $legalSkill,
+            'hsMode' => $hsMode, 'instructionMode' => $instructionMode, 'legalSkill' => $legalSkill, 'trainingMode' => $trainingMode,
         ] = $this->resolveTurn($conversation, $userMessages);
+        // The admin approved an image (see agents/lena/training/skills/generate-image.md): draw it
+        // instead of writing a text reply.
+        if ($trainingMode && $guidedAction === 'training_image_yes') {
+            return $this->generateTrainingImage($request, $conversation, (int) $aiDispatcherId, $interfaceLang, app(OpenRouterImageGenerator::class));
+        }
         $skillSelection = $latestUserMessageModel
             ? app(\App\Services\LenaSkillSelector::class)->select($conversation, $this->resolveTurn($conversation, $userMessages), $latestUserMessageModel->id)
             : ['files' => [], 'guided' => false];
@@ -275,6 +282,13 @@ class DispatchChatController extends Controller
             .($guidedAction === 'legal'
                 ? ' The user just entered Legal consultations mode. Reply with exactly this welcome text in the interface language, without adding another introduction, summary or list of laws: '.trans('lena.legal_welcome', [], $interfaceLang).' Do not mention load posting unless the user asks for it.'
                 : '')
+            .($trainingMode ? ' AI training mode is active for a platform superadmin. Images the admin attached recently are included in the conversation as real images: look at them before answering. Do not create loads or open the load-post canvas here.' : '')
+            .($guidedAction === 'training'
+                ? ' The superadmin just entered AI training mode. Greet them in two or three short sentences: they can describe a feature, a screen or a LenaAI skill, attach screenshots or photos, you shape it into a training brief that Claude or Codex builds later, and you can draw an image when they ask for one. Then ask what they want to work on.'
+                : '')
+            .($guidedAction === 'training_image_no'
+                ? ' The admin declined generating the image. Acknowledge it in one sentence and continue the training conversation without offering that image again.'
+                : '')
             .'Bosnian freight terminology is strict: translate the logistics noun "load" as "teret". Never call a load "opterećenje" in Bosnian. Use the correct grammatical form of "teret" for the sentence. '
             .($canvasEnabled
                 ? ' The conversation load-post canvas is active and remains active until the user selects the guided continue_add_no action. Help the user prepare a new load posting by collecting only facts they provide. Attached-file and message extraction results appear in the user message context and are authoritative for this draft; the canvas panel next to this chat already displays and updates those fields live. Because the user can already see the fields update, do not restate all field values in prose. The server controls a complete ordered questionnaire matching the load scan fields; never declare the load ready based only on title, cargo, weight, pickup, and delivery. Ask exactly one server-supplied missing step at a time. If the latest user message changes or supplies draft data, briefly confirm it and ask that next step. If it instead asks about another LenaAI capability or about Freightbook.ai, answer that request without discarding or changing modes, then write exactly [[LENA_FOLLOWUP]] on its own line, followed by a localized equivalent of "Your load is still in the data collection phase. Would you like to continue?", followed by [[LENA_OPTIONS:continue_add_yes,continue_add_no]] on its own line. In Bosnian, that follow-up sentence must be exactly "Vaš teret je još uvijek u fazi prikupljanja podataka. Želite li nastaviti?" In German, use "Ihre Ladung befindet sich noch in der Datenerfassungsphase. Möchten Sie fortfahren?" You must always include the literal [[LENA_FOLLOWUP]] marker on its own line immediately before that sentence, with no exceptions, even when the answer and the follow-up sentence feel like they belong together; never merge them into one paragraph without the marker between them. Do not ask or restate the next questionnaire step in this same reply; the application asks it again on its own once the user chooses to continue. Never invent values.'
@@ -359,28 +373,33 @@ class DispatchChatController extends Controller
         // user's selected application language. The model must treat this as a hard output rule.
         $systemPrompt .= "\n\nFINAL OUTPUT RULE: Reply only in {$interfaceLangName} (locale {$interfaceLang}). This rule overrides every example, previous message, detected transcript language, and conversation-history language. Do not reply in Bosnian, Croatian, Serbian, German, or English unless that is the selected application language. Never mix languages.";
 
+        // Training mode shows the model the admin's most recent screenshots as real images - the
+        // four newest messages carrying one, so a long session does not resend every picture.
+        $imageMessageIds = $trainingMode ? $this->recentImageMessageIds($conversation, (int) $aiDispatcherId) : collect();
         $history = $conversation->messages
             ->sortBy('sent_at')
-            ->map(function (Message $message) use ($aiDispatcherId): array {
+            ->map(function (Message $message) use ($aiDispatcherId, $imageMessageIds): array {
                 $content = $this->guidedAction($message->body)
                     ? '[User selected guided LenaAI action: '.$this->guidedAction($message->body).']'
                     : $message->body;
                 if (preg_match('/\[\[LENA_SKIP:([a-zA-Z]+)\]\]/', (string) $content, $skipMatch) === 1) {
                     $content = '[User chose to answer the questionnaire step "'.$skipMatch[1].'" later. Continue with the next server-supplied step.]';
                 }
+                // Strip every hidden application marker, not just the "card" ones - LENA_STEP,
+                // LENA_OPTIONS, LOAD_READY_TO_POST, and LENA_FOLLOWUP are also app-only control
+                // signals the model should never see echoed back as its own prior words. Sending
+                // that bracket-tag syntax back as assistant-authored history has been observed to
+                // correlate with Gemini returning an empty completion on the following turn.
+                $text = trim((string) preg_replace(
+                    '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+|LENA_STEP:[a-zA-Z]+|LENA_OPTIONS:[^\]\r\n]+|LOAD_READY_TO_POST(?::complete)?|LENA_FOLLOWUP)\]\]/u',
+                    '',
+                    $content
+                )).$this->attachmentContext($message);
+                $images = $imageMessageIds->contains($message->id) ? $this->imageParts($message) : [];
 
                 return [
                     'role' => $message->sender_user_id === $aiDispatcherId ? 'assistant' : 'user',
-                    // Strip every hidden application marker, not just the "card" ones - LENA_STEP,
-                    // LENA_OPTIONS, LOAD_READY_TO_POST, and LENA_FOLLOWUP are also app-only control
-                    // signals the model should never see echoed back as its own prior words. Sending
-                    // that bracket-tag syntax back as assistant-authored history has been observed to
-                    // correlate with Gemini returning an empty completion on the following turn.
-                    'content' => trim((string) preg_replace(
-                        '/\[\[(?:OFFER_BOOKING(?::\d+)?|LOAD_DETAILS(?::\d+)?|LOAD_LOCATION(?::\d+)?|LOAD_MAP(?::\d+)?|LOAD_STATUS(?::\d+)?|CHAT_TITLE:[^\]\r\n]+|LENA_STEP:[a-zA-Z]+|LENA_OPTIONS:[^\]\r\n]+|LOAD_READY_TO_POST(?::complete)?|LENA_FOLLOWUP)\]\]/u',
-                        '',
-                        $content
-                    )).$this->attachmentContext($message),
+                    'content' => $images ? [['type' => 'text', 'text' => $text !== '' ? $text : '(image attached)'], ...$images] : $text,
                 ];
             })
             ->values()
@@ -398,7 +417,11 @@ class DispatchChatController extends Controller
         foreach ($history as $entry) {
             $previousIndex = count($collapsedHistory) - 1;
             if ($previousIndex >= 0 && $collapsedHistory[$previousIndex]['role'] === $entry['role']) {
-                $collapsedHistory[$previousIndex]['content'] = trim($collapsedHistory[$previousIndex]['content']."\n".$entry['content']);
+                $previous = $collapsedHistory[$previousIndex]['content'];
+                // A turn carrying images is a list of parts; merging keeps text and images in order.
+                $collapsedHistory[$previousIndex]['content'] = is_string($previous) && is_string($entry['content'])
+                    ? trim($previous."\n".$entry['content'])
+                    : [...$this->contentParts($previous), ...$this->contentParts($entry['content'])];
 
                 continue;
             }
@@ -871,9 +894,13 @@ class DispatchChatController extends Controller
         $activeGuidedMode = $this->activeGuidedMode($userMessages);
         $legalSkill = \App\Services\LenaLegalSkillIntent::resolve($userMessages->pluck('body')->all());
         $explicitPaymentRequest = LenaIntent::isPaymentRequest($latestUserMessage);
+        // AI training is a superadmin workshop. For anyone else its buttons are simply not a mode,
+        // even if the marker is typed by hand.
+        $trainingMode = (bool) request()->user()?->isSuperAdminOrMaster()
+            && ($activeGuidedMode === 'training' || in_array($guidedAction, ['training', 'training_image_yes', 'training_image_no'], true));
         // A legal upload is deliberately not freight-document input. The user explicitly chooses
         // whether it should become a legal analysis or start a new load afterwards.
-        $legalMode = $guidedAction !== 'legal_upload_load'
+        $legalMode = ! $trainingMode && $guidedAction !== 'legal_upload_load'
             && ($guidedAction === 'legal' || $activeGuidedMode === 'legal'
                 || ($legalSkill && ! $guidedAction && ! $load && ! $conversation->canvas));
         if (! $legalMode) $legalSkill = null;
@@ -882,7 +909,7 @@ class DispatchChatController extends Controller
         // of canvas state, see attachFile in useLenaAiChat.ts) or from cargo-shaped free text, not
         // only from the narrow "new load"/"novi teret" phrasing asksToOpenLoadCanvas looks for.
         // This must keep working even while a different guided mode (tracking, hs, ...) is active.
-        $detectedLoadCreationRequest = ! $legalMode
+        $detectedLoadCreationRequest = ! $legalMode && ! $trainingMode
             && LenaIntent::detect($latestUserMessage) !== 'free'
             && ! $load
             && ! $wasCanvasEnabled
@@ -900,7 +927,7 @@ class DispatchChatController extends Controller
         $trackingMode = $guidedAction === 'tracking' || $activeGuidedMode === 'tracking';
         $requestedLoadCanvas = in_array($guidedAction, ['add', 'storage', 'start_add_yes', 'legal_upload_load'], true) || $autoStartFromDocument;
         $canvasBlockedByExistingLoad = $requestedLoadCanvas && $load;
-        $canvasEnabled = $legalMode ? false : $wasCanvasEnabled;
+        $canvasEnabled = ($legalMode || $trainingMode) ? false : $wasCanvasEnabled;
         if ($canvasBlockedByExistingLoad || $guidedAction === 'continue_add_no') {
             $canvasEnabled = false;
         } elseif ($requestedLoadCanvas) {
@@ -910,7 +937,9 @@ class DispatchChatController extends Controller
         $hsMode = $guidedAction === 'hs'
             || $activeGuidedMode === 'hs'
             || preg_match('/\b(?:hs\s*(?:code|kod|nummer)?|customs?\s+code|tariff\s+code|zolltarifnummer)\b/i', (string) $latestUserMessage) === 1;
-        $instructionMode = $legalMode
+        $instructionMode = $trainingMode
+            ? 'training'
+            : ($legalMode
             ? 'legal'
             : ($load
                 ? 'about-load'
@@ -922,14 +951,14 @@ class DispatchChatController extends Controller
                             ? 'hs'
                             : ($activeGuidedMode === 'booking'
                                 ? 'booking'
-                                : ($activeGuidedMode === 'free' ? 'free' : 'general'))))));
+                                : ($activeGuidedMode === 'free' ? 'free' : 'general')))))));
 
         return [
             'guidedAction' => $guidedAction, 'activeGuidedMode' => $activeGuidedMode, 'explicitPaymentRequest' => $explicitPaymentRequest,
             'legalMode' => $legalMode, 'wasCanvasEnabled' => $wasCanvasEnabled, 'detectedLoadCreationRequest' => $detectedLoadCreationRequest,
             'autoStartFromDocument' => $autoStartFromDocument, 'trackingMode' => $trackingMode, 'requestedLoadCanvas' => $requestedLoadCanvas,
             'canvasBlockedByExistingLoad' => (bool) $canvasBlockedByExistingLoad, 'canvasEnabled' => $canvasEnabled, 'storageMode' => $storageMode,
-            'hsMode' => $hsMode, 'instructionMode' => $instructionMode, 'legalSkill' => $legalSkill,
+            'hsMode' => $hsMode, 'instructionMode' => $instructionMode, 'legalSkill' => $legalSkill, 'trainingMode' => $trainingMode,
         ];
     }
 
@@ -1033,7 +1062,7 @@ class DispatchChatController extends Controller
             return null;
         }
 
-        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|legal|legal_upload_analyze|legal_upload_load|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no)\]\]$/', trim($message), $match) === 1
+        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|legal|legal_upload_analyze|legal_upload_load|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no|training|training_image_yes|training_image_no)\]\]$/', trim($message), $match) === 1
             ? $match[1]
             : null;
     }
@@ -1045,8 +1074,12 @@ class DispatchChatController extends Controller
             if ($action === 'legal_upload_load') {
                 return 'add';
             }
-            if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free', 'legal'], true)) {
+            if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free', 'legal', 'training'], true)) {
                 return $action;
+            }
+            // Answering the image offer keeps the conversation in training mode.
+            if (in_array($action, ['training_image_yes', 'training_image_no'], true)) {
+                return 'training';
             }
         }
 
@@ -1058,6 +1091,110 @@ class DispatchChatController extends Controller
         }
 
         return null;
+    }
+
+    /** The newest messages from the admin that carry a stored image, at most four. */
+    private function recentImageMessageIds(Conversation $conversation, int $aiDispatcherId): Collection
+    {
+        return $conversation->messages
+            ->filter(fn (Message $message) => $message->sender_user_id !== $aiDispatcherId
+                && collect($message->attachments ?? [])->contains(fn ($attachment) => is_array($attachment)
+                    && filled($attachment['path'] ?? null) && str_starts_with((string) ($attachment['type'] ?? ''), 'image/')))
+            ->sortByDesc('sent_at')
+            ->take(4)
+            ->pluck('id');
+    }
+
+    /** A message's stored images as model image parts. */
+    private function imageParts(Message $message): array
+    {
+        return collect($message->attachments ?? [])
+            ->map(fn ($attachment) => is_array($attachment) ? $this->imageDataUrl($attachment) : null)
+            ->filter()
+            ->map(fn (string $url) => ['type' => 'image_url', 'image_url' => ['url' => $url]])
+            ->values()
+            ->all();
+    }
+
+    /** An attached image read back from chat storage as a data URL - only formats the models accept, at most 5 MB. */
+    private function imageDataUrl(array $attachment): ?string
+    {
+        $relative = ltrim((string) ($attachment['path'] ?? ''), '/');
+        $mime = strtolower((string) ($attachment['type'] ?? ''));
+        if ($relative === '' || str_contains($relative, '..') || ! in_array($mime, ['image/png', 'image/jpeg', 'image/webp', 'image/gif'], true)) {
+            return null;
+        }
+        $disk = Storage::disk('local');
+        $path = "chat-attachments/{$relative}";
+        if (! $disk->exists($path) || $disk->size($path) > 5 * 1024 * 1024) {
+            return null;
+        }
+
+        return 'data:'.$mime.';base64,'.base64_encode((string) $disk->get($path));
+    }
+
+    /** @param string|array<int, array<string, mixed>> $content */
+    private function contentParts(string|array $content): array
+    {
+        return is_array($content) ? $content : (trim($content) === '' ? [] : [['type' => 'text', 'text' => $content]]);
+    }
+
+    /**
+     * Draws the image the admin just approved and posts it into the conversation as LenaAI's reply.
+     * The image model reads the recent conversation - the description LenaAI offered and any
+     * corrections - plus the admin's latest screenshots as visual reference.
+     */
+    private function generateTrainingImage(Request $request, Conversation $conversation, int $aiDispatcherId, string $interfaceLang, OpenRouterImageGenerator $generator): JsonResponse
+    {
+        $transcript = $conversation->messages
+            ->sortBy('sent_at')
+            ->filter(fn (Message $message) => ! $this->guidedAction($message->body))
+            ->take(-12)
+            ->map(fn (Message $message) => ($message->sender_user_id === $aiDispatcherId ? 'LenaAI' : 'Admin').': '
+                .trim((string) preg_replace('/\[\[[^\]]+\]\]/u', '', (string) $message->body)))
+            ->implode("\n");
+        $references = $this->recentImageMessageIds($conversation, $aiDispatcherId)
+            ->take(2)
+            ->flatMap(fn (int $id) => collect($this->imageParts($conversation->messages->firstWhere('id', $id)))->pluck('image_url.url'))
+            ->values()
+            ->all();
+
+        try {
+            $image = $generator->generate($transcript, $references, $conversation->id);
+        } catch (RuntimeException $exception) {
+            return $this->unavailable($exception->getMessage());
+        }
+
+        $filename = Str::uuid()->toString().'.'.$image['extension'];
+        Storage::disk('local')->put("chat-attachments/{$conversation->id}/{$filename}", $image['bytes']);
+        $caption = [
+            'bs' => 'Evo slike koju ste odobrili.', 'hr' => 'Evo slike koju ste odobrili.', 'sr' => 'Ево слике коју сте одобрили.',
+            'de' => 'Hier ist das Bild, das Sie freigegeben haben.', 'en' => 'Here is the image you approved.',
+        ][$interfaceLang] ?? 'Here is the image you approved.';
+
+        $message = Message::query()->create([
+            'conversation_id' => $conversation->id,
+            'sender_user_id' => $aiDispatcherId,
+            'body' => $caption,
+            'attachments' => [[
+                'name' => 'lena-image-'.now()->format('Ymd-His').'.'.$image['extension'],
+                'type' => $image['mime'],
+                'size' => strlen($image['bytes']),
+                'path' => "{$conversation->id}/{$filename}",
+                'generated' => true,
+            ]],
+            'sent_at' => now(),
+        ]);
+        $conversation->update(['last_message_at' => $message->sent_at]);
+        $conversation->participants()->syncWithoutDetaching([$aiDispatcherId]);
+        $message->load('sender');
+
+        return response()->json([
+            'message' => 'Image generated.',
+            'data' => (new EntityResource($message))->resolve($request),
+            'meta' => [],
+            'errors' => [],
+        ], 201);
     }
 
     private function attachmentContext(Message $message): string

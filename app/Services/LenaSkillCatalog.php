@@ -37,7 +37,7 @@ class LenaSkillCatalog
             // The display name comes from the file's "## Name" section; the slug is only a fallback.
             $rows[] = ['id' => $relative, 'name' => $names['en'] ?? trim($name[1] ?? $heading[1] ?? $folder), 'names' => $names,
                 'description' => trim($summary), 'folder' => $folder, 'kind' => $kind, 'shared' => $shared,
-                'modes' => $shared ? ['general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load'] : [explode('/', $folder)[0]],
+                'modes' => $shared ? ['general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load', 'training'] : [explode('/', $folder)[0]],
                 'scanners' => $relative === 'skills/hs-detection.md', 'content' => $content,
                 // Kept in the folder's resources/resources.json, keyed by the file's path inside the folder.
                 'sources' => $resources->for($folder, substr($relative, strlen($folder) + 1)),

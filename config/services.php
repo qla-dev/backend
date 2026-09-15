@@ -44,6 +44,8 @@ return [
         // switches models instead of hitting the same flaky provider again. Leave unset to disable
         // the model switch and just retry the primary model a second time.
         'fallback_model' => env('OPENROUTER_FALLBACK_MODEL'),
+        // Draws images in LenaAI training mode (superadmins only), after the admin approves one.
+        'image_model' => env('OPENROUTER_IMAGE_MODEL', 'google/gemini-2.5-flash-image'),
         'url' => env('OPENROUTER_URL', 'https://openrouter.ai/api/v1/chat/completions'),
     ],
 

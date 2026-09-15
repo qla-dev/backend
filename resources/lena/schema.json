@@ -15,7 +15,10 @@
         "start_add_yes",
         "start_add_no",
         "continue_add_yes",
-        "continue_add_no"
+        "continue_add_no",
+        "training",
+        "training_image_yes",
+        "training_image_no"
     ],
     "welcome_actions": [
         "add",
@@ -24,7 +27,8 @@
         "booking",
         "hs",
         "free",
-        "legal"
+        "legal",
+        "training"
     ],
     "option_groups": {
         "AIR_CARGO_TYPE_OPTIONS": [

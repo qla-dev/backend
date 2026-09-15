@@ -32,7 +32,7 @@ class LenaModeInstructions
         return $content === '' ? '' : "\n\nShared skill (apply only when relevant; follow any supplied response schema):\n{$content}\n";
     }
     private const MODES = [
-        'general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load',
+        'general', 'legal', 'post-load', 'storage', 'tracking', 'booking', 'hs', 'free', 'about-load', 'training',
     ];
 
     /**

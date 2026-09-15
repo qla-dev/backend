@@ -1,0 +1,6 @@
+{
+    "about": "Resources shown in the Resursi tab of the LenaAI skills screen for the files in this folder. Keys name a file in this folder (AGENT.md, skills/*.md). Each entry is a legal source ({\"type\": \"legal\", \"id\"} from agents/lena/legal-sources.json), a web page ({\"type\": \"link\", \"title\", \"url\"}), a screen of this app ({\"type\": \"app\", \"title\", \"view\"}) or a JSON data file of the backend under resources/lena or agents/lena ({\"type\": \"file\", \"title\", \"path\"}). Resources never enter the prompt.",
+    "resources": {
+        "AGENT.md": []
+    }
+}

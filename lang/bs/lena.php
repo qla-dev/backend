@@ -742,6 +742,9 @@ Možete mi pisati na bilo kojem jeziku. Odgovorit ću isključivo na jeziku koji
     'start_add_no' => 'Ne',
     'continue_add_yes' => 'Da',
     'continue_add_no' => 'Ne',
+    'training' => 'AI trening',
+    'training_image_yes' => 'Da, generiši sliku',
+    'training_image_no' => 'Ne, ne sada',
   ),
   'welcome' => 
   array (

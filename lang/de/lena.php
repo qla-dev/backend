@@ -742,6 +742,9 @@ Sie können mir in jeder Sprache schreiben. Ich antworte ausschließlich in der 
     'start_add_no' => 'Nein',
     'continue_add_yes' => 'Ja',
     'continue_add_no' => 'Nein',
+    'training' => 'KI-Training',
+    'training_image_yes' => 'Ja, Bild erstellen',
+    'training_image_no' => 'Nein, jetzt nicht',
   ),
   'welcome' => 
   array (
