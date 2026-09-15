@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Resources\EntityResource;
 use App\Models\Vehicle;
 use App\Models\VehicleLocation;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +22,7 @@ class VehicleLocationController extends CrudController
 
     protected function relations(): array
     {
-        return ['vehicle'];
+        return ['vehicle', 'user:id,name'];
     }
 
     protected function rules(bool $u = false): array
@@ -29,6 +30,15 @@ class VehicleLocationController extends CrudController
         $p = $u ? 'sometimes' : 'required';
 
         return ['vehicle_id' => [$p, 'integer', 'exists:vehicles,id'], 'latitude' => [$p, 'numeric', 'between:-90,90'], 'longitude' => [$p, 'numeric', 'between:-180,180'], 'speed_kph' => ['nullable', 'numeric', 'min:0'], 'heading' => ['nullable', 'numeric', 'between:0,360'], 'recorded_at' => [$p, 'date']];
+    }
+
+    /** The reporter is always the caller, never something the client can claim. */
+    public function store(Request $request): JsonResponse
+    {
+        $record = VehicleLocation::query()->create([...$request->validate($this->rules()), 'user_id' => $request->user()?->id]);
+        $record->load($this->relations());
+
+        return $this->success((new EntityResource($record))->resolve($request), 'Resource created successfully.', status: 201);
     }
 
     /**
@@ -75,6 +85,7 @@ class VehicleLocationController extends CrudController
         $now = now();
         $rows = collect($data['positions'])->map(fn (array $position): array => [
             'vehicle_id' => (int) $position['vehicle_id'],
+            'user_id' => $user->id,
             'latitude' => $position['latitude'],
             'longitude' => $position['longitude'],
             'speed_kph' => $position['speed_kph'] ?? null,

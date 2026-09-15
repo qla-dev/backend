@@ -139,6 +139,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('vehicle-locations/bulk', [VehicleLocationController::class, 'bulkStore'])
         ->middleware('throttle:120,1');
 
+    Route::post('support-conversation', [ConversationController::class, 'support']);
     Route::apiResources([
         'vehicles' => VehicleController::class,
         'vehicle-locations' => VehicleLocationController::class,

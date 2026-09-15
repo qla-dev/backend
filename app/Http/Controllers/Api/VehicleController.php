@@ -44,6 +44,8 @@ class VehicleController extends CrudController
             $query->where(function (Builder $visibility) use ($user): void {
                 $visibility
                     ->where('owner_user_id', $user->id)
+                    // A truck assigned to the driver is one they may report positions for, so they must see it.
+                    ->orWhere('assigned_driver_user_id', $user->id)
                     ->orWhereHas('permittedUsers', function (Builder $permittedUsers) use ($user): void {
                         $permittedUsers
                             ->where('users.id', $user->id)

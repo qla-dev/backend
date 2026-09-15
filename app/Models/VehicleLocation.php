@@ -15,4 +15,10 @@ class VehicleLocation extends BaseModel
     {
         return $this->belongsTo(Vehicle::class);
     }
+
+    /** Whoever's phone reported this position - usually the driver. */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 }

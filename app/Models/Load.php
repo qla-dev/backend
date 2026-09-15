@@ -110,7 +110,10 @@ class Load extends BaseModel
     {
         static::saving(function (Load $load): void {
             if ($load->isDirty('status')) {
-                app(\App\Services\ChecklistStatusRequirements::class)->assertAllowed($load);
+                \App\Services\LoadStatusProgression::assertAllowed($load);
+                $adminReversal = $load->exists && auth()->user()?->role?->name === 'superadmin'
+                    && \App\Services\LoadStatusProgression::isBackward((string) $load->getRawOriginal('status'), $load->status);
+                if (! $adminReversal) app(\App\Services\ChecklistStatusRequirements::class)->assertAllowed($load);
             }
         });
 

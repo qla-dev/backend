@@ -754,18 +754,26 @@ class LoadController extends CrudController
         $canManageStatus = $canManageStatus || $isStorageOperator;
 
         $target = $data['status'] ?? null;
+        $adminReversal = $role === 'superadmin' && $target !== null
+            && \App\Services\LoadStatusProgression::isBackward($load->status, $target);
+        if ($target !== null && $role !== 'superadmin' && \App\Services\LoadStatusProgression::isBackward($load->status, $target)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'status' => 'You cannot move a load to an earlier status. Contact admin support and explain your valid reason for requesting this change.',
+                'support_required' => 'status_regression',
+            ]);
+        }
         // Receipt and review are the two halves of closing a delivery: the carrier ends the drive
         // (`received`), and the recipient then files their review (`review`).
         $isReceivingCustomer = $role === 'user'
             && (int) $load->customer_user_id === (int) $user->id
             && in_array($target, ['received', 'review'], true);
         abort_unless($canManageStatus || $isReceivingCustomer, 403, 'You cannot update this load status.');
-        abort_if($target === 'received' && $load->status !== 'in_delivery', 409, 'The load can be received only while it is in delivery.');
+        abort_if(! $adminReversal && $target === 'received' && $load->status !== 'in_delivery', 409, 'The load can be received only while it is in delivery.');
         // Only the recipient can say they have reviewed the delivery, and only once a review exists.
         abort_if($target === 'review' && ! $isReceivingCustomer && ! $user?->isSuperAdminOrMaster(), 403, 'Only the customer can move the load to review.');
-        abort_if($target === 'review' && $load->status !== 'received', 409, 'The load can be reviewed only after it has been received.');
+        abort_if(! $adminReversal && $target === 'review' && $load->status !== 'received', 409, 'The load can be reviewed only after it has been received.');
         abort_if($target === 'review' && $isReceivingCustomer && ! $load->reviews()->where('reviewer_user_id', $user->id)->exists(), 422, 'Post your review before moving the load to review.');
-        abort_if($target === 'finished' && $load->transport_type === 'road' && !$load->for_storage, 422, 'Complete the vehicle return inspection before finishing the load.');
+        abort_if(! $adminReversal && $target === 'finished' && $load->transport_type === 'road' && !$load->for_storage, 422, 'Complete the vehicle return inspection before finishing the load.');
 
         $load->update($data);
         $load->load($this->relations());

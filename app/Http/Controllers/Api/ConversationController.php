@@ -102,6 +102,26 @@ class ConversationController extends CrudController
         return $this->success((new EntityResource($record))->resolve($request), 'Resource created successfully.', status: 201);
     }
 
+    public function support(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $admins = User::query()->whereHas('role', fn (Builder $query) => $query->where('name', 'superadmin'))->pluck('id');
+        abort_if($admins->isEmpty(), 503, 'Admin support is currently unavailable. Please try again later.');
+        $record = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $admins) {
+            // Serialize requests from this user so repeated clicks reuse the same conversation.
+            User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $record = Conversation::query()->where('created_by_user_id', $user->id)
+                ->where('subject', 'Admin support')->whereNull('load_id')->first();
+            if (! $record) {
+                $record = Conversation::query()->create(['created_by_user_id' => $user->id,
+                    'subject' => 'Admin support', 'channel' => 'inapp', 'last_message_at' => now()]);
+            }
+            $record->participants()->syncWithoutDetaching($admins->push($user->id)->unique()->all());
+            return $record;
+        });
+        return $this->success((new EntityResource($record->load($this->relations())))->resolve($request), 'Support conversation opened.');
+    }
+
     private function postDraftCreatedMessage(Conversation $conversation, string $greeting, string $lang): void
     {
         $aiDispatcherId = User::query()->where('username', 'ai_dispatcher')->value('id');
