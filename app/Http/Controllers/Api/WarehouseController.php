@@ -206,25 +206,7 @@ class WarehouseController extends CrudController
     // facilities: the figures below cover all of them at once unless ?warehouse_id= narrows the scope.
     public function overview(Request $request): JsonResponse
     {
-        $user = $request->user();
-        // Resolve the protected role directly from role_id. This endpoint must never accidentally
-        // scope a master/superadmin to warehouses they personally own because the relation was not
-        // preloaded on the Sanctum user instance.
-        $isNetworkView = $user && Role::query()
-            ->whereKey($user->role_id)
-            ->whereIn('name', Role::PROTECTED_NAMES)
-            ->exists();
-
-        $ownerIds = $isNetworkView
-            ? collect()
-            : $user->companies()->pluck('companies.owner_user_id')->push($user->id)->unique();
-        $warehouses = Warehouse::query()
-            // Admin/master use the same operations dashboard as warehouse companies, but across
-            // the complete network. A warehouse account remains strictly scoped to its own rows.
-            ->when(! $isNetworkView, fn (Builder $query) => $query->whereIn('user_id', $ownerIds))
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get();
+        $warehouses = $this->visibleWarehouses($request);
 
         if ($warehouses->isEmpty()) {
             return $this->success([
@@ -422,6 +404,108 @@ class WarehouseController extends CrudController
         $warehouse->delete();
 
         return $this->success(null, 'Warehouse deleted successfully.');
+    }
+
+    // The load planner's warehouse rack: what is stored right now across every facility the account may
+    // see, one stock row (load + customer + storage type within a facility) per rack slot, a page at a
+    // time, plus each facility's name and occupancy for the rack labels.
+    public function rackStock(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+        $page = (int) ($data['page'] ?? 1);
+        $perPage = (int) ($data['per_page'] ?? 27);
+
+        $warehouses = $this->visibleWarehouses($request);
+        $ids = $warehouses->pluck('id')->all();
+        $net = "SUM(CASE WHEN direction = 'inbound' THEN pallets ELSE -pallets END)";
+        $netCbm = "SUM(CASE WHEN direction = 'inbound' THEN COALESCE(cbm, 0) ELSE -COALESCE(cbm, 0) END)";
+        $netWeight = "SUM(CASE WHEN direction = 'inbound' THEN COALESCE(weight_kg, 0) ELSE -COALESCE(weight_kg, 0) END)";
+
+        $stock = WarehouseMovement::query()
+            ->whereIn('warehouse_id', $ids)
+            ->where('status', 'completed')
+            ->selectRaw("warehouse_id, load_id, customer_name, storage_type, {$net} as pallets, {$netCbm} as cbm, {$netWeight} as weight_kg, MIN(completed_at) as stored_since, MAX(description) as description")
+            ->groupBy('warehouse_id', 'load_id', 'customer_name', 'storage_type')
+            ->havingRaw("{$net} > 0");
+
+        $total = DB::query()->fromSub(clone $stock, 'stock')->count();
+        $rows = (clone $stock)
+            ->orderBy('warehouse_id')
+            ->orderByDesc('pallets')
+            ->orderBy('load_id')
+            ->orderBy('customer_name')
+            ->orderBy('storage_type')
+            ->forPage($page, $perPage)
+            ->get();
+
+        $loads = Load::query()
+            ->whereIn('id', $rows->pluck('load_id')->filter()->unique()->all())
+            ->get(['id', 'title', 'goods_type', 'cargo_type', 'status', 'weight_kg', 'volume_m3', 'pallets', 'length_m', 'width_m', 'height_m'])
+            ->keyBy('id');
+        $names = $warehouses->pluck('name', 'id');
+
+        $items = $rows->map(fn (WarehouseMovement $row): array => [
+            'key' => implode(':', ['w'.$row->warehouse_id, 'l'.($row->load_id ?? 0), md5($row->customer_name.'|'.$row->storage_type)]),
+            'warehouse_id' => (int) $row->warehouse_id,
+            'warehouse_name' => $names[$row->warehouse_id] ?? null,
+            'load_id' => $row->load_id,
+            'customer_name' => $row->customer_name,
+            'storage_type' => $row->storage_type,
+            'pallets' => (int) $row->pallets,
+            'cbm' => round((float) $row->cbm, 2),
+            'weight_kg' => round((float) $row->weight_kg, 2),
+            'stored_since' => $row->stored_since,
+            'description' => $row->description,
+            'load' => $loads[$row->load_id] ?? null,
+        ])->values();
+
+        $occupied = WarehouseMovement::query()
+            ->whereIn('warehouse_id', $ids)
+            ->where('status', 'completed')
+            ->selectRaw("warehouse_id, {$net} as net_pallets")
+            ->groupBy('warehouse_id')
+            ->pluck('net_pallets', 'warehouse_id');
+
+        return $this->success([
+            'items' => $items,
+            'warehouses' => $warehouses->map(fn (Warehouse $warehouse): array => [
+                'id' => $warehouse->id,
+                'name' => $warehouse->name,
+                'city' => $warehouse->city,
+                'total_capacity_pallets' => max(0, (int) $warehouse->total_capacity_pallets),
+                'occupied_pallets' => max(0, (int) ($occupied[$warehouse->id] ?? 0)),
+            ])->values(),
+        ], 'Rack stock retrieved successfully.', [
+            'current_page' => $page,
+            'last_page' => max(1, (int) ceil($total / $perPage)),
+            'per_page' => $perPage,
+            'total' => $total,
+        ]);
+    }
+
+    // Facilities an account may see: the whole network for protected admins, otherwise its own and those
+    // owned by the owners of its companies. The protected role is resolved from role_id directly, so a
+    // master/superadmin is never scoped down because the relation was not preloaded on the Sanctum user.
+    private function visibleWarehouses(Request $request): \Illuminate\Database\Eloquent\Collection
+    {
+        $user = $request->user();
+        $isNetworkView = $user && Role::query()
+            ->whereKey($user->role_id)
+            ->whereIn('name', Role::PROTECTED_NAMES)
+            ->exists();
+
+        $ownerIds = $isNetworkView
+            ? collect()
+            : $user->companies()->pluck('companies.owner_user_id')->push($user->id)->unique();
+
+        return Warehouse::query()
+            ->when(! $isNetworkView, fn (Builder $query) => $query->whereIn('user_id', $ownerIds))
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
     }
 
     private function authorizeWarehouse(Request $request, Warehouse $warehouse): void

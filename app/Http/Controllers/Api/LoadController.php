@@ -54,6 +54,56 @@ class LoadController extends CrudController
         return $this->success($counts, 'Tracking status counts retrieved successfully.');
     }
 
+    // The load planner's tracking rack: current loads this account may see - the same visibility rules as
+    // the tracking list - newest first, trimmed to what a rack slot and its info card need.
+    public function rackLoads(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+        $request->query->set('tracking', 'true');
+        $request->query->remove('status');
+        if (! $request->filled('statuses')) {
+            $request->query->set('statuses', 'pending,booked,opened,in_delivery');
+        }
+
+        $query = Load::query()->with(['stops', 'shipment', 'company', 'consignee']);
+        $this->applyFilters($query, $request);
+        $query->orderByDesc('updated_at')->orderByDesc('id');
+        $page = $query->paginate((int) ($data['per_page'] ?? 27), ['*'], 'page', (int) ($data['page'] ?? 1));
+
+        $number = fn (mixed $value): ?float => $value === null ? null : (float) $value;
+        $items = collect($page->items())->map(function (Load $load) use ($number): array {
+            $pickup = $load->stops->firstWhere('type', 'pickup');
+            $delivery = $load->stops->where('type', 'delivery')->last();
+
+            return [
+                'id' => $load->id,
+                'reference' => $load->shipment?->tracking_number ?? $load->booking_reference ?? '#'.$load->id,
+                'title' => $load->title,
+                'status' => $load->status,
+                'customer' => $load->consignee?->name ?? $load->company?->name,
+                'pickup_city' => $pickup?->city,
+                'delivery_city' => $delivery?->city,
+                'goods_type' => $load->goods_type,
+                'weight_kg' => $number($load->weight_kg),
+                'volume_m3' => $number($load->volume_m3),
+                'pallets' => $load->pallets === null ? null : (int) $load->pallets,
+                'length_m' => $number($load->length_m),
+                'width_m' => $number($load->width_m),
+                'height_m' => $number($load->height_m),
+            ];
+        })->values();
+
+        return $this->success($items, 'Rack loads retrieved successfully.', [
+            'current_page' => $page->currentPage(),
+            'last_page' => $page->lastPage(),
+            'per_page' => $page->perPage(),
+            'total' => $page->total(),
+        ]);
+    }
+
     public function publicIndex(): JsonResponse
     {
         $loads = Load::query()

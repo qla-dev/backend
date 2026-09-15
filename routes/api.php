@@ -108,6 +108,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('load-scans/bulk/text', [BulkLoadScanController::class, 'scanText'])->middleware('throttle:5,1');
     Route::get('loads/tracking-status-counts', [LoadController::class, 'trackingStatusCounts']);
     Route::get('loads/profile-status-counts', [LoadController::class, 'profileStatusCounts']);
+    // The load planner's rack rows, a page at a time: current tracking loads, and (below) warehouse stock.
+    Route::get('load-planning/racks/tracking', [LoadController::class, 'rackLoads']);
 
     // Customers, independent drivers, and logistics companies can post loads; superadmin/master keep their usual override.
     Route::middleware('role:user,driver,company,manager,dispatcher,customs_officer,superadmin,master')->group(function (): void {
@@ -119,6 +121,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // protected admins may additionally manage any facility in the network.
     Route::middleware('role:user,driver,company,manager,dispatcher,customs_officer,warehouse,superadmin,master')->group(function (): void {
         Route::get('warehouse/overview', [WarehouseController::class, 'overview']);
+        Route::get('load-planning/racks/warehouse', [WarehouseController::class, 'rackStock']);
         Route::get('warehouses/{warehouse}/status', [WarehouseController::class, 'status']);
         Route::post('warehouses', [WarehouseController::class, 'store']);
         Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update']);
