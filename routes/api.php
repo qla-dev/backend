@@ -176,6 +176,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // on a deployment that has not been given one.
     Route::get('lena-realtime/status', [\App\Http\Controllers\Api\LenaRealtimeController::class, 'status'])->middleware('throttle:60,1');
     Route::post('lena-realtime/session', [\App\Http\Controllers\Api\LenaRealtimeController::class, 'store'])->middleware('throttle:10,1');
+    // Reported when a call ends: the realtime API bills per token, and a call's tokens do not
+    // exist until it is over, so the mint's log row is completed here rather than at mint time.
+    Route::post('lena-realtime/usage', [\App\Http\Controllers\Api\LenaRealtimeController::class, 'usage'])->middleware('throttle:30,1');
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
     Route::post('lena-guided-answer', [LenaGuidedAnswerController::class, 'store'])->middleware('throttle:30,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
