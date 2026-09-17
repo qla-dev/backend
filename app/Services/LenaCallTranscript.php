@@ -25,7 +25,8 @@ class LenaCallTranscript
 
     public function save(int $conversationId, string $speaker, string $text, ?int $callerUserId): bool
     {
-        $body = trim($text);
+        // Whisper invents a subtitle sign-off out of silence; it must never reach the thread.
+        $body = SpeechHallucinations::strip($text);
         if (mb_strlen($body) < self::MIN_LENGTH) return false;
 
         $senderId = $speaker === 'lena'

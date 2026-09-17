@@ -60,7 +60,13 @@ class LenaRealtimeSession
                     // Transcribing the caller's own speech is what lets the call show a readable
                     // transcript beside it, and what gets the call saved as a normal conversation
                     // afterwards. Without it the caller's turns exist only as audio nobody keeps.
-                    'input' => ['transcription' => ['model' => 'whisper-1', 'language' => $language]],
+                    // near_field noise reduction runs before the turn detector, so cab rumble and the ambience
+                    // bleeding back through the speaker are less likely to be handed to Whisper as "audio" -
+                    // which is precisely when it invents a subtitle sign-off out of nothing.
+                    'input' => [
+                        'noise_reduction' => ['type' => 'near_field'],
+                        'transcription' => ['model' => 'whisper-1', 'language' => $language],
+                    ],
                     'output' => ['voice' => $voice],
                 ],
                 'tools' => self::tools(),

@@ -208,4 +208,31 @@ class LenaCallFreeModeTest extends TestCase
             $this->assertContains($mode, $actions, "A call cannot enter {$mode} mode.");
         }
     }
+
+    public function test_whisper_subtitle_hallucinations_never_reach_the_thread(): void
+    {
+        $caller = User::factory()->create();
+        $this->dispatcher();
+        $conversation = $this->conversationFor($caller);
+        $transcript = app(LenaCallTranscript::class);
+
+        // Real turns recorded in production, where Whisper appended a sign-off to actual speech.
+        $this->assertTrue($transcript->save($conversation->id, 'caller', 'Šta bolan uzmaš kao tri transporta? Hvala što pratite kanal!', $caller->id));
+        // A turn that was nothing but the hallucination is not a turn at all.
+        $this->assertFalse($transcript->save($conversation->id, 'caller', 'Hvala što pratite kanal.', $caller->id));
+
+        $saved = $conversation->messages()->orderBy('id')->pluck('body')->all();
+        $this->assertSame(['Šta bolan uzmaš kao tri transporta?'], $saved);
+    }
+
+    public function test_ordinary_freight_speech_is_never_mistaken_for_a_hallucination(): void
+    {
+        foreach ([
+            'Dvadeset paleta kafe za Beč.',
+            'Hvala vam na pomoći oko ovog tereta.',
+            'Prijevoz robe iz Beča u Sarajevo.',
+        ] as $spoken) {
+            $this->assertSame($spoken, \App\Services\SpeechHallucinations::strip($spoken));
+        }
+    }
 }

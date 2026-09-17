@@ -59,7 +59,9 @@ class LenaTranscription
             try {
                 $response = Http::withToken($key)->connectTimeout(10)->timeout(60)->post($url, $payload);
                 if ($response->successful()) {
-                    $text = trim((string) $response->json('text', ''));
+                    // Silence makes Whisper invent a subtitle sign-off; strip it before it becomes
+                    // a message, a load field, or an answer to a questionnaire step.
+                    $text = SpeechHallucinations::strip((string) $response->json('text', ''));
                     $success = $text !== '';
                 }
             } catch (\Throwable $exception) {
