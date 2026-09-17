@@ -240,19 +240,29 @@ class LenaRealtimeSession
     /** AGENT.md first, then each subskill in name order, with the Name sections stripped off. */
     private function trainedInstructions(string $spoken): string
     {
-        $root = realpath(__DIR__.'/../../agents/lena/call');
-        if (! $root) return '';
+        $agents = realpath(__DIR__.'/../../agents/lena');
+        if (! $agents) return '';
 
+        // The call agent's own tree, and then the free-roam gateway - the master skill that knows
+        // which tasks exist and when to hand one over. Without it the voice has no idea that
+        // "posting a load" is a thing she can start, so she keeps asking questions out of her own
+        // head while the real skill that does the job sits one button press away, unreachable.
+        //
+        // She is not given the task skills themselves. She cannot be: a realtime session gets one
+        // prompt when it is minted and cannot swap it mid-call, so per-turn skill selection - what
+        // the text chat does on every message - has nothing to hang off here. What she needs is not
+        // the skill, it is the knowledge of when to hand over to it.
         $paths = array_merge(
-            is_readable($root.'/AGENT.md') ? [$root.'/AGENT.md'] : [],
-            glob($root.'/skills/*.md') ?: [],
+            is_readable($agents.'/call/AGENT.md') ? [$agents.'/call/AGENT.md'] : [],
+            glob($agents.'/call/skills/*.md') ?: [],
+            is_readable($agents.'/freeroam/AGENT.md') ? [$agents.'/freeroam/AGENT.md'] : [],
         );
 
         $parts = [];
         foreach ($paths as $path) {
             $resolved = realpath($path);
-            // Never read outside the call agent's own folder, whatever the glob turns up.
-            if (! $resolved || ! str_starts_with($resolved, $root.DIRECTORY_SEPARATOR) || ! is_readable($resolved)) continue;
+            // Never read outside the agents tree, whatever the glob turns up.
+            if (! $resolved || ! str_starts_with($resolved, $agents.DIRECTORY_SEPARATOR) || ! is_readable($resolved)) continue;
             $prompt = LenaModeInstructions::split((string) file_get_contents($resolved))['prompt'];
             // Front matter is catalogue metadata for the skills screen, not something to speak.
             $prompt = trim((string) preg_replace('/\A---\R.*?\R---\R/s', '', $prompt));

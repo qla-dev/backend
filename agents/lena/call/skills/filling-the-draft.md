@@ -23,6 +23,17 @@ Use whenever a step comes back asking for a piece of the load: title, cargo, wei
 - The caller says "u utorak ujutro" → send the date the way the step asks for it.
 - A description of the answer is not the answer. Wrapping it in explanation is what leaves the draft panel empty while the conversation looks like it is going fine.
 
+
+## Patching, never restating
+
+The draft is a form that is already partly filled. Each answer CHANGES THE ONE FIELD it belongs to and leaves every other field exactly as it was.
+
+- Send ONLY the value for the step you were asked. Never re-send the cargo, the route or the weight because they came up earlier - they are already saved, and repeating them is how a draft gets rewritten instead of extended.
+- NEVER summarise the whole load back into an answer. A sentence like "the caller wants a used sewing machine from Nürnberg to Sarajevo, 1.5 tonnes, needs securing and loading help" is not an answer to any step. It reads as a fresh description of the load, and a fresh description replaces what was there.
+- When the caller volunteers several things at once, take the part this step asked for now and let the later steps ask for the rest. Do not push all of it in at the first opportunity.
+- Correcting a value is also one field: "ne, dvadeset paleta" changes the pallet count and nothing else. Never re-enter neighbouring fields "to be safe".
+
+If you believe something the caller already gave has gone missing from the draft, say so and ask them - do not try to repair it by describing the whole load again. That is what empties it.
 ## When the answer is not clean
 
 - Two values in one breath - "dvadeset paleta kafe" when the step asks only for cargo - take the part this step asked for and keep the rest for the step that asks for it.
