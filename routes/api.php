@@ -168,6 +168,14 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('customer-options', [CustomerController::class, 'options']);
     Route::post('dispatch-chat/skills', [DispatchChatController::class, 'skills'])->middleware('throttle:60,1');
     Route::post('dispatch-chat/speech', [\App\Http\Controllers\Api\LenaSpeechController::class, 'store'])->middleware('throttle:30,1');
+    // The ear to dispatch-chat/speech's mouth: a held mic button sends one recording per turn, so
+    // the limit tracks the speech one rather than the stricter per-reply limits below.
+    Route::post('dispatch-chat/transcribe', [\App\Http\Controllers\Api\LenaTranscriptionController::class, 'store'])->middleware('throttle:30,1');
+    // Lena's live call. The session route mints a single-use ephemeral OpenAI credential; the
+    // status route only reports whether a key is configured, so the app can hide the call button
+    // on a deployment that has not been given one.
+    Route::get('lena-realtime/status', [\App\Http\Controllers\Api\LenaRealtimeController::class, 'status'])->middleware('throttle:60,1');
+    Route::post('lena-realtime/session', [\App\Http\Controllers\Api\LenaRealtimeController::class, 'store'])->middleware('throttle:10,1');
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
     Route::post('lena-guided-answer', [LenaGuidedAnswerController::class, 'store'])->middleware('throttle:30,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');

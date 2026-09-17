@@ -47,6 +47,30 @@ return [
         // Draws images in LenaAI training mode (superadmins only), after the admin approves one.
         'image_model' => env('OPENROUTER_IMAGE_MODEL', 'google/gemini-2.5-flash-image'),
         'url' => env('OPENROUTER_URL', 'https://openrouter.ai/api/v1/chat/completions'),
+        // Turns a driver's recorded question into text before it reaches DispatchChatController.
+        // Whisper Large v3 Turbo served by Groq is the fastest transcription on OpenRouter, so it
+        // is the primary; LenaTranscription retries on the fallback model when the primary fails
+        // or returns nothing, mirroring the pair OpenRouterDispatchAssistant already uses.
+        'transcription_model' => env('OPENROUTER_TRANSCRIPTION_MODEL', 'openai/whisper-large-v3-turbo'),
+        'transcription_fallback_model' => env('OPENROUTER_TRANSCRIPTION_FALLBACK_MODEL', 'openai/whisper-1'),
+        // Whisper Large v3 is served by several providers; pinning the order keeps the primary on
+        // Groq's inference rather than a slower one. Leave empty to let OpenRouter choose.
+        'transcription_provider' => env('OPENROUTER_TRANSCRIPTION_PROVIDER', 'groq'),
+        'transcription_url' => env('OPENROUTER_TRANSCRIPTION_URL', 'https://openrouter.ai/api/v1/audio/transcriptions'),
+    ],
+
+    // Lena's live call talks straight to OpenAI, because a realtime session is a persistent WebRTC
+    // connection and OpenRouter exposes only request/response endpoints. Everything else Lena does
+    // stays on OpenRouter. With no key set, LenaRealtimeSession refuses to mint a token and the
+    // call screen reports the feature as unconfigured; nothing else in the app is affected.
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'realtime_model' => env('OPENAI_REALTIME_MODEL', 'gpt-realtime-2.1'),
+        'realtime_voice' => env('OPENAI_REALTIME_VOICE', 'marin'),
+        'realtime_client_secrets_url' => env('OPENAI_REALTIME_CLIENT_SECRETS_URL', 'https://api.openai.com/v1/realtime/client_secrets'),
+        // The app POSTs its SDP offer here with the ephemeral secret. Exposed through the session
+        // endpoint so the URL can move without shipping a new build.
+        'realtime_calls_url' => env('OPENAI_REALTIME_CALLS_URL', 'https://api.openai.com/v1/realtime/calls'),
     ],
 
     'fuelo' => [

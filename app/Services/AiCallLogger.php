@@ -35,7 +35,9 @@ class AiCallLogger
     }
 
     // Charge the reply once: voice replies cost two units, text replies one.
-    // Scripted text answers and speech generation/replays cost no extra units.
+    // Scripted text answers, speech generation/replays and transcription cost no extra units -
+    // transcribing the driver's recording is one half of a voice turn whose dispatch_chat reply is
+    // already charged two units, so billing it again would make a spoken turn cost three.
     private function decrementSubscriptionMessage(?int $userId, array $attributes): void
     {
         // Audio is part of the same reply; replays/chunks must not charge another plan message.
@@ -53,7 +55,7 @@ class AiCallLogger
 
     public static function messageUnits(array $attributes): int
     {
-        if (($attributes['is_success'] ?? true) !== true || in_array($attributes['service'] ?? '', ['speech', 'skill_selection'], true)) return 0;
+        if (($attributes['is_success'] ?? true) !== true || in_array($attributes['service'] ?? '', ['speech', 'transcription', 'skill_selection'], true)) return 0;
         if (in_array($attributes['service'] ?? '', ['dispatch_chat', 'guided_answer'], true)
             && ($attributes['request_payload']['input_mode'] ?? 'text') === 'voice') return 2;
         return ($attributes['service'] ?? '') === 'guided_answer' ? 0 : 1;
