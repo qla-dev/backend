@@ -29,6 +29,36 @@ class LenaRealtimeController extends Controller
     }
 
 
+
+    /**
+     * Saves one spoken turn of a call into the conversation, as it was actually said.
+     *
+     * A call in free conversation makes no dispatch-chat round trip - the realtime model answers
+     * out of its own head - so without this the thread would be empty afterwards and the call
+     * would leave nothing behind. Writing it here rather than from the browser is what keeps the
+     * app from being able to post messages as Lena: the speaker is a flag, not a user id.
+     */
+    public function transcript(Request $request, LenaCallTranscript $transcript): JsonResponse
+    {
+        $validated = $request->validate([
+            'conversation_id' => ['required', 'integer', 'exists:conversations,id'],
+            'speaker' => ['required', 'in:caller,lena'],
+            'text' => ['required', 'string', 'max:5000'],
+        ]);
+
+        if (! $this->userIsConversationParticipant($validated['conversation_id'], $request->user()?->id)) {
+            return response()->json(['message' => 'You are not part of this conversation.'], 403);
+        }
+
+        $saved = $transcript->save(
+            (int) $validated['conversation_id'],
+            $validated['speaker'],
+            $validated['text'],
+            $request->user()?->id,
+        );
+
+        return response()->json(['data' => ['saved' => $saved]]);
+    }
     /**
      * Prices a finished call. The app reports what the model declared during the session, because
      * the mint request that opened the log row happened before any of it existed.

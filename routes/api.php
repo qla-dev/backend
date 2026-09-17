@@ -179,6 +179,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // Reported when a call ends: the realtime API bills per token, and a call's tokens do not
     // exist until it is over, so the mint's log row is completed here rather than at mint time.
     Route::post('lena-realtime/usage', [\App\Http\Controllers\Api\LenaRealtimeController::class, 'usage'])->middleware('throttle:30,1');
+    // Both sides of a spoken turn, saved as ordinary messages. A call in free conversation never
+    // reaches dispatch-chat, so without this the thread it belongs to would stay empty.
+    Route::post('lena-realtime/transcript', [\App\Http\Controllers\Api\LenaRealtimeController::class, 'transcript'])->middleware('throttle:120,1');
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
     Route::post('lena-guided-answer', [LenaGuidedAnswerController::class, 'store'])->middleware('throttle:30,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');
