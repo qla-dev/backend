@@ -13,7 +13,7 @@ class OpenRouterDispatchAssistant
 
     public function __construct(private readonly AiCallLogger $logger) {}
 
-    public function reply(string $systemPrompt, array $history, ?int $conversationId = null, bool $hasAttachment = false, string $service = 'dispatch_chat'): string
+    public function reply(string $systemPrompt, array $history, ?int $conversationId = null, bool $hasAttachment = false, string $service = 'dispatch_chat', bool $webSearch = false): string
     {
         $primaryModel = (string) config('services.openrouter.model');
         $fallbackModel = config('services.openrouter.fallback_model');
@@ -45,6 +45,15 @@ class OpenRouterDispatchAssistant
                     ...$history,
                 ],
             ];
+            // Web search is attached only for the turns the skill selector judged to need it, because
+            // OpenRouter bills per search. Results come back as url_citation annotations, which the
+            // model is told (in the web-search skill) to attribute rather than pass off as our own.
+            if ($webSearch && config('services.openrouter.web_search_enabled')) {
+                $payload['plugins'] = [[
+                    'id' => 'web',
+                    'max_results' => max(1, (int) config('services.openrouter.web_search_max_results')),
+                ]];
+            }
             $startedAt = microtime(true);
             $logContext = ['attempt' => $attempt, 'max_attempts' => self::MAX_ATTEMPTS, 'conversation_id' => $conversationId, 'model' => $model];
 

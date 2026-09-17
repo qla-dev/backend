@@ -57,6 +57,11 @@ return [
         // Groq's inference rather than a slower one. Leave empty to let OpenRouter choose.
         'transcription_provider' => env('OPENROUTER_TRANSCRIPTION_PROVIDER', 'groq'),
         'transcription_url' => env('OPENROUTER_TRANSCRIPTION_URL', 'https://openrouter.ai/api/v1/audio/transcriptions'),
+        // Lena's web search, attached per reply rather than always on: OpenRouter bills each search
+        // separately, and almost every freight question is answered from our own database or from
+        // what the model already knows. The skill selector decides - see agents/lena/skills/web-search.md.
+        'web_search_enabled' => (bool) env('OPENROUTER_WEB_SEARCH_ENABLED', true),
+        'web_search_max_results' => (int) env('OPENROUTER_WEB_SEARCH_MAX_RESULTS', 5),
     ],
 
     // Lena's live call talks straight to OpenAI, because a realtime session is a persistent WebRTC
