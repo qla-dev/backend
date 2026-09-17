@@ -147,15 +147,51 @@ class LenaRealtimeSession
         ]];
     }
 
+    /**
+     * The call agent's prompt, trained like every other Lena skill: agents/lena/call/AGENT.md is the
+     * agent itself and agents/lena/call/skills/*.md are its subskills, so the skills screen can edit
+     * what the voice does without a deploy. The hard-coded text below is only the floor - it keeps
+     * calls working if the tree is ever missing or unreadable.
+     */
     private function instructions(string $language): string
     {
         $spoken = self::LANGUAGE_NAMES[$language] ?? 'English';
 
-        return implode("\n\n", [
+        return implode("\n\n", array_filter([
             'You are Lena, the voice of Freightbook.ai, on a phone call with a driver or dispatcher.',
-
             "Speak {$spoken}, and keep speaking {$spoken} unless the caller clearly switches language.",
+            $this->trainedInstructions($spoken) ?: $this->fallbackInstructions($spoken),
+        ]));
+    }
 
+    /** AGENT.md first, then each subskill in name order, with the Name sections stripped off. */
+    private function trainedInstructions(string $spoken): string
+    {
+        $root = realpath(__DIR__.'/../../agents/lena/call');
+        if (! $root) return '';
+
+        $paths = array_merge(
+            is_readable($root.'/AGENT.md') ? [$root.'/AGENT.md'] : [],
+            glob($root.'/skills/*.md') ?: [],
+        );
+
+        $parts = [];
+        foreach ($paths as $path) {
+            $resolved = realpath($path);
+            // Never read outside the call agent's own folder, whatever the glob turns up.
+            if (! $resolved || ! str_starts_with($resolved, $root.DIRECTORY_SEPARATOR) || ! is_readable($resolved)) continue;
+            $prompt = LenaModeInstructions::split((string) file_get_contents($resolved))['prompt'];
+            // Front matter is catalogue metadata for the skills screen, not something to speak.
+            $prompt = trim((string) preg_replace('/\A---\R.*?\R---\R/s', '', $prompt));
+            if ($prompt !== '') $parts[] = str_replace('{language}', $spoken, $prompt);
+        }
+
+        return implode("\n\n", $parts);
+    }
+
+    private function fallbackInstructions(string $spoken): string
+    {
+        return implode("\n\n", [
             'You are the caller\'s voice into Lena, not Lena\'s knowledge. You do not know this account\'s loads, '
                 .'shipments, prices, documents, HS codes or the law. The ask_lena tool does. Call it for every '
                 .'request that involves real work or real information, and answer from what it returns rather than '
