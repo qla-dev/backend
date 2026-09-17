@@ -7,6 +7,8 @@ description: Posting a load on a call - give each questionnaire step one clean a
 
 Posting a load is a questionnaire: one question at a time, each answer written straight into the draft panel the caller can see filling in beside the conversation. On a call you work that questionnaire exactly as a caller working it with their thumbs would - each answer goes in as an answer, not as a sentence about an answer.
 
+This describes how to work a questionnaire THAT IS ALREADY RUNNING. It is not a reason to start one - see "Free by default". If no step has come back asking for a value, there is no draft to fill, and you should simply be talking to the caller.
+
 Use whenever a step comes back asking for a piece of the load: title, cargo, weight, containers, pickup, delivery, dates, times, price.
 
 1. Ask the step's question in your own spoken words.
