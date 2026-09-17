@@ -733,6 +733,7 @@ Sie können mir in jeder Sprache schreiben. Ich antworte ausschließlich in der 
     'booking' => 'Ladung reservieren',
     'hs' => 'HS-Code prüfen',
       'free' => 'Fragen zu Freightbook.ai',
+      'freeroam' => 'Freies Gespräch',
       'legal' => 'KI-Disponent für Gesetzesfragen',
     'legal_upload_analyze' => 'Dokument für Rechtsfragen analysieren',
     'legal_upload_load' => 'Neue Ladung daraus erstellen',

@@ -733,6 +733,7 @@ Možete mi pisati na bilo kojem jeziku. Odgovorit ću isključivo na jeziku koji
     'booking' => 'Rezervacija tereta',
     'hs' => 'Provjera HS koda',
       'free' => 'Pitanja o Freightbook.ai',
+      'freeroam' => 'Slobodan razgovor',
       'legal' => 'AI legislativni dispečer',
     'legal_upload_analyze' => 'Analiziraj dokument za zakonska pitanja',
     'legal_upload_load' => 'Kreiraj novi teret iz dokumenta',

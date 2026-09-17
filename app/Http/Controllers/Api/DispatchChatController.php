@@ -206,7 +206,7 @@ class DispatchChatController extends Controller
         $questionnaireTurn = $canvasEnabled && (
             $startsLoadWithExistingDraft
             || ! in_array($guidedAction, [
-                'add', 'storage', 'start_add_yes', 'upload_yes', 'tracking', 'booking', 'hs', 'free', 'continue_add_no',
+                'add', 'storage', 'start_add_yes', 'upload_yes', 'tracking', 'booking', 'hs', 'free', 'freeroam', 'continue_add_no',
             ], true)
         );
         $origin = $contextLoad?->stops->firstWhere('type', 'pickup')?->city;
@@ -958,7 +958,7 @@ class DispatchChatController extends Controller
                             ? 'hs'
                             : ($activeGuidedMode === 'booking'
                                 ? 'booking'
-                                : ($activeGuidedMode === 'free' ? 'free' : 'general')))))));
+                                : ($activeGuidedMode === 'free' ? 'free' : ($activeGuidedMode === 'freeroam' ? 'freeroam' : 'general'))))))));
 
         return [
             'guidedAction' => $guidedAction, 'activeGuidedMode' => $activeGuidedMode, 'explicitPaymentRequest' => $explicitPaymentRequest,
@@ -1069,7 +1069,7 @@ class DispatchChatController extends Controller
             return null;
         }
 
-        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|legal|legal_upload_analyze|legal_upload_load|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no|training|training_image_yes|training_image_no)\]\]$/', trim($message), $match) === 1
+        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|freeroam|legal|legal_upload_analyze|legal_upload_load|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no|training|training_image_yes|training_image_no)\]\]$/', trim($message), $match) === 1
             ? $match[1]
             : null;
     }
@@ -1081,7 +1081,7 @@ class DispatchChatController extends Controller
             if ($action === 'legal_upload_load') {
                 return 'add';
             }
-            if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free', 'legal', 'training'], true)) {
+            if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free', 'freeroam', 'legal', 'training'], true)) {
                 return $action;
             }
             // Answering the image offer keeps the conversation in training mode.

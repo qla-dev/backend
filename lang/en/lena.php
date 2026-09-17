@@ -733,6 +733,7 @@ You can write to me in any language. I will reply exclusively in the language yo
     'booking' => 'Reserve a load',
     'hs' => 'Check HS code',
       'free' => 'Ask about Freightbook.ai',
+      'freeroam' => 'Free roam chat',
       'legal' => 'AI Legislative Dispatcher',
     'legal_upload_analyze' => 'Analyse document for legal questions',
     'legal_upload_load' => 'Create a new load from it',

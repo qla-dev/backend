@@ -1,7 +1,3 @@
----
-name: slobodna-konverzacija
-description: The master skill - free roaming conversation that can reach every other skill. This is the gateway mode a call starts in and the one a user picks when they just want to talk rather than run a task.
----
 
 # Slobodna konverzacija - free roam
 
