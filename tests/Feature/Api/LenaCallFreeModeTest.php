@@ -146,4 +146,33 @@ class LenaCallFreeModeTest extends TestCase
         $this->assertStringContainsString('MASTER SKILL', $prompt, 'Free roam must load its own gateway prompt.');
         $this->assertStringNotContainsString('{language}', $prompt);
     }
+
+    public function test_free_roam_is_a_registered_action_not_just_a_welcome_chip(): void
+    {
+        $catalog = json_decode(
+            app(\App\Http\Controllers\Api\LenaCatalogController::class)
+                ->show(app(\App\Services\LenaCatalog::class))
+                ->getContent(),
+            true,
+        )['data'];
+
+        // The welcome row is built by imploding welcome_actions into a LENA_OPTIONS line, so a chip
+        // can be offered while the key itself is unregistered - which is exactly what happened when
+        // this was added to one list and not the other.
+        $this->assertContains('freeroam', $catalog['actions'], 'freeroam must be a registered action.');
+        $this->assertSame('freeroam', $catalog['welcome_actions'][0] ?? null);
+
+        preg_match('/\[\[LENA_OPTIONS:([^\]]+)\]\]/', $catalog['locales']['bs']['welcome']['general'], $match);
+        $this->assertNotEmpty($match, 'The welcome must carry an options line.');
+        $this->assertStringStartsWith('freeroam,', $match[1]);
+
+        foreach (['bs' => 'Slobodan razgovor', 'en' => 'Free roam chat', 'de' => 'Freies Gespräch'] as $locale => $label) {
+            $this->assertSame($label, $catalog['locales'][$locale]['actions']['freeroam'] ?? null);
+            $this->assertNotSame(
+                $catalog['locales'][$locale]['actions']['free'] ?? null,
+                $catalog['locales'][$locale]['actions']['freeroam'] ?? null,
+                "The two chips share a label in {$locale}.",
+            );
+        }
+    }
 }
