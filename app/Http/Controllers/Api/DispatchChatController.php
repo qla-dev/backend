@@ -114,11 +114,17 @@ class DispatchChatController extends Controller
         $currentConversationTitle = Str::startsWith($conversationSubject, 'AI Dispatch —')
             ? trim(Str::after($conversationSubject, 'AI Dispatch —'))
             : $conversationSubject;
+        // Outside tracking mode the booking reference is tried first, then the tracking number: a
+        // caller who wants to book a load usually has whichever identifier is in front of them, and
+        // a shipment they have been following is identified by its tracking number, not a reference
+        // they have never been given. Tracking mode stays tracking-only - a booking reference there
+        // would answer a "where is it" question with the wrong record.
         $matchedGeneralLoad = $load
             ? null
             : ($trackingMode
                 ? $this->findVisibleLoadByTrackingNumber($latestUserMessage, $request->user())
-                : $this->findVisibleLoadByBookingReference($latestUserMessage, $request->user()));
+                : ($this->findVisibleLoadByBookingReference($latestUserMessage, $request->user())
+                    ?? $this->findVisibleLoadByTrackingNumber($latestUserMessage, $request->user())));
 
         // General LenaAI chats are not permanently attached to a load. Keep the most recently
         // resolved booking reference as conversational context for follow-ups such as "show the
@@ -132,7 +138,8 @@ class DispatchChatController extends Controller
             foreach ($userMessages->skip(1) as $earlierUserMessage) {
                 $matchedGeneralLoad = $trackingMode
                     ? $this->findVisibleLoadByTrackingNumber($earlierUserMessage->body, $request->user())
-                    : $this->findVisibleLoadByBookingReference($earlierUserMessage->body, $request->user());
+                    : ($this->findVisibleLoadByBookingReference($earlierUserMessage->body, $request->user())
+                        ?? $this->findVisibleLoadByTrackingNumber($earlierUserMessage->body, $request->user()));
                 if ($matchedGeneralLoad) {
                     break;
                 }
@@ -337,7 +344,7 @@ class DispatchChatController extends Controller
                             ? 'For add or start_add_yes, a document or message was already provided earlier in this conversation and its load data was already extracted into the draft below; never ask whether they have a document to upload. Briefly announce that you are starting the load draft from what they already gave you, then continue directly with the next incomplete questionnaire step described below.'
                             : 'For add or start_add_yes, ask exactly whether they have a document, shipping file or waybill to upload, and end your reply with [[LENA_OPTIONS:upload_yes,upload_no]]. Ask it with exactly this wording, in the language of the user. In Bosnian: "Imate li dokument, datoteku za otpremu ili tovarni list koji želite učitati?". In English: "Do you have a document, shipping file or waybill you would like to upload?". In German: "Möchten Sie ein Dokument, eine Versanddatei oder einen Frachtbrief hochladen?".')
                         : '')
-                    .' For start_add_no, acknowledge briefly and keep the builder off. For upload_yes, briefly tell them to attach the file now and say you will extract the available load data before asking only the remaining fields. For upload_no, begin with the server-supplied next incomplete questionnaire step, not a hard-coded pickup question. For continue_add_yes, resume by asking the same server-supplied next incomplete step; never skip it. For continue_add_no, acknowledge that load creation has been paused and that the collected draft remains available in the conversation. For tracking, ask for the shipment tracking number and never call it a booking reference. In Bosnian ask exactly: "Molim vas, unesite tracking broj tereta koji želite pratiti." Then use the shipment tracking-number database lookup. For booking, ask for the booking reference and use the booking-reference database lookup. For hs, introduce yourself confidently as an experienced HS classification expert with direct access to Freightbook.ai\'s international HS database, updated for 2026, containing 5,612 six-digit codes. Then ask for the product description, material or composition, processing state, intended use, and country context, and explain that you will search the database and provide the most likely HS code with a concise rationale. Never refuse to help or say that you cannot classify the product. If material details are missing or more than one code is plausible, state the assumptions, give the best-fit code first, optionally list close alternatives, and label the confidence level so uncertainty is not hidden. For free, invite the user to ask freely about Freightbook.ai features and workflows. Do not expose or explain the guided action marker.'
+                    .' For start_add_no, acknowledge briefly and keep the builder off. For upload_yes, briefly tell them to attach the file now and say you will extract the available load data before asking only the remaining fields. For upload_no, begin with the server-supplied next incomplete questionnaire step, not a hard-coded pickup question. For continue_add_yes, resume by asking the same server-supplied next incomplete step; never skip it. For continue_add_no, acknowledge that load creation has been paused and that the collected draft remains available in the conversation. For tracking, ask for the shipment tracking number and never call it a booking reference. In Bosnian ask exactly: "Molim vas, unesite tracking broj tereta koji želite pratiti." Then use the shipment tracking-number database lookup. For booking, ask for the booking reference OR the shipment tracking number - either identifies the load, and the caller may only have one of them. In Bosnian ask exactly: \"Molim vas, unesite broj rezervacije ili tracking broj tereta.\" Then use the database lookup, which tries the booking reference first and the tracking number after. For hs, introduce yourself confidently as an experienced HS classification expert with direct access to Freightbook.ai\'s international HS database, updated for 2026, containing 5,612 six-digit codes. Then ask for the product description, material or composition, processing state, intended use, and country context, and explain that you will search the database and provide the most likely HS code with a concise rationale. Never refuse to help or say that you cannot classify the product. If material details are missing or more than one code is plausible, state the assumptions, give the best-fit code first, optionally list close alternatives, and label the confidence level so uncertainty is not hidden. For free, invite the user to ask freely about Freightbook.ai features and workflows. Do not expose or explain the guided action marker.'
                 : '')
             .($hsMode
                 ? ' HS classification mode is active. Freightbook.ai has a server-side international HS database, updated for 2026, containing 5,612 six-digit classifications. '
