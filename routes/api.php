@@ -182,6 +182,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // Both sides of a spoken turn, saved as ordinary messages. A call in free conversation never
     // reaches dispatch-chat, so without this the thread it belongs to would stay empty.
     Route::post('lena-realtime/transcript', [\App\Http\Controllers\Api\LenaRealtimeController::class, 'transcript'])->middleware('throttle:120,1');
+    // The skills behind a mode, fetched when a call enters one so they can be pushed into the live
+    // realtime session. The text chat selects skills per message; a call is reconfigured instead.
+    Route::post('lena-realtime/mode-skills', [\App\Http\Controllers\Api\LenaRealtimeController::class, 'modeSkills'])->middleware('throttle:60,1');
     Route::post('dispatch-chat', [DispatchChatController::class, 'store'])->middleware('throttle:20,1');
     Route::post('lena-guided-answer', [LenaGuidedAnswerController::class, 'store'])->middleware('throttle:30,1');
     Route::post('load-scans', [LoadScanController::class, 'store'])->middleware('throttle:10,1');

@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\ScopesConversationAccess;
 use App\Http\Controllers\Controller;
+use App\Services\LenaCallTranscript;
+use App\Services\LenaSkillCatalog;
+use App\Services\LenaSkillSelector;
 use App\Services\LenaRealtimeSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,6 +61,39 @@ class LenaRealtimeController extends Controller
         );
 
         return response()->json(['data' => ['saved' => $saved]]);
+    }
+
+    /**
+     * The skills behind a mode, as prompt text a live call can be given mid-conversation.
+     *
+     * The text chat picks skills per message, because every message is a round trip. A realtime
+     * session has no such moment in free conversation - but it can be reconfigured at any time with
+     * session.update, so when a call enters a task its skills are fetched here and pushed into the
+     * live session. She gets the same knowledge the typed path would have used, a beat later.
+     */
+    public function modeSkills(Request $request, LenaSkillCatalog $catalog, LenaSkillSelector $selector): JsonResponse
+    {
+        $validated = $request->validate([
+            'mode' => ['required', 'string', 'in:freeroam,add,storage,tracking,booking,hs,legal,free,training'],
+        ]);
+
+        // The button a caller presses is not always the folder its skills live in.
+        $folder = ['add' => 'post-load', 'free' => 'free', 'freeroam' => 'freeroam'][$validated['mode']] ?? $validated['mode'];
+
+        $files = collect($catalog->rows())
+            // A mode's own subskills, plus the shared ones every mode loads. Not the AGENT.md files:
+            // those carry the text chat's own protocol - its buttons and markers - which is the one
+            // thing a voice must never start producing.
+            ->filter(fn (array $row) => $row['kind'] === 'skill' && in_array($folder, $row['modes'], true))
+            ->pluck('id')
+            ->values()
+            ->all();
+
+        return response()->json(['data' => [
+            'mode' => $validated['mode'],
+            'skills' => $files,
+            'instructions' => $selector->instructions($files),
+        ]]);
     }
     /**
      * Prices a finished call. The app reports what the model declared during the session, because
