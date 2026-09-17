@@ -173,6 +173,57 @@ class LenaRealtimeSession
      * what the voice does without a deploy. The hard-coded text below is only the floor - it keeps
      * calls working if the tree is ever missing or unreadable.
      */
+
+    /**
+     * Prices one finished call and writes the result onto the row minted() logged.
+     *
+     * The realtime API bills per token, but a call's tokens only exist once it is over: the mint
+     * request that opened the log row happened before a word was said. The app therefore reports
+     * what the model itself declared in its response.done events, and that is priced here rather
+     * than in the browser, so the rates are not something a client can argue with.
+     *
+     * @param array{audio_input?:int,audio_output?:int,cached_audio_input?:int,text_input?:int,text_output?:int} $usage
+     */
+    public function recordUsage(array $usage, ?int $conversationId, ?int $userId, ?int $durationMs = null): void
+    {
+        $rates = (array) config('services.openai.realtime_rates');
+        $tokens = [
+            'audio_input' => max(0, (int) ($usage['audio_input'] ?? 0)),
+            'audio_output' => max(0, (int) ($usage['audio_output'] ?? 0)),
+            'cached_audio_input' => max(0, (int) ($usage['cached_audio_input'] ?? 0)),
+            'text_input' => max(0, (int) ($usage['text_input'] ?? 0)),
+            'text_output' => max(0, (int) ($usage['text_output'] ?? 0)),
+        ];
+
+        $cost = 0.0;
+        foreach ($tokens as $kind => $count) {
+            $cost += $count / 1_000_000 * (float) ($rates[$kind] ?? 0);
+        }
+
+        $promptTokens = $tokens['audio_input'] + $tokens['cached_audio_input'] + $tokens['text_input'];
+        $completionTokens = $tokens['audio_output'] + $tokens['text_output'];
+
+        // The row this call already owns, rather than a second one: a call is one line on the AI
+        // stats screen, opened when it was placed and completed when it ends.
+        $log = AiCallLog::query()
+            ->where('service', 'realtime_session')
+            ->when($conversationId, fn ($query) => $query->where('conversation_id', $conversationId))
+            ->when($userId, fn ($query) => $query->where('user_id', $userId))
+            ->whereNull('cost_usd')
+            ->latest('id')
+            ->first();
+
+        if (! $log) return;
+
+        $log->update([
+            'prompt_tokens' => $promptTokens,
+            'completion_tokens' => $completionTokens,
+            'total_tokens' => $promptTokens + $completionTokens,
+            'cost_usd' => round($cost, 6),
+            'duration_ms' => $durationMs ?? $log->duration_ms,
+            'response_payload' => [...(array) $log->response_payload, 'usage' => $tokens],
+        ]);
+    }
     private function instructions(string $language): string
     {
         $spoken = self::LANGUAGE_NAMES[$language] ?? 'English';

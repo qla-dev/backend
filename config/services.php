@@ -71,6 +71,16 @@ return [
         // The app POSTs its SDP offer here with the ephemeral secret. Exposed through the session
         // endpoint so the URL can move without shipping a new build.
         'realtime_calls_url' => env('OPENAI_REALTIME_CALLS_URL', 'https://api.openai.com/v1/realtime/calls'),
+        // USD per million tokens, as OpenAI publishes them for gpt-realtime-2.1. Kept in config
+        // rather than code because a price change must not need a deploy - and verify these against
+        // your own pricing page before trusting the AI stats screen's totals.
+        'realtime_rates' => [
+            'audio_input' => (float) env('OPENAI_REALTIME_RATE_AUDIO_IN', 32),
+            'cached_audio_input' => (float) env('OPENAI_REALTIME_RATE_AUDIO_CACHED', 0.40),
+            'audio_output' => (float) env('OPENAI_REALTIME_RATE_AUDIO_OUT', 64),
+            'text_input' => (float) env('OPENAI_REALTIME_RATE_TEXT_IN', 4),
+            'text_output' => (float) env('OPENAI_REALTIME_RATE_TEXT_OUT', 24),
+        ],
     ],
 
     'fuelo' => [
