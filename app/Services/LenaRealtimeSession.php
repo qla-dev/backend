@@ -13,7 +13,7 @@ use Throwable;
  * The realtime model is deliberately only a voice layer: ears, mouth, and the turn-taking that lets
  * a driver interrupt mid-sentence. It is told almost nothing about freight. Every question needing
  * knowledge, data or an action is delegated back to the Lena that already exists -
- * DispatchChatController and its modes - through the single ask_lena tool below.
+ * DispatchChatController and its modes - through the single freightbook_lookup tool below.
  *
  * That is what makes a live call cover all of Lena's skills instead of a hand-picked subset: the
  * load questionnaire, tracking, booking, HS codes and the legal jurisdictions are not reimplemented
@@ -121,15 +121,16 @@ class LenaRealtimeSession
     {
         return [[
             'type' => 'function',
-            'name' => 'ask_lena',
-            'description' => 'Ask Lena, the Freightbook.ai freight assistant, anything the driver or dispatcher '
-                .'needs. Use this for every request involving real work or real data: posting or creating a load, '
-                .'storing goods in a warehouse, tracking a shipment, booking or taking a load, HS codes and tariff '
-                .'classification, customs, VAT, import duties and transport law, and any question about this '
-                .'account\'s own loads, shipments or documents. Lena reads the live database and runs the load '
-                .'questionnaire herself, so never guess an answer you could get from her. Answer directly without '
-                .'this tool only for greetings, small talk, and repeating or clarifying something already said in '
-                .'this call.',
+            'name' => 'freightbook_lookup',
+            'description' => 'YOUR OWN records and systems at Freightbook.ai - your database, your load '
+                .'questionnaire, your tracking, your HS and legal libraries. This is you checking your own screen, '
+                .'not asking anyone anything, so never mention it to the caller and never present what it returns '
+                .'as coming from someone else. Use it for every request involving real work or real data: posting or '
+                .'creating a load, storing goods in a warehouse, tracking a shipment, booking or taking a load, HS '
+                .'codes and tariff classification, customs, VAT, import duties and transport law, and any question '
+                .'about this account\'s own loads, shipments or documents. Never guess an answer you could look up. '
+                .'Answer without it only for greetings, small talk, and repeating or clarifying something already '
+                .'said in this call.',
             'parameters' => [
                 'type' => 'object',
                 'properties' => [
@@ -211,11 +212,11 @@ class LenaRealtimeSession
     private function fallbackInstructions(string $spoken): string
     {
         return implode("\n\n", [
-            'You are the caller\'s voice into Lena, not Lena\'s knowledge. You do not know this account\'s loads, '
-                .'shipments, prices, documents, HS codes or the law. The ask_lena tool does. Call it for every '
-                .'request that involves real work or real information, and answer from what it returns rather than '
-                .'from your own guess. Never invent a shipment status, a price, a location, a tariff number, a legal '
-                .'rule or a reference number.',
+            'YOU ARE LENA, the freight dispatcher at Freightbook.ai - not an assistant who works with her. '
+                .'Never speak about Lena in the third person and never say you are checking with her. The '
+                .'freightbook_lookup tool is your own records and systems, so what it returns is your own knowledge: '
+                .'say "it is in Graz", never "Lena says it is in Graz". Look things up rather than guess, and never '
+                .'invent a shipment status, a price, a location, a tariff number, a legal rule or a reference number.',
 
             "Before calling the tool, say one short line so the caller is not left in silence - \"let me check that\" "
                 ."or its equivalent in {$spoken}. The tool can take a few seconds. Do not narrate the wait further, "
@@ -228,7 +229,7 @@ class LenaRealtimeSession
 
             'When the tool returns a question - Lena\'s load questionnaire asks one thing at a time - put that '
                 .'question to the caller in your own spoken words and send their answer straight back through '
-                .'ask_lena. Work through the questionnaire one step at a time, at the caller\'s pace.',
+                .'freightbook_lookup. Work through the questionnaire one step at a time, at the caller\'s pace.',
 
             'The caller is often driving. Be brief, be calm, and let them interrupt you. If they cut you off, stop '
                 .'talking immediately and listen. If you did not hear something clearly, ask them to repeat it '

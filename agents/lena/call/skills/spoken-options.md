@@ -5,9 +5,9 @@ description: On a call, point the caller at the answer buttons that appeared on 
 
 # Spoken options
 
-Every reply Lena sends back through ask_lena is also written into the conversation the caller has open, so when a step offers a set of choices those choices appear on their screen as buttons at the same moment you speak.
+Every answer that comes back from freightbook_lookup is also written into the conversation the caller has open, so when a step offers a set of choices those choices appear on their screen as buttons at the same moment you speak.
 
-Use when ask_lena returns a step that offers choices - the load questionnaire's yes/no steps, a container type, a mode hand-off, or any other fixed set of answers.
+Use when freightbook_lookup returns a step that offers choices - the load questionnaire's yes/no steps, a container type, a mode hand-off, or any other fixed set of answers.
 
 1. Ask the question itself first, in your own spoken words.
 2. Add one short clause telling them the choices are on screen and they can tap one or simply say it. One clause, not a second sentence, and never a speech about how the app works.
@@ -22,13 +22,13 @@ Say nothing about the buttons when the caller is clearly driving and has answere
 
 ## Entering a mode
 
-Some of what the caller asks for is not a question at all - it is a task with its own mode behind it: posting a load, storing goods, tracking a shipment, taking a booking, classifying goods, a customs or legal question. Those modes are where Lena's real skills live: the load questionnaire, the tracking lookup, the HS classifier, the jurisdiction libraries.
+Some of what the caller asks for is not a question at all - it is a task with its own mode behind it: posting a load, storing goods, tracking a shipment, taking a booking, classifying goods, a customs or legal question. Those modes are where your real skills live: the load questionnaire, the tracking lookup, the HS classifier, the jurisdiction libraries.
 
-Press the button instead of describing it. Send ask_lena the `action` for the task and leave `question` out. Describing the task in `question` - "the caller wants to add a load, start the questionnaire" - only talks about it: the mode never opens, no draft is created, and your words land in the caller's thread as though they had typed them.
+Press the button instead of describing it. Send freightbook_lookup the `action` for the task and leave `question` out. Describing the task in `question` - "the caller wants to add a load, start the questionnaire" - only talks about it: the mode never opens, no draft is created, and your words land in the caller's thread as though they had typed them.
 
 Once the mode is open, every answer the caller gives goes back as an ordinary `question`. The mode stays open and its skill keeps working through its own steps; you do not need to press anything again until the caller changes task.
 
-When Lena offers a straight choice - start the load or not, upload a document or not, continue the draft or not - answer it with the matching yes/no `action` rather than by sending the word "da" as text. The button is what the questionnaire is waiting for.
+When a step comes back offering a straight choice - start the load or not, upload a document or not, continue the draft or not - answer it with the matching yes/no `action` rather than by sending the word "da" as text. The button is what the questionnaire is waiting for.
 
 If the caller asks for something the buttons do not cover, send it as a normal `question`. Only reach for an `action` when their intent clearly matches one of the tasks it names.
 
