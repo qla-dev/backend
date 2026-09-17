@@ -147,18 +147,20 @@ class LenaRealtimeSession
                     // is what switches mode and creates the draft, exactly as a tap in the app does.
                     'action' => [
                         'type' => 'string',
-                        'enum' => ['add', 'storage', 'tracking', 'booking', 'hs', 'legal', 'free',
+                        'enum' => ['freeroam', 'add', 'storage', 'tracking', 'booking', 'hs', 'legal', 'free', 'training',
                             'start_add_yes', 'start_add_no', 'upload_yes', 'upload_no',
                             'continue_add_yes', 'continue_add_no'],
                         'description' => 'The button to press on the caller\'s behalf, when what they want is a '
                             .'task with its own mode rather than a question. Use "add" to start posting or creating '
                             .'a load, "storage" for warehousing, "tracking" to follow a shipment, "booking" to take '
                             .'or reserve a load, "hs" for tariff classification, "legal" for customs, duty, VAT or '
-                            .'transport law, and the yes/no ones to answer a choice Lena has just offered. Send it '
-                            .'on its own, with "question" left out - never describe the task in "question" instead '
-                            .'of pressing the button, because a description only talks about the task while the '
-                            .'button actually starts it. Once the mode is open, go back to using "question" for '
-                            .'each of the caller\'s answers.',
+                            .'transport law, "training" when the caller wants to teach you something or correct how '
+                            .'you answer, "free" for questions about Freightbook.ai itself, "freeroam" to come back '
+                            .'to ordinary conversation once a task is finished or abandoned, and the yes/no ones to '
+                            .'answer a choice just offered. Send it on its own, with "question" left out - never '
+                            .'describe the task in "question" instead of pressing the button, because a description '
+                            .'only talks about the task while the button actually starts it. Once the mode is open, '
+                            .'go back to using "question" for each of the caller\'s answers.',
                     ],
                 ],
                 'required' => [],

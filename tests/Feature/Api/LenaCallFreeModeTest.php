@@ -175,4 +175,37 @@ class LenaCallFreeModeTest extends TestCase
             );
         }
     }
+
+    public function test_every_action_the_voice_can_press_is_one_the_backend_accepts(): void
+    {
+        $tools = \App\Services\LenaRealtimeSession::tools();
+        $actions = $tools[0]['parameters']['properties']['action']['enum'] ?? [];
+        $this->assertNotEmpty($actions, 'The call has no actions it can press.');
+
+        // The button a call presses is written into the thread as [[LENA_ACTION:x]] and read back by
+        // DispatchChatController. An action offered to the voice but missing from that pattern is a
+        // mode she can ask for and never reach - silently, because an unmatched marker is just text.
+        $reflection = new \ReflectionMethod(\App\Http\Controllers\Api\DispatchChatController::class, 'guidedAction');
+        $reflection->setAccessible(true);
+        $controller = app(\App\Http\Controllers\Api\DispatchChatController::class);
+
+        foreach ($actions as $action) {
+            $this->assertSame(
+                $action,
+                $reflection->invoke($controller, "[[LENA_ACTION:{$action}]]"),
+                "The voice can press \"{$action}\" but the backend does not recognise it.",
+            );
+        }
+    }
+
+    public function test_the_modes_a_call_must_be_able_to_reach_are_all_offered(): void
+    {
+        $actions = \App\Services\LenaRealtimeSession::tools()[0]['parameters']['properties']['action']['enum'] ?? [];
+
+        // Each of these is a mode with real skills behind it. Leaving one out does not fail loudly:
+        // she simply answers from her own head and the skill never runs.
+        foreach (['freeroam', 'add', 'storage', 'tracking', 'booking', 'hs', 'legal', 'training'] as $mode) {
+            $this->assertContains($mode, $actions, "A call cannot enter {$mode} mode.");
+        }
+    }
 }
