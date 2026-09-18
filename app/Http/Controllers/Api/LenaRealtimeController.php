@@ -126,6 +126,38 @@ class LenaRealtimeController extends Controller
 
         return response()->json(['data' => ['recorded' => true]]);
     }
+
+    /**
+     * Prices a finished call. The app reports what the model declared during the session, because
+     * the mint request that opened the log row happened before any of it existed.
+     */
+    public function usage(Request $request, LenaRealtimeSession $session): JsonResponse
+    {
+        $validated = $request->validate([
+            'conversation_id' => ['nullable', 'integer', 'exists:conversations,id'],
+            'duration_ms' => ['nullable', 'integer', 'min:0'],
+            'usage' => ['required', 'array'],
+            'usage.audio_input' => ['nullable', 'integer', 'min:0'],
+            'usage.audio_output' => ['nullable', 'integer', 'min:0'],
+            'usage.cached_audio_input' => ['nullable', 'integer', 'min:0'],
+            'usage.text_input' => ['nullable', 'integer', 'min:0'],
+            'usage.text_output' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        if (isset($validated['conversation_id'])
+            && ! $this->userIsConversationParticipant($validated['conversation_id'], $request->user()?->id)) {
+            return response()->json(['message' => 'You are not part of this conversation.'], 403);
+        }
+
+        $session->recordUsage(
+            $validated['usage'],
+            $validated['conversation_id'] ?? null,
+            $request->user()?->id,
+            $validated['duration_ms'] ?? null,
+        );
+
+        return response()->json(['data' => ['recorded' => true]]);
+    }
     public function store(Request $request, LenaRealtimeSession $session): JsonResponse
     {
         $validated = $request->validate([
