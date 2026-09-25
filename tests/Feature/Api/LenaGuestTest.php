@@ -67,6 +67,31 @@ class LenaGuestTest extends TestCase
             ->assertJsonFragment(['body' => 'Imam 17 kutija.'])->assertJsonFragment(['body' => 'Koja je dužina jedne kutije?']);
     }
 
+    public function test_guest_conversations_appear_in_normal_messages_only_for_guest_managers(): void
+    {
+        $guest = $this->guest();
+        $privateUser = User::factory()->create();
+        $private = Conversation::query()->create(['created_by_user_id' => $privateUser->id, 'channel' => 'inapp', 'subject' => 'Private chat']);
+
+        foreach (['superadmin', 'master', 'user'] as $name) {
+            $role = Role::query()->firstOrCreate(['name' => $name], ['label' => $name]);
+            $user = User::factory()->create(['role_id' => $role->id]);
+            $this->app['auth']->forgetGuards();
+            $this->withToken($user->createToken('test')->plainTextToken);
+            $list = $this->getJson('/api/conversations')->assertOk();
+            if ($name === 'user') {
+                $list->assertJsonMissing(['id' => $guest['conversation_id'], 'subject' => 'AI Dispatch — LIVE CALL CBM']);
+                $this->getJson('/api/conversations/'.$guest['conversation_id'])->assertNotFound();
+                $this->getJson('/api/messages?conversation_id='.$guest['conversation_id'])->assertOk()->assertJsonCount(0, 'data');
+            } else {
+                $list->assertJsonFragment(['id' => $guest['conversation_id'], 'subject' => 'AI Dispatch — LIVE CALL CBM']);
+                $this->getJson('/api/conversations/'.$guest['conversation_id'])->assertOk();
+                $this->getJson('/api/messages?conversation_id='.$guest['conversation_id'])->assertOk()->assertJsonFragment(['body' => '[[LENA_ACTION:freeroam]]']);
+            }
+            $this->getJson('/api/conversations/'.$private->id)->assertNotFound();
+        }
+    }
+
     public function test_cbm_call_opens_with_question_and_existing_skill(): void
     {
         Http::fake(['*' => Http::response(['value' => 'ephemeral-test-secret'])]);
