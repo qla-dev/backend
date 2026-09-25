@@ -40,6 +40,9 @@ class LenaSkillSelector
 
     public function select(Conversation $conversation, array $turn, int $latestUserId): array
     {
+        if (LenaGuest::cbm(request()->user()) && ! ($turn['canvasEnabled'] ?? $conversation->canvas) && empty($turn['guidedAction'])) {
+            return ['files' => [LenaGuest::CBM_SKILL], 'guided' => false];
+        }
         $messages = $conversation->messages->filter(fn ($message) => $message->id <= $latestUserId)->sortBy('id')->values();
         $latest = $messages->last();
         $previous = $messages->count() > 1 ? $messages[$messages->count() - 2] : null;

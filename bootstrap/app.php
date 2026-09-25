@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
+            'lena.guest' => \App\Http\Middleware\RestrictLenaGuest::class,
             'role' => EnsureRole::class,
             'feature' => EnsureFeatureAccess::class,
         ]);

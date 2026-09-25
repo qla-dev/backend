@@ -55,7 +55,7 @@ class LenaRealtimeSession
             'session' => [
                 'type' => 'realtime',
                 'model' => $model,
-                'instructions' => $this->instructions($language),
+                'instructions' => $this->instructions($language).LenaGuest::instructions(request()->user()),
                 'audio' => [
                     // Transcribing the caller's own speech is what lets the call show a readable
                     // transcript beside it, and what gets the call saved as a normal conversation

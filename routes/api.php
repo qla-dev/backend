@@ -55,6 +55,8 @@ use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\WarehouseMovementController;
 use Illuminate\Support\Facades\Route;
 
+Route::post('lena-guest/session', [\App\Http\Controllers\Api\LenaGuestController::class, 'store'])->middleware('throttle:5,1');
+
 Route::get('health', fn () => response()->json(['message' => 'Freightbook.ai API is healthy.', 'data' => ['status' => 'ok', 'timestamp' => now()->toIso8601String()], 'meta' => [], 'errors' => []]));
 
 // Shared, non-personalized questions and translations for web and mobile.
@@ -87,14 +89,20 @@ Route::prefix('auth')->group(function (): void {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('google', [AuthController::class, 'google']);
     Route::post('apple', [AuthController::class, 'apple']);
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::get('me', [AuthController::class, 'me']);
         Route::put('profile', [AuthController::class, 'updateProfile']);
         Route::post('logout', [AuthController::class, 'logout']);
     });
 });
 
-Route::middleware('auth:sanctum')->group(function (): void {
+Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
+    Route::get('lena-guest/current', [\App\Http\Controllers\Api\LenaGuestController::class, 'current']);
+    Route::post('lena-guest/publish', [\App\Http\Controllers\Api\LenaGuestController::class, 'publish'])->middleware('throttle:5,1');
+    Route::middleware('role:superadmin,master')->group(function (): void {
+        Route::get('lena-guest/conversations', [\App\Http\Controllers\Api\LenaGuestController::class, 'index']);
+        Route::get('lena-guest/conversations/{conversation}', [\App\Http\Controllers\Api\LenaGuestController::class, 'show']);
+    });
     Route::get('fuel-stations', [FuelStationController::class, 'index'])->middleware('throttle:120,1');
     Route::get('vehicles/{vehicle}/return-inspections', [VehicleReturnInspectionController::class, 'index']);
     Route::get('vehicle-return-photos/{photo}', [VehicleReturnInspectionController::class, 'photo']);

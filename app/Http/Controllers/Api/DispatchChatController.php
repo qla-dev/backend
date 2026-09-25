@@ -271,6 +271,7 @@ class DispatchChatController extends Controller
             .$languageInstruction
             .'Never mix languages inside a reply: do not insert Bosnian menu names into an English answer or English terms into a Bosnian answer. Translate ordinary feature and navigation names naturally; only proper names such as LenaAI, Freightbook.ai, and literal load reference values stay unchanged. Write plain text only. Do not use Markdown, asterisks, Markdown headings, or Markdown emphasis. If a list is necessary, use short numbered lines without Markdown symbols. Never use em dashes or en dashes. Use commas, periods, parentheses, or a normal hyphen instead. '
             .$modeInstructions->for($instructionMode)
+            .\App\Services\LenaGuest::instructions($request->user(), ! $canvasEnabled)
             .app(\App\Services\LenaSkillSelector::class)->instructions($skillSelection['files'])
             .($legalSkill ? ' The current user task automatically matches '.$legalSkill.'. Apply that supplied workflow now, including follow-up inputs and corrections. No button selection is required. If the user asks for one question at a time, ask only one missing input per reply. Do not run the generic upload-choice flow for this task.' : '')
             .($canvasEnabled ? "\nContainer planning result (advice only, copy requires user action):\n".json_encode(app(\App\Services\ContainerRecommendationEngine::class)->recommend($loadDraft), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n" : '')
