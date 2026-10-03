@@ -65,7 +65,10 @@ class OpenRouterDispatchAssistant
                         'HTTP-Referer' => config('app.url'),
                         'X-Title' => 'Freightbook.ai AI Dispatcher',
                     ])
-                    ->post((string) config('services.openrouter.url'), $payload);
+                    // Keep image data URLs literal on the wire. Some provider adapters parse
+                    // the MIME prefix before unescaping JSON and reject image\/png.
+                    ->withBody(json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), 'application/json')
+                    ->post((string) config('services.openrouter.url'));
 
                 if (! $response->successful()) {
                     $errorMessage = data_get($response->json(), 'error.message');
