@@ -445,7 +445,12 @@ class DispatchChatController extends Controller
             // skill is exactly the signal that this answer depends on the outside world, so it is also
             // what turns the search on. No second classifier, and no search on turns that never asked.
             $wantsWebSearch = in_array('skills/web-search.md', $skillSelection['files'], true);
-            $reply = $assistant->reply($systemPrompt, $history, $conversation->id, $latestMessageHasFileAttachment, 'dispatch_chat', $wantsWebSearch);
+            $needsImageConfirmation = \App\Services\LenaImageConfirmation::required(
+                $trainingMode, $guidedAction, (string) $latestUserMessage, $skillSelection['files'],
+            );
+            $reply = $needsImageConfirmation
+                ? \App\Services\LenaImageConfirmation::reply($interfaceLang)
+                : $assistant->reply($systemPrompt, $history, $conversation->id, $latestMessageHasFileAttachment, 'dispatch_chat', $wantsWebSearch);
         } catch (RuntimeException $exception) {
             return $this->unavailable($exception->getMessage());
         }

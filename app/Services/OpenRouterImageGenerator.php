@@ -46,7 +46,8 @@ class OpenRouterImageGenerator
                 ->acceptJson()
                 ->timeout(120)
                 ->withHeaders(['HTTP-Referer' => config('app.url'), 'X-Title' => 'Freightbook.ai LenaAI Training'])
-                ->post((string) config('services.openrouter.url'), $payload);
+                ->withBody(json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), 'application/json')
+                ->post((string) config('services.openrouter.url'));
         } catch (ConnectionException $exception) {
             Log::warning('Image generation failed to connect.', ['conversation_id' => $conversationId, 'error' => $exception->getMessage()]);
             $this->log($payload, null, null, $conversationId, $startedAt, false, $exception->getMessage());
