@@ -59,8 +59,13 @@ Route::post('lena-guest/session', [\App\Http\Controllers\Api\LenaGuestController
 
 Route::get('health', fn () => response()->json(['message' => 'Freightbook.ai API is healthy.', 'data' => ['status' => 'ok', 'timestamp' => now()->toIso8601String()], 'meta' => [], 'errors' => []]));
 
+// Static JSON reports kept in resources/reports, viewable in the browser.
+Route::get('reports/{slug}', fn (string $slug) => is_file($path = resource_path("reports/$slug.json"))
+    ? response()->file($path, ['Content-Type' => 'application/json; charset=utf-8'])
+    : abort(404))->where('slug', '[a-z0-9\-]+');
+
 // Shared, non-personalized questions and translations for web and mobile.
-Route::get('lena/catalog', [\App\Http\Controllers\Api\LenaCatalogController::class, 'show']);
+Route::get('lena/catalog',[\App\Http\Controllers\Api\LenaCatalogController::class, 'show']);
 
 // Curated laws cited by Lena's consultation mode. They contain no account-specific data and open
 // directly in a new browser tab from the source card.
@@ -326,11 +331,6 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::get('legal-sources', [\App\Http\Controllers\Api\LegalSourceController::class, 'index']);
         Route::get('lena-skills', [\App\Http\Controllers\Api\LenaSkillController::class, 'index']);
         Route::get('lena-skills/file', [\App\Http\Controllers\Api\LenaSkillController::class, 'file']);
-        // Uploaded knowledge files for LenaAI; each one is served at its own route by file name.
-        Route::get('lena-files', [\App\Http\Controllers\Api\LenaFileController::class, 'index']);
-        Route::post('lena-files', [\App\Http\Controllers\Api\LenaFileController::class, 'store'])->middleware('throttle:20,1');
-        Route::get('lena-files/{slug}', [\App\Http\Controllers\Api\LenaFileController::class, 'show'])->where('slug', '[a-z0-9\-]+');
-        Route::delete('lena-files/{slug}', [\App\Http\Controllers\Api\LenaFileController::class, 'destroy'])->where('slug', '[a-z0-9\-]+');
         Route::post('user-subscriptions/{user}', [UserSubscriptionController::class, 'store']);
         Route::delete('user-subscriptions/{userSubscription}', [UserSubscriptionController::class, 'destroy']);
         Route::apiResources([
