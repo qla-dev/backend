@@ -141,7 +141,7 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::post('pantheon', 'savePantheon');
         Route::post('pantheon/test', 'testPantheon');
         Route::get('pantheon/preview', 'previewPantheon');
-        Route::post('pantheon/import', 'importPantheon');
+        Route::post('pantheon/sync', 'syncPantheon');
         Route::post('pantheon/export', 'exportPantheon');
     });
     Route::get('lena-guest/current', [\App\Http\Controllers\Api\LenaGuestController::class, 'current']);
@@ -326,6 +326,11 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::get('legal-sources', [\App\Http\Controllers\Api\LegalSourceController::class, 'index']);
         Route::get('lena-skills', [\App\Http\Controllers\Api\LenaSkillController::class, 'index']);
         Route::get('lena-skills/file', [\App\Http\Controllers\Api\LenaSkillController::class, 'file']);
+        // Uploaded knowledge files for LenaAI; each one is served at its own route by file name.
+        Route::get('lena-files', [\App\Http\Controllers\Api\LenaFileController::class, 'index']);
+        Route::post('lena-files', [\App\Http\Controllers\Api\LenaFileController::class, 'store'])->middleware('throttle:20,1');
+        Route::get('lena-files/{slug}', [\App\Http\Controllers\Api\LenaFileController::class, 'show'])->where('slug', '[a-z0-9\-]+');
+        Route::delete('lena-files/{slug}', [\App\Http\Controllers\Api\LenaFileController::class, 'destroy'])->where('slug', '[a-z0-9\-]+');
         Route::post('user-subscriptions/{user}', [UserSubscriptionController::class, 'store']);
         Route::delete('user-subscriptions/{userSubscription}', [UserSubscriptionController::class, 'destroy']);
         Route::apiResources([

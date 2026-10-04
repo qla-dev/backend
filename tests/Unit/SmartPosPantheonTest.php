@@ -93,6 +93,7 @@ class SmartPosPantheonTest extends TestCase
         });
         (require __DIR__.'/../../database/migrations/2026_10_04_000001_create_accounting_module.php')->up();
         (require __DIR__.'/../../database/migrations/2026_10_04_000002_add_smart_pos_and_pantheon_connector.php')->up();
+        (require __DIR__.'/../../database/migrations/2026_10_04_000003_add_pantheon_sync_state.php')->up();
         DB::table('users')->insert(['id' => 1, 'name' => 'Cashier']);
         DB::table('companies')->insert(['id' => 1, 'owner_user_id' => 1, 'name' => 'Company A']);
         DB::table('accounting_settings')->insert(['company_id' => 1, 'jurisdiction' => 'FBiH', 'base_currency' => 'BAM']);
@@ -260,7 +261,8 @@ class SmartPosPantheonTest extends TestCase
         // Synthetic Pantheon tables in the same in-memory SQLite database; no remote system is contacted.
         Schema::create('tHE_SetAccount', fn (Blueprint $t) => [$t->string('acAcct'), $t->string('acName'), $t->string('acPermitPost'), $t->string('acSubject')]);
         Schema::create('tHE_SetSubj', fn (Blueprint $t) => [$t->string('acSubject'), $t->string('acName2'), $t->string('acCode'), $t->string('acRegNo')->default(''),
-            $t->string('acAddress')->default(''), $t->string('acPost')->default(''), $t->string('acCountry')->default(''), $t->string('acVATCodePrefix')->default(''), $t->string('acActive')->default('T')]);
+            $t->string('acAddress')->default(''), $t->string('acPost')->default(''), $t->string('acCountry')->default(''), $t->string('acVATCodePrefix')->default(''), $t->string('acActive')->default('T'),
+            $t->string('acWarehouse')->default('F'), $t->string('acDept')->default('F')]);
         Schema::create('tHE_AcctTrans', function (Blueprint $t) {
             foreach (['acKey', 'acDocType', 'adDate', 'adDateOfEntry', 'anClerk', 'anDebit', 'anCredit', 'acNote', 'acKeyView', 'anUserIns', 'anUserChg'] as $c) {
                 $t->string($c)->nullable();
@@ -276,6 +278,7 @@ class SmartPosPantheonTest extends TestCase
             ['acAcct' => '7000', 'acName' => 'Zatvaranje', 'acPermitPost' => 'D', 'acSubject' => 'F'], ['acAcct' => '61', 'acName' => 'Sintetika', 'acPermitPost' => 'N', 'acSubject' => 'F']]);
         DB::table('tHE_SetSubj')->insert([['acSubject' => 'BUYER DOO', 'acName2' => 'Buyer d.o.o.', 'acCode' => '4200000000001', 'acVATCodePrefix' => 'BA'],
             ['acSubject' => 'NO COUNTRY', 'acName2' => 'Unknown', 'acCode' => '999', 'acVATCodePrefix' => '']]);
+        DB::table('tHE_SetSubj')->insert(['acSubject' => 'Skladište sirovina', 'acName2' => '', 'acCode' => '', 'acWarehouse' => 'T']);
         DB::table('tHE_AcctTrans')->insert(['acKey' => '2642000000016', 'acDocType' => '4200', 'acNote' => '']);
 
         return new class($this->ledger) extends PantheonConnector
@@ -287,18 +290,62 @@ class SmartPosPantheonTest extends TestCase
         };
     }
 
-    public function test_pantheon_account_import_never_redefines_and_requires_kind_for_class_seven(): void
+    public function test_pantheon_sync_adopts_existing_records_and_keeps_pending_ones(): void
     {
         $connector = $this->pantheon();
         $preview = collect($connector->preview(1, 'accounts'))->keyBy('code');
         self::assertTrue($preview['2110']['exists']);
         self::assertNull($preview['7000']['kind']);
-        $result = $connector->import(1, 1, 'accounts', [['code' => '2110'], ['code' => '7000'], ['code' => '61', 'kind' => 'income']], 'Reviewed by accountant');
-        self::assertSame(1, $result['imported']);
-        self::assertSame(['exists', 'kind_required'], array_column($result['skipped'], 'reason'));
+        $first = $connector->sync(1, 1);
+        // 2110/6120/4700 already exist locally: linked and renamed, never duplicated or re-kinded.
+        self::assertSame(['created' => 1, 'updated' => 3, 'linked' => 3, 'deactivated' => 0], collect($first['accounts'])->except('pending')->all());
+        self::assertSame(['kind_required'], array_column($first['accounts']['pending'], 'reason'));
+        self::assertSame('Kupci', DB::table('accounting_accounts')->where('code', '2110')->value('name'));
+        self::assertSame('asset', DB::table('accounting_accounts')->where('code', '2110')->value('kind'));
         self::assertSame(0, (int) DB::table('accounting_accounts')->where('code', '61')->value('active'));
-        $partners = $connector->import(1, 1, 'partners', [['key' => 'NO COUNTRY'], ['key' => 'BUYER DOO']], 'Reviewed');
-        self::assertSame(['country_required', 'exists'], array_column($partners['skipped'], 'reason'));
+        self::assertSame(['created' => 0, 'updated' => 1, 'linked' => 1], collect($first['partners'])->except('pending')->all());
+        self::assertSame('Buyer d.o.o.', DB::table('accounting_partners')->where('id', 1)->value('name'));
+        self::assertSame(['NO COUNTRY'], array_column($first['partners']['pending'], 'key'));
+        self::assertSame(0, DB::table('accounting_partners')->where('name', 'Skladište sirovina')->count());
+        self::assertSame('ok', DB::table('accounting_pantheon_connectors')->value('last_sync_status'));
+        self::assertFalse($first['entries']['enabled']);
+        $again = $connector->sync(1, 1);
+        self::assertSame(0, $again['accounts']['created'] + $again['accounts']['updated'] + $again['accounts']['linked']);
+        self::assertSame(0, $again['partners']['updated'] + $again['partners']['linked']);
+    }
+
+    public function test_pantheon_sync_follows_remote_changes_and_resolves_pending_choices(): void
+    {
+        $connector = $this->pantheon();
+        $connector->sync(1, 1);
+        DB::table('tHE_SetAccount')->where('acAcct', '6120')->update(['acName' => 'Prihodi od prevoza']);
+        DB::table('tHE_SetAccount')->where('acAcct', '4700')->delete();
+        DB::table('tHE_SetSubj')->where('acSubject', 'BUYER DOO')->update(['acAddress' => 'Zmaja od Bosne 1']);
+        DB::table('accounting_pantheon_connectors')->update(['account_kinds' => json_encode(['7000' => 'equity']), 'default_country_code' => 'BA']);
+        $result = $connector->sync(1, 1);
+        self::assertSame('Prihodi od prevoza', DB::table('accounting_accounts')->where('code', '6120')->value('name'));
+        self::assertSame(0, (int) DB::table('accounting_accounts')->where('code', '4700')->value('active'));
+        self::assertSame(1, $result['accounts']['deactivated']);
+        self::assertSame('equity', DB::table('accounting_accounts')->where('code', '7000')->value('kind'));
+        self::assertSame('Zmaja od Bosne 1', DB::table('accounting_partners')->where('id', 1)->value('address'));
+        self::assertSame('BA', DB::table('accounting_partners')->where('tax_number', '999')->value('country_code'));
+        self::assertSame([], $result['accounts']['pending']);
+        self::assertSame([], $result['partners']['pending']);
+    }
+
+    public function test_pantheon_sync_pushes_posted_entries_once_when_enabled(): void
+    {
+        $connector = $this->pantheon();
+        $i = $this->issued();
+        $this->invoices->transition(1, 1, $i->id, 'post', ['control_account_id' => 1, 'vat_account_id' => 3]);
+        DB::table('accounting_pantheon_connectors')->update(['push_entries_from' => '2026-10-01', 'sync_enabled' => true]);
+        self::assertCount(1, $connector->due());
+        $result = $connector->sync(1, 1);
+        self::assertSame(1, $result['entries']['exported']);
+        self::assertSame(2, DB::table('tHE_AcctTrans')->count());
+        self::assertSame([], $connector->due());
+        self::assertSame(0, $connector->sync(1, 1)['entries']['exported']);
+        self::assertSame(2, DB::table('tHE_AcctTrans')->count());
     }
 
     public function test_pantheon_export_dry_run_then_single_write_with_pantheon_key_format(): void

@@ -109,7 +109,12 @@ final class SmartPosController extends Controller
         $data = $r->validate(['host' => ['required', 'string', 'max:255'], 'port' => ['required', 'integer', 'between:1,65535'], 'database' => ['required', 'string', 'max:128'],
             'schema' => ['required', 'regex:/^[A-Za-z_][A-Za-z0-9_]{0,63}$/'], 'username' => ['required', 'string', 'max:128'], 'password' => ['nullable', 'string', 'max:255'],
             'allow_write' => ['required', 'boolean'], 'clerk_id' => ['required', 'integer', 'min:0'],
-            'outgoing_doc_type' => $docType, 'incoming_doc_type' => $docType, 'journal_doc_type' => $docType]);
+            'outgoing_doc_type' => $docType, 'incoming_doc_type' => $docType, 'journal_doc_type' => $docType,
+            'sync_enabled' => ['required', 'boolean'], 'sync_interval_minutes' => ['required', 'integer', 'between:5,1440'], 'push_entries_from' => ['nullable', 'date'],
+            'default_country_code' => ['nullable', 'regex:/^[A-Z]{2}$/'], 'account_kinds' => ['nullable', 'array'],
+            'account_kinds.*' => [Rule::in(['asset', 'liability', 'equity', 'income', 'expense'])]]);
+        // Choosing account kinds or enabling sync changes the local chart of accounts.
+        $this->access->authorize($r->user(), $id, 'setup');
 
         return $this->response($this->pantheon->save($id, $r->user()->id, $data));
     }
@@ -127,16 +132,12 @@ final class SmartPosController extends Controller
         return $this->response($this->pantheon->preview($id, $data['type']));
     }
 
-    public function importPantheon(Request $r): JsonResponse
+    public function syncPantheon(Request $r): JsonResponse
     {
         $id = $this->company($r, 'integrations');
         $this->access->authorize($r->user(), $id, 'setup');
-        $data = $r->validate(['type' => ['required', Rule::in(['accounts', 'partners'])], 'items' => ['required', 'array', 'min:1', 'max:2000'],
-            'items.*.code' => ['nullable', 'string', 'max:30'], 'items.*.key' => ['nullable', 'string', 'max:30'],
-            'items.*.kind' => ['nullable', Rule::in(['asset', 'liability', 'equity', 'income', 'expense'])], 'items.*.country_code' => ['nullable', 'regex:/^[A-Z]{2}$/'],
-            'review_note' => ['required', 'string', 'max:2000']]);
 
-        return $this->response($this->pantheon->import($id, $r->user()->id, $data['type'], $data['items'], $data['review_note']));
+        return $this->response($this->pantheon->sync($id, $r->user()->id));
     }
 
     public function exportPantheon(Request $r): JsonResponse

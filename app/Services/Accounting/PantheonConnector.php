@@ -24,6 +24,8 @@ class PantheonConnector
         if ($row) {
             unset($row->password);
             $row->has_password = true;
+            $row->account_kinds = json_decode((string) ($row->account_kinds ?? ''), true) ?: (object) [];
+            $row->last_sync_summary = json_decode((string) ($row->last_sync_summary ?? ''), true);
         }
 
         return $row;
@@ -35,7 +37,11 @@ class PantheonConnector
             DB::table('accounting_settings')->where('company_id', $companyId)->lockForUpdate()->first();
             $exists = DB::table('accounting_pantheon_connectors')->where('company_id', $companyId)->exists();
             $this->ledger->require($exists || filled($data['password'] ?? null), 'Pantheon password is required.');
-            $values = collect($data)->only(['host', 'port', 'database', 'schema', 'username', 'allow_write', 'clerk_id', 'outgoing_doc_type', 'incoming_doc_type', 'journal_doc_type'])->all();
+            $values = collect($data)->only(['host', 'port', 'database', 'schema', 'username', 'allow_write', 'clerk_id', 'outgoing_doc_type', 'incoming_doc_type', 'journal_doc_type',
+                'sync_enabled', 'sync_interval_minutes', 'push_entries_from', 'default_country_code'])->all();
+            if (array_key_exists('account_kinds', $data)) {
+                $values['account_kinds'] = json_encode((object) ($data['account_kinds'] ?? []));
+            }
             if (filled($data['password'] ?? null)) {
                 $values['password'] = Crypt::encryptString($data['password']);
             }
@@ -75,13 +81,17 @@ class PantheonConnector
         }
         if ($type === 'partners') {
             $local = DB::table('accounting_partners')->where('company_id', $companyId)->whereNotNull('tax_number')->pluck('tax_number')->all();
+            $linked = DB::table('accounting_pantheon_links')->where('company_id', $companyId)->where('entity_type', 'partner')->pluck('pantheon_key')->all();
 
-            return $remote->table($this->table($companyId, 'tHE_SetSubj'))->where('acActive', 'T')->orderBy('acSubject')
+            // tHE_SetSubj also holds warehouses and departments; only business partners are synced.
+            return $remote->table($this->table($companyId, 'tHE_SetSubj'))->where('acActive', 'T')
+                ->where(fn ($q) => $q->whereNull('acWarehouse')->orWhere('acWarehouse', '<>', 'T'))
+                ->where(fn ($q) => $q->whereNull('acDept')->orWhere('acDept', '<>', 'T'))->orderBy('acSubject')
                 ->get(['acSubject', 'acName2', 'acCode', 'acRegNo', 'acAddress', 'acPost', 'acCountry', 'acVATCodePrefix'])
                 ->map(fn ($s) => ['key' => trim($s->acSubject), 'name' => trim((string) ($s->acName2 ?: $s->acSubject)), 'tax_number' => trim((string) $s->acCode) ?: null,
                     'registration_number' => trim((string) $s->acRegNo) ?: null, 'address' => trim(trim((string) $s->acAddress).' '.trim((string) $s->acPost)) ?: null,
                     'country' => trim((string) $s->acCountry), 'country_code' => preg_match('/^[A-Z]{2}$/', trim((string) $s->acVATCodePrefix)) ? trim($s->acVATCodePrefix) : null,
-                    'exists' => trim((string) $s->acCode) !== '' && in_array(trim($s->acCode), $local, true)])->all();
+                    'exists' => in_array(trim($s->acSubject), $linked, true) || (trim((string) $s->acCode) !== '' && in_array(trim($s->acCode), $local, true))])->all();
         }
         $this->ledger->require($type === 'taxes', 'Unsupported Pantheon preview.');
 
@@ -90,49 +100,144 @@ class PantheonConnector
             ->map(fn ($t) => ['code' => trim($t->acVATCode), 'name' => trim((string) $t->acName), 'rate' => (string) $t->anVAT, 'fiscal_code' => trim((string) $t->acFiscalCode)])->all();
     }
 
-    /** Imports selected Pantheon accounts or subjects. Existing local records are never redefined. */
-    public function import(int $companyId, int $actor, string $type, array $selected, string $reviewNote): array
+    /**
+     * Continuous two-way sync. PANTHEON is the master for accounts and partners: new rows are created,
+     * linked rows follow PANTHEON changes, matching local rows are adopted instead of duplicated, and
+     * accounts removed in PANTHEON are deactivated. Posted entries are pushed when writing is enabled.
+     * An account kind, once set, is never changed by sync because postings depend on it.
+     */
+    public function sync(int $companyId, int $actor): array
     {
-        $rows = collect($this->preview($companyId, $type))->keyBy($type === 'accounts' ? 'code' : 'key');
+        $connector = DB::table('accounting_pantheon_connectors')->where('company_id', $companyId)->first();
+        $this->ledger->require($connector !== null, 'Pantheon connector is not configured.');
+        try {
+            $accounts = $this->preview($companyId, 'accounts');
+            $partners = $this->preview($companyId, 'partners');
+            $summary = DB::transaction(function () use ($companyId, $actor, $connector, $accounts, $partners) {
+                DB::table('accounting_settings')->where('company_id', $companyId)->lockForUpdate()->first();
 
-        return DB::transaction(function () use ($companyId, $actor, $type, $selected, $reviewNote, $rows) {
-            DB::table('accounting_settings')->where('company_id', $companyId)->lockForUpdate()->first();
-            $imported = 0;
-            $skipped = [];
-            foreach ($selected as $item) {
-                $key = (string) ($item['code'] ?? $item['key'] ?? '');
-                $row = $rows->get($key);
-                if (! $row) {
-                    $skipped[] = ['key' => $key, 'reason' => 'not_found'];
+                return ['accounts' => $this->syncAccounts($companyId, $actor, $connector, $accounts),
+                    'partners' => $this->syncPartners($companyId, $actor, $connector, $partners)];
+            });
+            $summary['entries'] = $this->pushEntries($companyId, $actor, $connector);
+            $this->ledger->audit($companyId, $actor, 'pantheon', $companyId, 'pantheon_sync', $summary);
+            $this->syncState($companyId, 'ok', null, $summary);
 
-                    continue;
+            return ['ok' => true] + $summary;
+        } catch (\Throwable $e) {
+            $this->syncState($companyId, 'failed', $this->safeMessage($e), null);
+            throw $e;
+        }
+    }
+
+    private function syncAccounts(int $companyId, int $actor, object $connector, array $remote): array
+    {
+        $kinds = json_decode((string) ($connector->account_kinds ?? ''), true) ?: [];
+        $links = DB::table('accounting_pantheon_links')->where('company_id', $companyId)->where('entity_type', 'account')->pluck('local_id', 'pantheon_key');
+        $local = DB::table('accounting_accounts')->where('company_id', $companyId)->get()->keyBy('code');
+        $result = ['created' => 0, 'updated' => 0, 'linked' => 0, 'deactivated' => 0, 'pending' => []];
+        $seen = [];
+        foreach ($remote as $row) {
+            $code = $row['code'];
+            $seen[$code] = true;
+            $existing = $links->has($code) ? $local->firstWhere('id', $links[$code]) : $local->get($code);
+            if ($existing) {
+                if (! $links->has($code)) {
+                    $this->link($companyId, $actor, 'account', (int) $existing->id, $code, 'sync');
+                    $result['linked']++;
                 }
-                if ($type === 'accounts') {
-                    $kind = $item['kind'] ?? $row['kind'];
-                    if (! in_array($kind, ['asset', 'liability', 'equity', 'income', 'expense'], true) || DB::table('accounting_accounts')->where('company_id', $companyId)->where('code', $key)->exists()) {
-                        $skipped[] = ['key' => $key, 'reason' => $kind ? 'exists' : 'kind_required'];
-
-                        continue;
-                    }
-                    $local = DB::table('accounting_accounts')->insertGetId(['company_id' => $companyId, 'code' => $key, 'name' => $row['name'], 'kind' => $kind,
-                        'active' => $row['postable'], 'approved_by' => $actor, 'created_at' => now(), 'updated_at' => now()]);
-                } else {
-                    $country = $item['country_code'] ?? $row['country_code'];
-                    if (! $country || ($row['tax_number'] && DB::table('accounting_partners')->where('company_id', $companyId)->where('tax_number', $row['tax_number'])->exists())) {
-                        $skipped[] = ['key' => $key, 'reason' => $country ? 'exists' : 'country_required'];
-
-                        continue;
-                    }
-                    $local = DB::table('accounting_partners')->insertGetId(['company_id' => $companyId, 'name' => $row['name'], 'tax_number' => $row['tax_number'],
-                        'address' => $row['address'], 'country_code' => $country, 'created_at' => now(), 'updated_at' => now()]);
+                if ($existing->name !== $row['name'] || (bool) $existing->active !== $row['postable']) {
+                    DB::table('accounting_accounts')->where('id', $existing->id)->update(['name' => $row['name'], 'active' => $row['postable'], 'updated_at' => now()]);
+                    $result['updated']++;
                 }
-                $this->link($companyId, $actor, $type === 'accounts' ? 'account' : 'partner', $local, $key, 'import');
-                $imported++;
+
+                continue;
             }
-            $this->ledger->audit($companyId, $actor, 'pantheon', $companyId, 'pantheon_import', ['type' => $type, 'imported' => $imported, 'review_note' => $reviewNote]);
+            $kind = $kinds[$code] ?? $row['kind'];
+            if (! in_array($kind, ['asset', 'liability', 'equity', 'income', 'expense'], true)) {
+                $result['pending'][] = ['key' => $code, 'name' => $row['name'], 'reason' => 'kind_required'];
 
-            return ['imported' => $imported, 'skipped' => $skipped];
-        });
+                continue;
+            }
+            $id = DB::table('accounting_accounts')->insertGetId(['company_id' => $companyId, 'code' => $code, 'name' => $row['name'], 'kind' => $kind,
+                'active' => $row['postable'], 'approved_by' => $actor, 'created_at' => now(), 'updated_at' => now()]);
+            $this->link($companyId, $actor, 'account', $id, $code, 'sync');
+            $result['created']++;
+        }
+        foreach ($links as $code => $id) {
+            if (! isset($seen[$code]) && DB::table('accounting_accounts')->where('id', $id)->where('active', true)->update(['active' => false, 'updated_at' => now()])) {
+                $result['deactivated']++;
+            }
+        }
+
+        return $result;
+    }
+
+    private function syncPartners(int $companyId, int $actor, object $connector, array $remote): array
+    {
+        $links = DB::table('accounting_pantheon_links')->where('company_id', $companyId)->where('entity_type', 'partner')->pluck('local_id', 'pantheon_key');
+        $result = ['created' => 0, 'updated' => 0, 'linked' => 0, 'pending' => []];
+        foreach ($remote as $row) {
+            $key = $row['key'];
+            $country = $row['country_code'] ?? $connector->default_country_code;
+            $partners = DB::table('accounting_partners')->where('company_id', $companyId);
+            $existing = $links->has($key) ? (clone $partners)->where('id', $links[$key])->first()
+                : ($row['tax_number'] ? (clone $partners)->where('tax_number', $row['tax_number'])->first() : null);
+            if ($existing) {
+                if (! $links->has($key)) {
+                    $this->link($companyId, $actor, 'partner', (int) $existing->id, $key, 'sync');
+                    $result['linked']++;
+                }
+                $changes = array_filter(['name' => $row['name'], 'address' => $row['address'], 'country_code' => $row['country_code']], fn ($v) => $v !== null);
+                // A tax number is only filled in, never moved onto a number another local partner already uses.
+                if (! $existing->tax_number && $row['tax_number'] && ! (clone $partners)->where('tax_number', $row['tax_number'])->exists()) {
+                    $changes['tax_number'] = $row['tax_number'];
+                }
+                $changes = array_filter($changes, fn ($v, $k) => (string) $existing->{$k} !== (string) $v, ARRAY_FILTER_USE_BOTH);
+                if ($changes) {
+                    DB::table('accounting_partners')->where('id', $existing->id)->update($changes + ['updated_at' => now()]);
+                    $result['updated']++;
+                }
+
+                continue;
+            }
+            if (! $country) {
+                $result['pending'][] = ['key' => $key, 'name' => $row['name'], 'reason' => 'country_required'];
+
+                continue;
+            }
+            $id = DB::table('accounting_partners')->insertGetId(['company_id' => $companyId, 'name' => $row['name'], 'tax_number' => $row['tax_number'],
+                'address' => $row['address'], 'country_code' => $country, 'created_at' => now(), 'updated_at' => now()]);
+            $this->link($companyId, $actor, 'partner', $id, $key, 'sync');
+            $result['created']++;
+        }
+
+        return $result;
+    }
+
+    private function pushEntries(int $companyId, int $actor, object $connector): array
+    {
+        if (! $connector->allow_write || ! $connector->push_entries_from) {
+            return ['enabled' => false, 'exported' => 0, 'waiting' => 0];
+        }
+        $result = $this->export($companyId, $actor, (string) $connector->push_entries_from, now()->toDateString(), true);
+
+        return ['enabled' => true, 'exported' => count($result['exported']), 'waiting' => $result['skipped'],
+            'problems' => array_values(array_filter(array_map(fn ($d) => $d['problems'] ? ['entry_id' => $d['entry_id'], 'problems' => $d['problems']] : null, $result['documents'])))];
+    }
+
+    /** Connectors whose interval has elapsed; used by the scheduled sync command. */
+    public function due(bool $ignoreInterval = false): array
+    {
+        return DB::table('accounting_pantheon_connectors')->where('sync_enabled', true)->get(['company_id', 'sync_interval_minutes', 'last_synced_at', 'updated_by'])
+            ->filter(fn ($c) => $ignoreInterval || ! $c->last_synced_at || now()->diffInMinutes($c->last_synced_at, true) >= max(1, (int) $c->sync_interval_minutes))
+            ->values()->all();
+    }
+
+    private function syncState(int $companyId, string $status, ?string $error, ?array $summary): void
+    {
+        DB::table('accounting_pantheon_connectors')->where('company_id', $companyId)->update(['last_synced_at' => now(), 'last_sync_status' => $status, 'last_sync_error' => $error]
+            + ($summary === null ? [] : ['last_sync_summary' => json_encode($summary)]));
     }
 
     /** Builds (dry run) or writes posted journal entries into Pantheon. */
