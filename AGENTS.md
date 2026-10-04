@@ -12,3 +12,7 @@ The configured database may contain live or irreplaceable data. Never assume tha
 - Verify migrations only with non-destructive checks or an isolated in-memory database.
 - Seeders must not be part of normal production deployment and must not delete or replace existing operational records.
 - If a database command unexpectedly targets a non-isolated database, terminate immediately and report the exact command and effective connection. Do not attempt an automatic repair, reseed, or recovery.
+
+# Open work — Smart POS fiscal driver
+
+Smart POS fiscalisation depends on an external Laravel `fiscal:*` worker and a Datecs driver, neither of which is installed yet. Read `docs/agents/smart-pos-fiscal-driver.md` before touching `App\Services\Fiscal` or the PANTHEON connector.

@@ -67,7 +67,8 @@ class Invoice extends BaseModel
 
     protected function casts(): array
     {
-        return ['issued_at' => 'date', 'due_at' => 'date', 'paid_at' => 'datetime', 'issued_snapshot' => 'array', 'accounting_managed' => 'boolean'];
+        return ['issued_at' => 'date', 'due_at' => 'date', 'paid_at' => 'datetime', 'issued_snapshot' => 'array', 'accounting_managed' => 'boolean',
+            'fiscalised_at' => 'datetime', 'fiscal_refunded_at' => 'datetime'];
     }
 
     public function customer(): BelongsTo

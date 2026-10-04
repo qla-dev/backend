@@ -128,6 +128,22 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::post('partners', 'partner');
         Route::post('jobs/invoice', 'fromJob');
     });
+    Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\SmartPosController::class)->group(function (): void {
+        Route::get('pos/status', 'status');
+        Route::get('pos/operations', 'operations');
+        Route::get('pos/duplicate-options', 'duplicateOptions');
+        Route::get('pos/summary', 'summary');
+        Route::post('pos/invoices/{invoice}/fiscalise', 'fiscalise')->whereNumber('invoice');
+        Route::post('pos/invoices/{invoice}/refund', 'refund')->whereNumber('invoice');
+        Route::post('pos/invoices/{invoice}/confirm', 'confirm')->whereNumber('invoice');
+        Route::post('pos/reports/{type}', 'report')->where('type', 'daily|snapshot|periodic|duplicate|text');
+        Route::get('pantheon', 'pantheon');
+        Route::post('pantheon', 'savePantheon');
+        Route::post('pantheon/test', 'testPantheon');
+        Route::get('pantheon/preview', 'previewPantheon');
+        Route::post('pantheon/import', 'importPantheon');
+        Route::post('pantheon/export', 'exportPantheon');
+    });
     Route::get('lena-guest/current', [\App\Http\Controllers\Api\LenaGuestController::class, 'current']);
     Route::post('lena-guest/publish', [\App\Http\Controllers\Api\LenaGuestController::class, 'publish'])->middleware('throttle:5,1');
     Route::middleware('role:superadmin,master')->group(function (): void {

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 final class AccountingAccess
 {
-    public const ABILITIES = ['view', 'prepare', 'approve', 'post', 'correct', 'payments', 'periods', 'rules', 'setup'];
+    public const ABILITIES = ['view', 'prepare', 'approve', 'post', 'correct', 'payments', 'periods', 'rules', 'setup', 'pos', 'integrations'];
 
     public function member(User $user, int $companyId): Company
     {
