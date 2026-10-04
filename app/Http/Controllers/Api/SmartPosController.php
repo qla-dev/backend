@@ -112,7 +112,8 @@ final class SmartPosController extends Controller
             'outgoing_doc_type' => $docType, 'incoming_doc_type' => $docType, 'journal_doc_type' => $docType,
             'sync_enabled' => ['required', 'boolean'], 'sync_interval_minutes' => ['required', 'integer', 'between:5,1440'], 'push_entries_from' => ['nullable', 'date'],
             'default_country_code' => ['nullable', 'regex:/^[A-Z]{2}$/'], 'account_kinds' => ['nullable', 'array'],
-            'account_kinds.*' => [Rule::in(['asset', 'liability', 'equity', 'income', 'expense'])]]);
+            'account_kinds.*' => [Rule::in(['asset', 'liability', 'equity', 'income', 'expense'])],
+            'sales_doc_types' => ['sometimes', 'regex:/^[0-9A-Z]{4}(,[0-9A-Z]{4}){0,20}$/'], 'delivery_doc_types' => ['sometimes', 'regex:/^[0-9A-Z]{4}(,[0-9A-Z]{4}){0,20}$/']]);
         // Choosing account kinds or enabling sync changes the local chart of accounts.
         $this->access->authorize($r->user(), $id, 'setup');
 

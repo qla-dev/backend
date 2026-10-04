@@ -149,6 +149,31 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::post('pantheon/sync', 'syncPantheon');
         Route::post('pantheon/export', 'exportPantheon');
     });
+    Route::prefix('accounting/{company}/crm')->whereNumber('company')->controller(\App\Http\Controllers\Api\CrmController::class)->group(function (): void {
+        Route::get('', 'overview');
+        Route::get('report', 'report');
+        Route::post('sync', 'sync');
+        Route::post('documents', 'store');
+        Route::get('documents/{document}', 'show')->whereNumber('document');
+        Route::patch('documents/{document}', 'update')->whereNumber('document');
+        Route::post('follow-ups', 'followUp');
+        Route::post('follow-ups/{followUp}/done', 'completeFollowUp')->whereNumber('followUp');
+    });
+    // FreightBook Ops work orders: local data only; PANTHEON is reached through ops/pantheon/sync.
+    Route::prefix('accounting/{company}/ops')->whereNumber('company')->controller(\App\Http\Controllers\Api\OpsController::class)->group(function (): void {
+        Route::get('', 'overview');
+        Route::post('orders', 'store');
+        Route::get('orders/{order}', 'show')->whereNumber('order');
+        Route::patch('orders/{order}', 'update')->whereNumber('order');
+        Route::post('orders/{order}/items', 'item')->whereNumber('order');
+        Route::post('orders/{order}/work', 'work')->whereNumber('order');
+        Route::post('orders/{order}/events', 'event')->whereNumber('order');
+        Route::post('orders/{order}/close', 'close')->whereNumber('order');
+        Route::post('templates', 'template');
+        Route::get('pantheon', 'pantheon');
+        Route::post('pantheon', 'savePantheon');
+        Route::post('pantheon/sync', 'syncPantheon');
+    });
     Route::get('lena-guest/current', [\App\Http\Controllers\Api\LenaGuestController::class, 'current']);
     Route::post('lena-guest/publish', [\App\Http\Controllers\Api\LenaGuestController::class, 'publish'])->middleware('throttle:5,1');
     Route::middleware('role:superadmin,master')->group(function (): void {

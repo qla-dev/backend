@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\ShipmentWorkspace;
+use App\Observers\ShipmentWorkspaceOpsObserver;
 use App\Services\AisVesselStreamClient;
 use App\Services\Contracts\VesselSnapshotClient;
 use App\Services\Contracts\VesselStreamClient;
@@ -26,5 +28,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Schema::defaultStringLength(191);
+        // Booked shipment = FreightBook Ops work order (docs/pantheon-proizvodnja/freightbook_ops_prijedlog.sql).
+        ShipmentWorkspace::observe(ShipmentWorkspaceOpsObserver::class);
     }
 }

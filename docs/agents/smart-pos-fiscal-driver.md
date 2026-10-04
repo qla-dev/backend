@@ -66,7 +66,7 @@ Prices are gross (VAT included), computed from the immutable issued snapshot.
 3. Implement the three **new** commands above, if the worker does not have them yet.
 4. Test with `--preview` and "Nefiskalni test" before issuing a real receipt.
 
-## 2. PANTHEON connector (Accounting → PANTHEON konektor)
+## 2. PANTHEON connector (Company details → Integracije; architecture: pantheon-integration.md)
 
 - The licence is the company's PANTHEON SQL Server login (host, port, database, schema, username, password). The password is stored with `Crypt::encryptString` and never returned to the browser.
 - The server PHP needs the `pdo_sqlsrv` extension. The XAMPP PHP on the developer PC does not have it. Trendy's server does.

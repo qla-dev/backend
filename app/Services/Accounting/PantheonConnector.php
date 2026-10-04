@@ -38,7 +38,7 @@ class PantheonConnector
             $exists = DB::table('accounting_pantheon_connectors')->where('company_id', $companyId)->exists();
             $this->ledger->require($exists || filled($data['password'] ?? null), 'Pantheon password is required.');
             $values = collect($data)->only(['host', 'port', 'database', 'schema', 'username', 'allow_write', 'clerk_id', 'outgoing_doc_type', 'incoming_doc_type', 'journal_doc_type',
-                'sync_enabled', 'sync_interval_minutes', 'push_entries_from', 'default_country_code'])->all();
+                'sync_enabled', 'sync_interval_minutes', 'push_entries_from', 'default_country_code', 'sales_doc_types', 'delivery_doc_types'])->all();
             if (array_key_exists('account_kinds', $data)) {
                 $values['account_kinds'] = json_encode((object) ($data['account_kinds'] ?? []));
             }
@@ -264,6 +264,17 @@ class PantheonConnector
         }
 
         return ['dry_run' => false, 'exported' => $exported, 'skipped' => count($documents) - count($ready), 'documents' => $documents];
+    }
+
+    /** Read access for other PANTHEON integrations (CRM) that share this connector licence. */
+    public function connection(int $companyId): ConnectionInterface
+    {
+        return $this->remote($companyId);
+    }
+
+    public function remoteTable(int $companyId, string $table): string
+    {
+        return $this->table($companyId, $table);
     }
 
     protected function remote(int $companyId): ConnectionInterface

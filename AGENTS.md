@@ -16,3 +16,7 @@ The configured database may contain live or irreplaceable data. Never assume tha
 # Open work — Smart POS fiscal driver
 
 Smart POS fiscalisation depends on an external Laravel `fiscal:*` worker and a Datecs driver, neither of which is installed yet. Read `docs/agents/smart-pos-fiscal-driver.md` before touching `App\Services\Fiscal` or the PANTHEON connector.
+
+# SmartFreight and PANTHEON (architecture)
+
+SmartFreight works on its own; PANTHEON is only a connector. Records are created locally and a scheduled sync pushes them to PANTHEON. Never write PANTHEON tables directly from a user action. Read `docs/agents/pantheon-integration.md` before changing Accounting sync, CRM, Smart POS or Ops work orders.
