@@ -161,6 +161,13 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::post('follow-ups', 'followUp');
         Route::post('follow-ups/{followUp}/done', 'completeFollowUp')->whereNumber('followUp');
     });
+    // Product/service catalogue (CRM, templates, POS); PANTHEON tHE_SetItem only through catalog/pantheon/sync.
+    Route::prefix('accounting/{company}/catalog')->whereNumber('company')->controller(\App\Http\Controllers\Api\CatalogController::class)->group(function (): void {
+        Route::get('', 'index');
+        Route::post('', 'save');
+        Route::match(['get', 'post'], 'pantheon/settings', 'pantheonSettings');
+        Route::post('pantheon/sync', 'syncPantheon');
+    });
     // FreightBook Ops work orders: local data only; PANTHEON is reached through ops/pantheon/sync.
     Route::prefix('accounting/{company}/ops')->whereNumber('company')->controller(\App\Http\Controllers\Api\OpsController::class)->group(function (): void {
         Route::get('', 'overview');

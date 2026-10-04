@@ -102,7 +102,8 @@ final class OpsController extends Controller
         $data = $r->validate(['id' => ['nullable', 'integer'], 'item_type' => ['required_without:id', Rule::in(OpsOrders::ITEM_TYPES)], 'item_code' => ['required_without:id', 'string', 'max:30'],
             'description' => ['required_without:id', 'string', 'max:160'], 'unit' => ['sometimes', 'string', 'max:10'], 'planned_qty' => ['sometimes', 'numeric', 'min:0'],
             'actual_qty' => ['sometimes', 'nullable', 'numeric', 'min:0'], 'planned_price' => ['sometimes', 'nullable', 'numeric', 'min:0'], 'actual_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-            'supplier_partner_id' => ['sometimes', 'nullable', 'integer'], 'finished' => ['sometimes', 'boolean']]);
+            'supplier_partner_id' => ['sometimes', 'nullable', 'integer'], 'finished' => ['sometimes', 'boolean'],
+            'product_id' => ['sometimes', 'nullable', 'integer'], 'vat_percent' => ['sometimes', 'nullable', 'numeric', 'between:0,100'], 'vat_code' => ['sometimes', 'nullable', 'string', 'max:2']]);
 
         return $this->response($this->orders->saveItem($id, $r->user()->id, (int) $r->route('order'), $data));
     }
@@ -139,7 +140,8 @@ final class OpsController extends Controller
         $data = $r->validate(['id' => ['nullable', 'integer'], 'code' => ['required', 'string', 'max:30'], 'name' => ['required', 'string', 'max:160'], 'transport_type' => ['nullable', 'string', 'max:60'],
             'active' => ['required', 'boolean'], 'items' => ['array', 'max:60'], 'items.*.item_type' => ['required', Rule::in(OpsOrders::ITEM_TYPES)], 'items.*.item_code' => ['required', 'string', 'max:30'],
             'items.*.description' => ['required', 'string', 'max:160'], 'items.*.unit' => ['required', 'string', 'max:10'], 'items.*.planned_qty' => ['required', 'numeric', 'min:0'],
-            'items.*.planned_price' => ['nullable', 'numeric', 'min:0']]);
+            'items.*.planned_price' => ['nullable', 'numeric', 'min:0'],
+            'items.*.product_id' => ['nullable', 'integer'], 'items.*.vat_percent' => ['nullable', 'numeric', 'between:0,100'], 'items.*.vat_code' => ['nullable', 'string', 'max:2']]);
 
         return $this->response(DB::transaction(function () use ($id, $data, $r) {
             $values = collect($data)->only(['code', 'name', 'transport_type', 'active'])->all() + ['updated_at' => now()];
@@ -153,7 +155,8 @@ final class OpsController extends Controller
             }
             foreach (array_values($data['items'] ?? []) as $n => $item) {
                 DB::table('ops_service_template_items')->insert(['template_id' => $templateId, 'position' => $n + 1, 'item_type' => $item['item_type'], 'item_code' => $item['item_code'],
-                    'description' => $item['description'], 'unit' => $item['unit'], 'planned_qty' => $item['planned_qty'], 'planned_price' => $item['planned_price'] ?? null]);
+                    'description' => $item['description'], 'unit' => $item['unit'], 'planned_qty' => $item['planned_qty'], 'planned_price' => $item['planned_price'] ?? null]
+                    + (OpsOrders::hasVat() ? ['product_id' => $item['product_id'] ?? null, 'vat_percent' => $item['vat_percent'] ?? null, 'vat_code' => isset($item['vat_code']) && $item['vat_code'] !== '' ? strtoupper($item['vat_code']) : null] : []));
             }
 
             return DB::table('ops_service_templates')->find($templateId);

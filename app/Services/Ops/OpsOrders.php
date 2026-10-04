@@ -31,6 +31,19 @@ class OpsOrders
 
     public function __construct(private AccountingLedger $ledger) {}
 
+    /** Product link and VAT on template/order lines arrive with migration 000007; older deployments skip them. */
+    public static function hasVat(): bool
+    {
+        static $has;
+
+        return $has ??= Schema::hasColumn('ops_order_items', 'vat_percent');
+    }
+
+    private static function vatOf(?object $line): array
+    {
+        return self::hasVat() && $line ? ['product_id' => $line->product_id ?? null, 'vat_percent' => $line->vat_percent ?? null, 'vat_code' => $line->vat_code ?? null] : [];
+    }
+
     public static function available(): bool
     {
         static $available;
@@ -71,19 +84,22 @@ class OpsOrders
                 'created_by' => $workspace->provider_user_id, 'created_at' => now(), 'updated_at' => now(),
             ]);
             $position = 0;
+            $revenueLine = null;
             if ($template) {
                 foreach (DB::table('ops_service_template_items')->where('template_id', $template->id)->orderBy('position')->get() as $line) {
                     if ($line->item_type === 'revenue') {
-                        continue; // Revenue comes from the agreed amount of this shipment, below.
+                        $revenueLine ??= $line; // Its product and VAT are kept; the price is the agreed amount of this shipment.
+
+                        continue;
                     }
                     DB::table('ops_order_items')->insert(['order_id' => $id, 'position' => ++$position, 'item_type' => $line->item_type, 'item_code' => $line->item_code,
                         'description' => $line->description, 'unit' => $line->unit, 'planned_qty' => $line->planned_qty, 'planned_price' => $line->planned_price,
-                        'supplier_partner_id' => $line->default_supplier_partner_id, 'created_at' => now(), 'updated_at' => now()]);
+                        'supplier_partner_id' => $line->default_supplier_partner_id, 'created_at' => now(), 'updated_at' => now()] + self::vatOf($line));
                 }
             }
-            DB::table('ops_order_items')->insert(['order_id' => $id, 'position' => ++$position, 'item_type' => 'revenue', 'item_code' => $template->code ?? 'TRANSPORT',
-                'description' => mb_substr((string) ($snapshot['title'] ?? $workspace->reference), 0, 160), 'unit' => 'KOM', 'planned_qty' => 1,
-                'planned_price' => Decimal::value((string) $workspace->agreed_amount, 4), 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('ops_order_items')->insert(['order_id' => $id, 'position' => ++$position, 'item_type' => 'revenue', 'item_code' => $revenueLine->item_code ?? $template->code ?? 'TRANSPORT',
+                'description' => mb_substr((string) ($snapshot['title'] ?? $workspace->reference), 0, 160), 'unit' => $revenueLine->unit ?? 'KOM', 'planned_qty' => 1,
+                'planned_price' => Decimal::value((string) $workspace->agreed_amount, 4), 'created_at' => now(), 'updated_at' => now()] + self::vatOf($revenueLine));
             DB::table('ops_events')->insert(['order_id' => $id, 'event_type' => 'booked', 'occurred_at' => now(), 'user_id' => $workspace->provider_user_id, 'created_at' => now()]);
             $this->followCrm($crmId, 'order');
 
@@ -137,7 +153,7 @@ class OpsOrders
             foreach ($template ? DB::table('ops_service_template_items')->where('template_id', $template->id)->orderBy('position')->get() : [] as $line) {
                 DB::table('ops_order_items')->insert(['order_id' => $id, 'position' => ++$position, 'item_type' => $line->item_type, 'item_code' => $line->item_code, 'description' => $line->description,
                     'unit' => $line->unit, 'planned_qty' => $line->planned_qty, 'planned_price' => $line->item_type === 'revenue' && isset($data['agreed_revenue']) ? Decimal::value((string) $data['agreed_revenue'], 4) : $line->planned_price,
-                    'supplier_partner_id' => $line->default_supplier_partner_id, 'created_at' => now(), 'updated_at' => now()]);
+                    'supplier_partner_id' => $line->default_supplier_partner_id, 'created_at' => now(), 'updated_at' => now()] + self::vatOf($line));
             }
             $this->ledger->audit($companyId, $actor, 'ops_order', $id, 'ops_created', ['template_id' => $template?->id]);
 
@@ -152,7 +168,8 @@ class OpsOrders
             if (! empty($data['supplier_partner_id'])) {
                 $this->ledger->require(DB::table('accounting_partners')->where('company_id', $companyId)->where('id', $data['supplier_partner_id'])->exists(), 'Supplier does not belong to this company.');
             }
-            $values = collect($data)->only(['item_type', 'item_code', 'description', 'unit', 'planned_qty', 'actual_qty', 'planned_price', 'actual_price', 'supplier_partner_id', 'finished'])->all();
+            $values = collect($data)->only(['item_type', 'item_code', 'description', 'unit', 'planned_qty', 'actual_qty', 'planned_price', 'actual_price', 'supplier_partner_id', 'finished',
+                ...(self::hasVat() ? ['product_id', 'vat_percent', 'vat_code'] : [])])->all();
             if (! empty($data['id'])) {
                 $this->ledger->require(DB::table('ops_order_items')->where('order_id', $orderId)->where('id', $data['id'])->exists(), 'Line does not belong to this work order.');
                 DB::table('ops_order_items')->where('id', $data['id'])->update($values + ['updated_at' => now()]);

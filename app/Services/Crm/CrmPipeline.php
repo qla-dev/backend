@@ -4,6 +4,7 @@ namespace App\Services\Crm;
 
 use App\Services\Accounting\AccountingLedger;
 use App\Services\Accounting\Decimal;
+use App\Services\Catalog\CatalogProducts;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -140,7 +141,8 @@ class CrmPipeline
             $vat = bcadd($vat, $rate === null ? '0' : Decimal::round(bcmul($lineNet, bcdiv($rate, '100', 8), 8)), 2);
             DB::table('crm_document_items')->insert(['crm_document_id' => $documentId, 'line_no' => $n + 1, 'item_code' => $item['item_code'] ?? null,
                 'name' => mb_substr((string) $item['name'], 0, 255), 'quantity' => $quantity, 'unit' => $item['unit'] ?? null, 'unit_price' => $price,
-                'discount_percent' => $discount, 'vat_percent' => $rate] + (self::revisioned() ? ['vat_code' => $item['vat_code'] ?? null] : []));
+                'discount_percent' => $discount, 'vat_percent' => $rate] + (self::revisioned() ? ['vat_code' => isset($item['vat_code']) && $item['vat_code'] !== '' ? strtoupper((string) $item['vat_code']) : null] : [])
+                + (CatalogProducts::available() ? ['product_id' => $item['product_id'] ?? null] : []));
         }
         DB::table('crm_documents')->where('id', $documentId)->update(['net_amount' => $net, 'vat_amount' => $vat, 'total_amount' => bcadd($net, $vat, 2)]);
     }

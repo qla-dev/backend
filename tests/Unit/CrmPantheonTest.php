@@ -52,7 +52,7 @@ class CrmPantheonTest extends TestCase
         Schema::create('loads', fn (Blueprint $t) => [$t->id()]);
         Schema::create('load_drafts', fn (Blueprint $t) => [$t->id()]);
         foreach (['000001_create_accounting_module', '000002_add_smart_pos_and_pantheon_connector', '000003_add_pantheon_sync_state', '000004_create_crm_sales_pipeline',
-            '000005_create_ops_work_orders', '000006_add_crm_and_ops_pantheon_push'] as $migration) {
+            '000005_create_ops_work_orders', '000006_add_crm_and_ops_pantheon_push', '000007_create_catalog_products'] as $migration) {
             (require __DIR__.'/../../database/migrations/2026_10_04_'.$migration.'.php')->up();
         }
         DB::table('users')->insert([['id' => 1, 'name' => 'Sales'], ['id' => 2, 'name' => 'Other']]);
