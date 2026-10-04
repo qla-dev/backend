@@ -22,6 +22,7 @@ This is the difference from the Trendy project (`C:\Users\Public\Documents\trend
 | Journal postings | `accounting_entries` | Push `tHE_AcctTrans` / `tHE_AcctTransItem` (temeljnica 4700, izdate 4200, primljene 4300) | `PantheonConnector::export` |
 | CRM offers / orders | `crm_documents`, `crm_document_items`, `crm_contacts`, `crm_follow_ups` | Pull `tHE_Order` 0100/0110/0120 + `tHE_LinkMoveItemOrderItem`. SmartFreight offers/orders are pushed to `tHE_Order` / `tHE_OrderItem` (status 1 offer, 2 order, Z lost/closed) | `PantheonCrmSync`, `CrmPantheonPush` |
 | Work orders (špediterski nalog) | `ops_orders`, `ops_order_items`, `ops_work_logs`, `ops_events`, `ops_order_documents` | Push `tHF_WOEx` / `tHF_WOExItem`, work time to `tHF_WOExItemWork`, milestones to `tHF_WOExRegOper`; pull closing (Z) | `OpsOrders`, `OpsPantheonSync` |
+| Products / services catalogue | `catalog_products` (used by CRM lines, service templates, POS tiles) | Pull `tHE_SetItem` of `catalog_item_sets` (default USL,OPR) + stock summed from `tHE_Stock`; push SmartFreight products to `tHE_SetItem` in `catalog_push_item_set` | `CatalogProducts`, `PantheonCatalogSync` |
 | Fiscal receipts (Smart POS) | `invoices.fiscal_*`, `accounting_fiscal_operations` | Not PANTHEON: external `fiscal:*` worker | `SmartPos`, see `smart-pos-fiscal-driver.md` |
 
 Everything runs from one scheduled command: `accounting:pantheon-sync`, every 5 minutes. A failure in one part (accounting, CRM, work orders) never stops the others.
@@ -90,6 +91,18 @@ Spec of the Ops module: `docs/pantheon-proizvodnja/freightbook_ops_prijedlog.sql
   - `acEventType` codes are ours (`OpsPantheonSync::EVENT_CODES`: BK, DS, LD, BR, CC, DL, PD, DM, NT); Trendy does not use this table.
   - `acFinished = T` for delivered/POD.
 - **Writing rules:** each log and event is written once (`ops_pantheon_links` work/event). Nothing new is written to a work order PANTHEON has closed.
+
+## Catalogue details (`PantheonCatalogSync`)
+
+- **Pull:**
+  - Trendy has 27,000 articles; 25,000 are production parts in set 120, so only the chosen sets are pulled.
+  - PANTHEON is the master for its own articles. Locally they can only be switched off (`active`).
+- **Push:**
+  - Needs `catalog_push_enabled` + the connector write switch, and a VAT code that exists in `tHE_SetTax`.
+  - `anQId` is an identity column. The marker `SF:{company}:product:{id}` in `acNote` marks our own articles; only those follow local edits.
+  - A code PANTHEON already has is linked, never overwritten.
+- **Lines carry a product and VAT:** template, work-order and CRM lines keep `product_id`, `vat_percent` and `vat_code`. A booked shipment's revenue line keeps the template product/VAT at the agreed amount.
+- **POS:** tiles show products (server search), templates (their revenue lines, or one line at the planned value), jobs and recent lines. A product line uses the valid VAT rule with the same rate.
 
 ## Open items
 
