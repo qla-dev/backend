@@ -24,6 +24,12 @@ use Illuminate\Support\Facades\DB;
  */
 class OpsPantheonSync
 {
+    /** SmartFreight milestone -> tHF_WOExRegOper.acEventType (2 chars; Trendy does not use this table, so these codes are ours). */
+    public const EVENT_CODES = ['booked' => 'BK', 'dispatched' => 'DS', 'loaded' => 'LD', 'border' => 'BR', 'customs_cleared' => 'CC', 'delivered' => 'DL', 'pod' => 'PD', 'damage' => 'DM', 'note' => 'NT'];
+
+    /** Activity rows that could not be written in this cycle (e.g. unmapped worker). */
+    private array $waiting = [];
+
     public const STATUS_MF = ['open' => 'O', 'dispatched' => 'D', 'in_progress' => 'P', 'partially_closed' => 'R', 'closed' => 'Z', 'cancelled' => 'R'];
 
     public function __construct(private PantheonConnector $pantheon, private AccountingLedger $ledger) {}
@@ -33,6 +39,7 @@ class OpsPantheonSync
         $row = DB::table('ops_pantheon_sync')->where('company_id', $companyId)->first();
         if ($row) {
             $row->last_sync_summary = json_decode((string) ($row->last_sync_summary ?? ''), true);
+            $row->worker_map = json_decode((string) ($row->worker_map ?? ''), true) ?: (object) [];
         }
 
         return $row;
@@ -41,7 +48,8 @@ class OpsPantheonSync
     public function save(int $companyId, int $actor, array $data): ?object
     {
         $exists = DB::table('ops_pantheon_sync')->where('company_id', $companyId)->exists();
-        DB::table('ops_pantheon_sync')->updateOrInsert(['company_id' => $companyId], collect($data)->only(['sync_enabled', 'order_doc_type', 'push_orders_from'])->all()
+        DB::table('ops_pantheon_sync')->updateOrInsert(['company_id' => $companyId], collect($data)->only(['sync_enabled', 'order_doc_type', 'push_orders_from', 'default_worker'])->all()
+            + (array_key_exists('worker_map', $data) ? ['worker_map' => json_encode((object) ($data['worker_map'] ?? []))] : [])
             + ['updated_by' => $actor, 'updated_at' => now()] + ($exists ? [] : ['created_at' => now()]));
         $this->ledger->audit($companyId, $actor, 'pantheon', $companyId, 'ops_sync_saved', $data);
 
@@ -79,6 +87,8 @@ class OpsPantheonSync
                 $result = $this->push($companyId, $connector, $state, $remote, $order, $link);
                 $summary[$result['action']][] = ['order_id' => $order->id, 'reference' => $order->reference, 'pantheon_key' => $result['key']];
             }
+            $summary['waiting'] = [...$summary['waiting'], ...$this->waiting];
+            $this->waiting = [];
             $this->pull($companyId, $remote, $summary);
             $this->state($companyId, 'ok', null, $summary);
 
@@ -117,7 +127,7 @@ class OpsPantheonSync
                 // A work order PANTHEON already closed is never changed from here.
                 $remoteStatus = trim((string) $remote->table($header)->lockForUpdate()->where('acKey', $key)->value('acStatusMF'));
                 if ($remoteStatus === 'Z') {
-                    return $key;
+                    return [$key];
                 }
                 $remote->table($header)->where('acKey', $key)->update($values);
             }
@@ -135,10 +145,88 @@ class OpsPantheonSync
 
             return $key;
         });
+        $closedRemote = is_array($key);
+        $key = $closedRemote ? $key[0] : $key;
+        $waitingBefore = count($this->waiting);
+        if (! $closedRemote) {
+            // Work time and milestones follow their order; a work order PANTHEON closed gets nothing new.
+            $this->pushActivity($companyId, $state, $remote, $order, $key, $clerk);
+        }
+        // Activity that had to wait (e.g. unmapped worker) keeps the order one revision behind, so it retries next cycle.
+        $sent = count($this->waiting) > $waitingBefore ? $order->revision - 1 : $order->revision;
         DB::table('ops_pantheon_links')->updateOrInsert(['company_id' => $companyId, 'entity_type' => 'order', 'local_id' => $order->id],
-            ['pantheon_key' => $key, 'local_revision' => $order->revision, 'remote_changed_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+            ['pantheon_key' => $key, 'local_revision' => $sent, 'remote_changed_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
 
         return ['action' => $action, 'key' => $key];
+    }
+
+    /**
+     * ops_work_logs -> tHF_WOExItemWork (worker minutes on the operation line) and ops_events -> tHF_WOExRegOper.
+     * Each row is written once (ops_pantheon_links work/event + acNote marker or exact event match).
+     * Workers are PANTHEON people (tHR_Prsn.acWorker): users map through worker_map, else default_worker;
+     * a log without a known worker waits and is listed in the sync summary.
+     */
+    private function pushActivity(int $companyId, object $state, ConnectionInterface $remote, object $order, string $key, int $clerk): void
+    {
+        $map = json_decode((string) ($state->worker_map ?? ''), true) ?: [];
+        $workers = $remote->table($this->pantheon->remoteTable($companyId, 'tHR_Prsn'))->pluck('acWorker')->map(fn ($w) => trim((string) $w))->filter()->flip();
+        $worker = function (?int $userId) use ($map, $state, $workers): ?string {
+            $code = trim((string) ($map[(string) $userId] ?? $state->default_worker ?? ''));
+
+            return $code !== '' && $workers->has($code) ? $code : null;
+        };
+        $linked = fn (string $type) => DB::table('ops_pantheon_links')->where('company_id', $companyId)->where('entity_type', $type)->pluck('local_id')->flip();
+        $items = DB::table('ops_order_items')->where('order_id', $order->id)->get()->keyBy('id');
+        $remoteItems = $remote->table($this->pantheon->remoteTable($companyId, 'tHF_WOExItem'))->where('acKey', $key)->pluck('anQId', 'anNo');
+        $workTable = $this->pantheon->remoteTable($companyId, 'tHF_WOExItemWork');
+        $doneWork = $linked('work');
+        foreach (DB::table('ops_work_logs')->whereIn('order_item_id', $items->keys())->orderBy('id')->get() as $log) {
+            if ($doneWork->has($log->id)) {
+                continue;
+            }
+            $item = $items->get($log->order_item_id);
+            $who = $worker((int) $log->user_id);
+            if (! $who) {
+                $this->waiting[] = ['order_id' => $order->id, 'reference' => $order->reference, 'problems' => ['worker_unmapped: user '.$log->user_id]];
+
+                continue;
+            }
+            $marker = 'SF:'.$companyId.':opswork:'.$log->id;
+            $qid = $remote->table($workTable)->where('acNote', $marker)->value('anQId');
+            if (! $qid) {
+                $remote->table($workTable)->insert(['acWorker' => $who, 'acIdent' => mb_substr($item->item_code, 0, 16), 'anQty' => 0, 'anPlanQty' => 0, 'anTime' => (string) $log->minutes,
+                    'adDate' => $log->work_date, 'anHoldUp' => (string) $log->downtime_minutes, 'acHoldUpType' => '0', 'acWorkTimeType' => '3', 'acNote' => $marker,
+                    'acLnkKey' => $key, 'anLnkNo' => (int) $item->position, 'anWOExItemQid' => $remoteItems[(int) $item->position] ?? null, 'anUserIns' => $clerk, 'anUserChg' => $clerk,
+                    'adTimeIns' => now(), 'adTimeChg' => now()]);
+                $qid = $remote->table($workTable)->where('acNote', $marker)->value('anQId');
+            }
+            $this->link($companyId, 'work', (int) $log->id, (string) $qid);
+        }
+        $eventTable = $this->pantheon->remoteTable($companyId, 'tHF_WOExRegOper');
+        $doneEvents = $linked('event');
+        $template = $order->template_id ? (string) DB::table('ops_service_templates')->where('id', $order->template_id)->value('code') : '';
+        foreach (DB::table('ops_events')->where('order_id', $order->id)->orderBy('id')->get() as $event) {
+            if ($doneEvents->has($event->id)) {
+                continue;
+            }
+            $code = self::EVENT_CODES[$event->event_type] ?? 'NT';
+            $match = $remote->table($eventTable)->where('acKey', $key)->where('acEventType', $code)->where('adEventTime', $event->occurred_at);
+            $qid = (clone $match)->value('anQId');
+            if (! $qid) {
+                $remote->table($eventTable)->insert(['acWorker' => $worker($event->user_id ? (int) $event->user_id : null) ?? '', 'adEventTime' => $event->occurred_at, 'acEventType' => $code,
+                    'acKey' => $key, 'anNo' => 0, 'acIdent' => mb_substr($template, 0, 16), 'acDescr' => mb_substr(trim($event->event_type.' '.($event->note ?? '')), 0, 80),
+                    'acFinished' => in_array($event->event_type, ['delivered', 'pod'], true) ? 'T' : 'F', 'acKeyView' => substr($key, 0, 2).'-'.substr($key, 2, 4).'-'.substr($key, -6),
+                    'anUserIns' => $clerk, 'anUserChg' => $clerk, 'adTimeIns' => now(), 'adTimeChg' => now()]);
+                $qid = (clone $match)->value('anQId');
+            }
+            $this->link($companyId, 'event', (int) $event->id, (string) $qid);
+        }
+    }
+
+    private function link(int $companyId, string $type, int $localId, string $key): void
+    {
+        DB::table('ops_pantheon_links')->updateOrInsert(['company_id' => $companyId, 'entity_type' => $type, 'local_id' => $localId],
+            ['pantheon_key' => $key, 'remote_changed_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
     }
 
     /** PANTHEON is the master for closing: a Z there closes the order here (never the other way round). */

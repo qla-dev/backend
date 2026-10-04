@@ -106,6 +106,18 @@ class PantheonCrmSync
                     'currency' => $this->currency((string) $h->acCurrency), 'net_amount' => bcsub($total, $vat, 2), 'vat_amount' => $vat, 'total_amount' => $total,
                     'ordered_quantity' => $ordered, 'delivered_quantity' => $shipped, 'linked_documents' => json_encode($linked), 'note' => mb_substr(trim((string) $h->acNote), 0, 5000) ?: null,
                     'synced_at' => now(), 'updated_at' => now()];
+                if ($existing && $existing->source === 'smartfreight') {
+                    // Pushed from SmartFreight (CrmPantheonPush): our content is the master. Read back only
+                    // what PANTHEON adds: delivery/invoice progress, moving the stage forward, never back.
+                    DB::table('crm_documents')->where('id', $existing->id)->update(collect($values)->only(['pantheon_status', 'ordered_quantity', 'delivered_quantity', 'linked_documents', 'synced_at', 'updated_at'])->all()
+                        + (($rank[$stage] ?? -1) > ($rank[$existing->stage] ?? -1) && in_array($stage, ['in_delivery', 'delivered', 'invoiced'], true) ? ['stage' => $stage] : []));
+                    foreach ($lines as $line) {
+                        DB::table('crm_document_items')->where('crm_document_id', $existing->id)->where('line_no', (int) $line->anNo)->update(['delivered_quantity' => $delivered[(int) $line->anNo] ?? '0']);
+                    }
+                    $summary['documents']++;
+
+                    continue;
+                }
                 if ($existing) {
                     DB::table('crm_documents')->where('id', $existing->id)->update($values);
                     $id = $existing->id;

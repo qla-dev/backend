@@ -153,6 +153,8 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::get('', 'overview');
         Route::get('report', 'report');
         Route::post('sync', 'sync');
+        Route::post('pantheon/push', 'push');
+        Route::match(['get', 'post'], 'pantheon/settings', 'pushSettings');
         Route::post('documents', 'store');
         Route::get('documents/{document}', 'show')->whereNumber('document');
         Route::patch('documents/{document}', 'update')->whereNumber('document');

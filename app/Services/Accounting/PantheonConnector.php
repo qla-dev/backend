@@ -38,7 +38,7 @@ class PantheonConnector
             $exists = DB::table('accounting_pantheon_connectors')->where('company_id', $companyId)->exists();
             $this->ledger->require($exists || filled($data['password'] ?? null), 'Pantheon password is required.');
             $values = collect($data)->only(['host', 'port', 'database', 'schema', 'username', 'allow_write', 'clerk_id', 'outgoing_doc_type', 'incoming_doc_type', 'journal_doc_type',
-                'sync_enabled', 'sync_interval_minutes', 'push_entries_from', 'default_country_code', 'sales_doc_types', 'delivery_doc_types'])->all();
+                'sync_enabled', 'sync_interval_minutes', 'push_entries_from', 'default_country_code', 'sales_doc_types', 'delivery_doc_types', 'crm_push_enabled', 'crm_push_doc_type', 'crm_push_from'])->all();
             if (array_key_exists('account_kinds', $data)) {
                 $values['account_kinds'] = json_encode((object) ($data['account_kinds'] ?? []));
             }

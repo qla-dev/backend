@@ -113,7 +113,8 @@ final class SmartPosController extends Controller
             'sync_enabled' => ['required', 'boolean'], 'sync_interval_minutes' => ['required', 'integer', 'between:5,1440'], 'push_entries_from' => ['nullable', 'date'],
             'default_country_code' => ['nullable', 'regex:/^[A-Z]{2}$/'], 'account_kinds' => ['nullable', 'array'],
             'account_kinds.*' => [Rule::in(['asset', 'liability', 'equity', 'income', 'expense'])],
-            'sales_doc_types' => ['sometimes', 'regex:/^[0-9A-Z]{4}(,[0-9A-Z]{4}){0,20}$/'], 'delivery_doc_types' => ['sometimes', 'regex:/^[0-9A-Z]{4}(,[0-9A-Z]{4}){0,20}$/']]);
+            'sales_doc_types' => ['sometimes', 'regex:/^[0-9A-Z]{4}(,[0-9A-Z]{4}){0,20}$/'], 'delivery_doc_types' => ['sometimes', 'regex:/^[0-9A-Z]{4}(,[0-9A-Z]{4}){0,20}$/'],
+            'crm_push_enabled' => ['sometimes', 'boolean'], 'crm_push_doc_type' => ['sometimes', 'nullable', 'regex:/^[0-9A-Z]{4}$/'], 'crm_push_from' => ['sometimes', 'nullable', 'date']]);
         // Choosing account kinds or enabling sync changes the local chart of accounts.
         $this->access->authorize($r->user(), $id, 'setup');
 

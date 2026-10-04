@@ -162,13 +162,22 @@ final class OpsController extends Controller
 
     public function pantheon(Request $r): JsonResponse
     {
-        return $this->response($this->sync->settings($this->company($r, 'integrations')));
+        $id = $this->company($r, 'integrations');
+        $settings = $this->sync->settings($id);
+        if ($settings) {
+            // Members are listed so each SmartFreight user can be mapped to a PANTHEON worker (tHR_Prsn).
+            $settings->members = DB::table('users')->whereIn('id', DB::table('company_user')->where('company_id', $id)->where('status', 'active')->pluck('user_id')
+                ->push(DB::table('companies')->where('id', $id)->value('owner_user_id')))->get(['id', 'name']);
+        }
+
+        return $this->response($settings);
     }
 
     public function savePantheon(Request $r): JsonResponse
     {
         $id = $this->company($r, 'integrations');
-        $data = $r->validate(['sync_enabled' => ['required', 'boolean'], 'order_doc_type' => ['nullable', 'regex:/^[0-9A-Z]{4}$/'], 'push_orders_from' => ['nullable', 'date']]);
+        $data = $r->validate(['sync_enabled' => ['required', 'boolean'], 'order_doc_type' => ['nullable', 'regex:/^[0-9A-Z]{4}$/'], 'push_orders_from' => ['nullable', 'date'],
+            'default_worker' => ['nullable', 'string', 'max:30'], 'worker_map' => ['nullable', 'array'], 'worker_map.*' => ['nullable', 'string', 'max:30']]);
 
         return $this->response($this->sync->save($id, $r->user()->id, $data));
     }

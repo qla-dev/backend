@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Services\Accounting\PantheonConnector;
+use App\Services\Crm\CrmPantheonPush;
+use App\Services\Crm\CrmPipeline;
 use App\Services\Crm\PantheonCrmSync;
 use App\Services\Ops\OpsOrders;
 use App\Services\Ops\OpsPantheonSync;
@@ -15,7 +17,7 @@ class SyncPantheon extends Command
 
     protected $description = 'Sync PANTHEON accounts/partners and push posted journal entries, and pull CRM offers/orders for connectors with sync enabled';
 
-    public function handle(PantheonConnector $pantheon, PantheonCrmSync $crmSync, OpsPantheonSync $opsSync): int
+    public function handle(PantheonConnector $pantheon, PantheonCrmSync $crmSync, OpsPantheonSync $opsSync, CrmPantheonPush $crmPush): int
     {
         $company = $this->option('company');
         $due = $company ? array_filter($pantheon->due(true), fn ($c) => (int) $c->company_id === (int) $company) : $pantheon->due();
@@ -34,6 +36,15 @@ class SyncPantheon extends Command
                 $this->info("Company {$connector->company_id}: CRM documents {$crm['documents']} (+{$crm['created']}), contacts {$crm['contacts']}");
             } catch (\Throwable $e) {
                 $this->error("Company {$connector->company_id}: CRM pull failed");
+            }
+            try {
+                // SmartFreight CRM offers/orders -> tHE_Order, only when this company enabled the CRM push.
+                if (CrmPipeline::revisioned() && DB::table('accounting_pantheon_connectors')->where('company_id', $connector->company_id)->where('crm_push_enabled', true)->exists()) {
+                    $pushed = $crmPush->push((int) $connector->company_id);
+                    $this->info("Company {$connector->company_id}: CRM offers pushed ".count($pushed['pushed']).', updated '.count($pushed['updated']).', waiting '.count($pushed['waiting']));
+                }
+            } catch (\Throwable $e) {
+                $this->error("Company {$connector->company_id}: CRM push failed");
             }
             try {
                 // Work orders: pushed only when this company enabled the Ops sync (OpsPantheonSync rules apply).

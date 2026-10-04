@@ -5,6 +5,7 @@ namespace App\Services\Crm;
 use App\Services\Accounting\AccountingLedger;
 use App\Services\Accounting\Decimal;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * SmartFreight side of the CRM: leads, follow-ups, ownership, lost offers and the sales report.
@@ -69,6 +70,9 @@ class CrmPipeline
                 'issued_on' => $data['issued_on'] ?? now()->toDateString(), 'valid_until' => $data['valid_until'] ?? null, 'currency' => $data['currency'] ?? 'BAM',
                 'net_amount' => $total, 'total_amount' => $total, 'note' => $data['note'] ?? null, 'owner_user_id' => $data['owner_user_id'] ?? $actor,
                 'next_follow_up_on' => $data['next_follow_up_on'] ?? null, 'created_by' => $actor, 'created_at' => now(), 'updated_at' => now()]);
+            if (! empty($data['items'])) {
+                $this->saveLines($id, $data['items']);
+            }
             $this->ledger->audit($companyId, $actor, 'crm_document', $id, 'crm_created', ['stage' => $data['stage'] ?? 'lead']);
 
             return DB::table('crm_documents')->find($id);
@@ -95,17 +99,58 @@ class CrmPipeline
             }
             if ($document->source === 'smartfreight') {
                 $changes += collect($data)->only(['title', 'contact_name', 'note', 'valid_until'])->all();
-                if (array_key_exists('total_amount', $data)) {
+                if (array_key_exists('total_amount', $data) && ! array_key_exists('items', $data)) {
                     $changes['total_amount'] = $changes['net_amount'] = Decimal::value((string) $data['total_amount']);
+                }
+                if (array_key_exists('items', $data)) {
+                    $this->saveLines($id, $data['items'] ?? []);
+                    $changes['lines'] = count($data['items'] ?? []);
                 }
             }
             if ($changes) {
-                DB::table('crm_documents')->where('id', $id)->update($changes + ['updated_at' => now()]);
+                $lines = array_key_exists('lines', $changes);
+                unset($changes['lines']);
+                // SmartFreight-owned documents carry a revision; the CRM sync pushes revisions PANTHEON has not seen.
+                if ($document->source === 'smartfreight' && self::revisioned()) {
+                    $changes['revision'] = (int) $document->revision + 1;
+                }
+                if ($changes || $lines) {
+                    DB::table('crm_documents')->where('id', $id)->update($changes + ['updated_at' => now()]);
+                }
                 $this->ledger->audit($companyId, $actor, 'crm_document', $id, 'crm_updated', $changes);
             }
 
             return DB::table('crm_documents')->find($id);
         });
+    }
+
+    /** Replaces the lines of a SmartFreight document and recomputes its totals (decimal strings, half-up). */
+    private function saveLines(int $documentId, array $items): void
+    {
+        DB::table('crm_document_items')->where('crm_document_id', $documentId)->delete();
+        $net = '0.00';
+        $vat = '0.00';
+        foreach (array_values($items) as $n => $item) {
+            $quantity = Decimal::value((string) ($item['quantity'] ?? '1'), 4);
+            $price = Decimal::value((string) ($item['unit_price'] ?? '0'), 4);
+            $discount = Decimal::value((string) ($item['discount_percent'] ?? '0'), 4);
+            $rate = isset($item['vat_percent']) && $item['vat_percent'] !== '' ? Decimal::value((string) $item['vat_percent'], 4) : null;
+            $lineNet = Decimal::round(bcmul(bcmul($quantity, $price, 8), bcsub('1', bcdiv($discount, '100', 8), 8), 8));
+            $net = bcadd($net, $lineNet, 2);
+            $vat = bcadd($vat, $rate === null ? '0' : Decimal::round(bcmul($lineNet, bcdiv($rate, '100', 8), 8)), 2);
+            DB::table('crm_document_items')->insert(['crm_document_id' => $documentId, 'line_no' => $n + 1, 'item_code' => $item['item_code'] ?? null,
+                'name' => mb_substr((string) $item['name'], 0, 255), 'quantity' => $quantity, 'unit' => $item['unit'] ?? null, 'unit_price' => $price,
+                'discount_percent' => $discount, 'vat_percent' => $rate] + (self::revisioned() ? ['vat_code' => $item['vat_code'] ?? null] : []));
+        }
+        DB::table('crm_documents')->where('id', $documentId)->update(['net_amount' => $net, 'vat_amount' => $vat, 'total_amount' => bcadd($net, $vat, 2)]);
+    }
+
+    /** The PANTHEON push columns arrive with migration 000006; code deployed earlier keeps working without them. */
+    public static function revisioned(): bool
+    {
+        static $has;
+
+        return $has ??= Schema::hasColumn('crm_documents', 'revision');
     }
 
     public function followUp(int $companyId, int $actor, array $data): object

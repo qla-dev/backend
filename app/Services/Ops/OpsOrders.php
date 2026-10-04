@@ -108,6 +108,8 @@ class OpsOrders
         };
         if ($workspace->status === 'completed' && ! DB::table('ops_events')->where('order_id', $order->id)->where('event_type', 'delivered')->exists()) {
             DB::table('ops_events')->insert(['order_id' => $order->id, 'event_type' => 'delivered', 'occurred_at' => now(), 'created_at' => now()]);
+            DB::table('ops_orders')->where('id', $order->id)->increment('revision');
+            $order->revision++;
             $this->followCrm($order->crm_document_id, 'delivered');
         }
         if ($status && $status !== $order->status) {

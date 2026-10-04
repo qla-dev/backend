@@ -67,7 +67,7 @@ class OpsWorkOrderTest extends TestCase
         Schema::create('invoices', fn (Blueprint $t) => [$t->id(), $t->unsignedBigInteger('company_id')->nullable(), $t->unsignedBigInteger('customer_user_id')->nullable(),
             $t->date('issued_at')->nullable(), $t->date('due_at')->nullable()]);
         Schema::create('invoice_items', fn (Blueprint $t) => [$t->id(), $t->unsignedBigInteger('invoice_id'), $t->decimal('quantity', 10, 2)->default(1), $t->decimal('unit_price', 14, 2)->default(0)]);
-        foreach (['000001_create_accounting_module', '000002_add_smart_pos_and_pantheon_connector', '000003_add_pantheon_sync_state', '000004_create_crm_sales_pipeline', '000005_create_ops_work_orders'] as $m) {
+        foreach (['000001_create_accounting_module', '000002_add_smart_pos_and_pantheon_connector', '000003_add_pantheon_sync_state', '000004_create_crm_sales_pipeline', '000005_create_ops_work_orders', '000006_add_crm_and_ops_pantheon_push'] as $m) {
             (require __DIR__.'/../../database/migrations/2026_10_04_'.$m.'.php')->up();
         }
         DB::table('users')->insert([['id' => 1, 'name' => 'Dispatcher'], ['id' => 2, 'name' => 'Customer']]);
@@ -186,14 +186,18 @@ class OpsWorkOrderTest extends TestCase
         foreach (['tHF_WOEx' => ['acKey', 'acDocType', 'acDocTypeView', 'adDate', 'acIdent', 'acName', 'acUM', 'anPlanQty', 'anProducedQty', 'acStatusMF', 'acStatus', 'anPriority', 'adSchedStartTime',
             'adSchedEndTime', 'acReceiver', 'acConsignee', 'acDept', 'acNote', 'acKeyView', 'acCreateFrom', 'anUserIns', 'anUserChg', 'adTimeChg'],
             'tHF_WOExItem' => ['acKey', 'anNo', 'anVariant', 'acIdent', 'acDescr', 'acOperationType', 'acUM', 'anPlanQty', 'anQty', 'anPrice', 'acIssueFinished', 'acDelayType', 'anIssuePerc', 'anUserIns', 'anUserChg'],
-            'tHE_SetItem' => ['acIdent']] as $table => $columns) {
+            'tHE_SetItem' => ['acIdent'], 'tHR_Prsn' => ['acWorker'],
+            'tHF_WOExItemWork' => ['acWorker', 'acIdent', 'anQty', 'anPlanQty', 'anTime', 'adDate', 'anHoldUp', 'acHoldUpType', 'acWorkTimeType', 'acNote', 'acLnkKey', 'anLnkNo', 'anWOExItemQid', 'anUserIns', 'anUserChg', 'adTimeIns', 'adTimeChg'],
+            'tHF_WOExRegOper' => ['acWorker', 'adEventTime', 'acEventType', 'acKey', 'anNo', 'acIdent', 'acDescr', 'acFinished', 'acKeyView', 'anUserIns', 'anUserChg', 'adTimeIns', 'adTimeChg']] as $table => $columns) {
             Schema::create($table, function (Blueprint $t) use ($columns) {
+                $t->increments('anQId'); // identity, as in PANTHEON
                 foreach ($columns as $c) {
                     $t->string($c)->nullable();
                 }
             });
         }
         DB::table('tHE_SetItem')->insert([['acIdent' => 'FTL-UVOZ'], ['acIdent' => 'VOZARINA']]);
+        DB::table('tHR_Prsn')->insert(['acWorker' => 'Adin Habibović']);
         DB::table('tHF_WOEx')->insert(['acKey' => '266A000000004', 'acDocType' => '6A00', 'acNote' => 'other']);
 
         return new OpsPantheonSync(new class(new AccountingLedger) extends PantheonConnector
@@ -247,5 +251,31 @@ class OpsWorkOrderTest extends TestCase
         self::assertSame('closed', $this->order()->status);
         self::assertCount(1, $result['pulled_closed']);
         self::assertSame('Closed in PANTHEON', DB::table('tHF_WOEx')->where('acKey', '266A000000005')->value('acName'));
+    }
+
+    public function test_work_time_and_events_follow_the_order_once_and_wait_for_an_unmapped_worker(): void
+    {
+        $this->book();
+        $sync = $this->sync();
+        DB::table('tHE_SetItem')->insert(['acIdent' => 'DISPECING']);
+        $order = $this->order();
+        $operation = DB::table('ops_order_items')->where('order_id', $order->id)->where('item_type', 'operation')->first();
+        $this->ops->logWork(1, 1, $order->id, ['order_item_id' => $operation->id, 'work_date' => '2026-10-06', 'minutes' => '90', 'downtime_minutes' => '15']);
+        $first = $sync->sync(1);
+        self::assertStringContainsString('worker_unmapped', json_encode($first['waiting']));
+        self::assertSame(0, DB::table('tHF_WOExItemWork')->count());
+        self::assertSame('BK', DB::table('tHF_WOExRegOper')->value('acEventType'), 'The booking milestone is written with the order.');
+        DB::table('ops_pantheon_sync')->update(['worker_map' => json_encode(['1' => 'Adin Habibović'])]);
+        $sync->sync(1);
+        $work = DB::table('tHF_WOExItemWork')->first();
+        self::assertSame(['Adin Habibović', 'DISPECING', '266A000000005', '2'], [$work->acWorker, $work->acIdent, $work->acLnkKey, (string) $work->anLnkNo]);
+        self::assertEquals(90, (float) $work->anTime);
+        self::assertNotNull($work->anWOExItemQid, 'Linked to the PANTHEON work order line.');
+        $this->ops->event(1, 1, $order->id, ['event_type' => 'pod', 'occurred_at' => '2026-10-07 15:00:00']);
+        $sync->sync(1);
+        $sync->sync(1);
+        self::assertSame(1, DB::table('tHF_WOExItemWork')->count());
+        self::assertSame(['BK', 'PD'], DB::table('tHF_WOExRegOper')->orderBy('anQId')->pluck('acEventType')->all());
+        self::assertSame('T', DB::table('tHF_WOExRegOper')->where('acEventType', 'PD')->value('acFinished'));
     }
 }

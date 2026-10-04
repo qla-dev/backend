@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Services\Accounting\AccountingLedger;
 use App\Services\Accounting\PantheonConnector;
+use App\Services\Crm\CrmPantheonPush;
 use App\Services\Crm\CrmPipeline;
 use App\Services\Crm\PantheonCrmSync;
 use Illuminate\Contracts\Console\Kernel;
@@ -48,7 +49,10 @@ class CrmPantheonTest extends TestCase
         Schema::create('invoices', fn (Blueprint $t) => [$t->id(), $t->unsignedBigInteger('company_id')->nullable(), $t->unsignedBigInteger('customer_user_id')->nullable(),
             $t->date('issued_at')->nullable(), $t->date('due_at')->nullable()]);
         Schema::create('invoice_items', fn (Blueprint $t) => [$t->id(), $t->unsignedBigInteger('invoice_id'), $t->decimal('quantity', 10, 2)->default(1), $t->decimal('unit_price', 14, 2)->default(0)]);
-        foreach (['000001_create_accounting_module', '000002_add_smart_pos_and_pantheon_connector', '000003_add_pantheon_sync_state', '000004_create_crm_sales_pipeline'] as $migration) {
+        Schema::create('loads', fn (Blueprint $t) => [$t->id()]);
+        Schema::create('load_drafts', fn (Blueprint $t) => [$t->id()]);
+        foreach (['000001_create_accounting_module', '000002_add_smart_pos_and_pantheon_connector', '000003_add_pantheon_sync_state', '000004_create_crm_sales_pipeline',
+            '000005_create_ops_work_orders', '000006_add_crm_and_ops_pantheon_push'] as $migration) {
             (require __DIR__.'/../../database/migrations/2026_10_04_'.$migration.'.php')->up();
         }
         DB::table('users')->insert([['id' => 1, 'name' => 'Sales'], ['id' => 2, 'name' => 'Other']]);
@@ -60,8 +64,15 @@ class CrmPantheonTest extends TestCase
             'username' => 'test', 'password' => encrypt('unused'), 'updated_by' => 1]);
         DB::table('accounting_pantheon_links')->insert(['company_id' => 1, 'entity_type' => 'partner', 'local_id' => 1, 'pantheon_key' => 'BUYER DOO', 'direction' => 'sync', 'synced_by' => 1]);
         // Synthetic PANTHEON tables in the same in-memory database; no remote system is contacted.
-        $this->table('tHE_Order', ['acKey', 'acDocType', 'adDate', 'acStatus', 'acReceiver', 'acContactPrsn', 'adDateValid', 'adDeliveryDeadline', 'acCurrency', 'anVAT', 'anForPay', 'acNote', 'acDoc1', 'acKeyView', 'acFinished', 'adTimeChg']);
-        $this->table('tHE_OrderItem', ['acKey', 'anNo', 'acIdent', 'acName', 'anQty', 'acUM', 'anPrice', 'anRebate', 'anVAT', 'adDeliveryDeadline']);
+        $this->table('tHE_Order', ['acKey', 'acDocType', 'adDate', 'acStatus', 'acReceiver', 'acContactPrsn', 'adDateValid', 'adDeliveryDeadline', 'acCurrency', 'anVAT', 'anForPay', 'acNote', 'acDoc1', 'acKeyView', 'acFinished', 'adTimeChg',
+            'acConsignee', 'anFXRate', 'anValue', 'anCurrValue', 'anClerk', 'anUserIns', 'anUserChg']);
+        $this->table('tHE_OrderItem', ['acKey', 'anNo', 'acIdent', 'acName', 'anQty', 'acUM', 'anPrice', 'anRebate', 'anVAT', 'adDeliveryDeadline', 'anQtyConverted', 'acUMConverted', 'acVATCode',
+            'anPVValue', 'anPVDiscount', 'anPVExcise', 'anPVVATBase', 'anPVVAT', 'anPVForPay', 'anPVOCValue', 'anPVOCDiscount', 'anPVOCExcise', 'anPVOCVATBase', 'anPVOCVAT', 'anPVOCForPay',
+            'anQtyDispDoc', 'acLnkKey', 'anLnkNo', 'anUserIns', 'adTimeIns', 'anUserChg', 'adTimeChg']);
+        $this->table('tHE_SetItem', ['acIdent']);
+        $this->table('tHE_SetTax', ['acVATCode']);
+        DB::table('tHE_SetItem')->insert([['acIdent' => 'A1'], ['acIdent' => 'B1']]);
+        DB::table('tHE_SetTax')->insert([['acVATCode' => 'P1'], ['acVATCode' => 'I0']]);
         $this->table('tHE_LinkMoveItemOrderItem', ['acKey', 'anNo', 'acLnkKey', 'anLnkNo', 'anQty']);
         $this->table('tHE_Move', ['acKey', 'acDocType', 'adDate', 'acKeyView']);
         $this->table('tHE_SetSubj', ['acSubject', 'acName2', 'acCode']);
@@ -202,5 +213,81 @@ class CrmPantheonTest extends TestCase
     {
         $this->expectException(ValidationException::class);
         $this->crm->create(1, 1, ['stage' => 'lead', 'partner_id' => 2, 'title' => 'Not ours', 'currency' => 'BAM']);
+    }
+
+    private function push(): CrmPantheonPush
+    {
+        DB::table('accounting_pantheon_connectors')->update(['allow_write' => true, 'crm_push_enabled' => true, 'crm_push_doc_type' => '0110', 'crm_push_from' => '2000-01-01', 'clerk_id' => 45]);
+
+        return new CrmPantheonPush(new class(new AccountingLedger) extends PantheonConnector
+        {
+            protected function remote(int $companyId): ConnectionInterface
+            {
+                return DB::connection();
+            }
+        }, new AccountingLedger);
+    }
+
+    private function offer(array $line = []): object
+    {
+        return $this->crm->create(1, 1, ['stage' => 'offer', 'partner_id' => 1, 'title' => 'Okvirna ponuda', 'currency' => 'BAM', 'issued_on' => '2026-10-04',
+            'items' => [array_merge(['item_code' => 'A1', 'name' => 'Part A', 'quantity' => '2', 'unit' => 'KOM', 'unit_price' => '50', 'vat_percent' => '17', 'vat_code' => 'P1'], $line)]]);
+    }
+
+    public function test_smartfreight_offer_is_pushed_once_as_pantheon_order_with_km_values(): void
+    {
+        $offer = $this->offer();
+        self::assertEquals(117, (float) DB::table('crm_documents')->where('id', $offer->id)->value('total_amount'));
+        $this->crm->create(1, 1, ['stage' => 'lead', 'partner_id' => 1, 'title' => 'Only a lead', 'currency' => 'BAM']);
+        $push = $this->push();
+        self::assertSame(['write_disabled'], $push->push(1, false)['waiting'][0]['problems']);
+        $result = $push->push(1);
+        self::assertCount(1, $result['pushed'], 'Leads stay in SmartFreight.');
+        $key = $result['pushed'][0]['pantheon_key'];
+        self::assertSame('2601100000005', $key);
+        $order = DB::table('tHE_Order')->where('acKey', $key)->first();
+        self::assertSame(['1', 'BUYER DOO', 'KM', '26-0110-000005'], [$order->acStatus, $order->acReceiver, $order->acCurrency, $order->acKeyView]);
+        self::assertStringStartsWith('SF:1:crm:', $order->acNote);
+        $line = DB::table('tHE_OrderItem')->where('acKey', $key)->first();
+        self::assertSame(['A1', 'P1', '100.00', '17.00', '117.00'], [$line->acIdent, $line->acVATCode, $line->anPVValue, $line->anPVVAT, $line->anPVForPay]);
+        self::assertSame([], $push->push(1)['pushed'], 'An unchanged offer is not pushed again.');
+        $this->crm->update(1, 1, $offer->id, ['stage' => 'order']);
+        self::assertCount(1, $push->push(1)['updated']);
+        self::assertSame('2', DB::table('tHE_Order')->where('acKey', $key)->value('acStatus'));
+        self::assertSame(1, DB::table('tHE_Order')->where('acNote', 'like', 'SF:%')->count());
+    }
+
+    public function test_eur_offer_converts_at_fixed_rate_and_missing_codes_wait(): void
+    {
+        $eur = $this->crm->create(1, 1, ['stage' => 'offer', 'partner_id' => 1, 'title' => 'EUR', 'currency' => 'EUR',
+            'items' => [['item_code' => 'B1', 'name' => 'Part B', 'quantity' => '1', 'unit_price' => '100', 'vat_percent' => '0', 'vat_code' => 'I0']]]);
+        $this->offer(['vat_code' => null]);
+        $this->crm->create(1, 1, ['stage' => 'offer', 'title' => 'No PANTHEON customer', 'customer_name' => 'New', 'currency' => 'BAM',
+            'items' => [['item_code' => 'ZZ', 'name' => 'Unknown', 'quantity' => '1', 'unit_price' => '1', 'vat_code' => 'P1']]]);
+        $result = $this->push()->push(1);
+        self::assertCount(1, $result['pushed']);
+        $problems = json_encode($result['waiting']);
+        self::assertStringContainsString('vat_code_required', $problems);
+        self::assertStringContainsString('customer_not_in_pantheon', $problems);
+        self::assertStringContainsString('unknown_item_codes: ZZ', $problems);
+        $line = DB::table('tHE_OrderItem')->where('acKey', DB::table('crm_documents')->where('id', $eur->id)->value('pantheon_key'))->first();
+        self::assertSame(['195.58', '100.00'], [$line->anPVValue, $line->anPVOCValue]);
+    }
+
+    public function test_pull_reads_delivery_back_without_overwriting_and_a_delivered_order_is_locked(): void
+    {
+        $offer = $this->offer();
+        $push = $this->push();
+        $key = $push->push(1)['pushed'][0]['pantheon_key'];
+        DB::table('tHE_Order')->where('acKey', $key)->update(['adDate' => '2026-10-04', 'acDocType' => '0110', 'anVAT' => '17', 'anForPay' => '117']);
+        DB::table('tHE_LinkMoveItemOrderItem')->insert(['acKey' => '2635000000020', 'anNo' => 1, 'acLnkKey' => $key, 'anLnkNo' => 1, 'anQty' => '2']);
+        DB::table('tHE_Move')->insert(['acKey' => '2635000000020', 'acDocType' => '3500', 'adDate' => '2026-10-06', 'acKeyView' => '26-3500-000020']);
+        $this->sync->pull(1, 1, true);
+        $document = DB::table('crm_documents')->where('id', $offer->id)->first();
+        self::assertSame(['smartfreight', 'delivered', 'Okvirna ponuda'], [$document->source, $document->stage, $document->title]);
+        $this->crm->update(1, 1, $offer->id, ['title' => 'Changed after delivery']);
+        $after = $push->push(1);
+        self::assertSame([], [...$after['pushed'], ...$after['updated']], 'A delivered order is never changed from SmartFreight.');
+        self::assertSame('Okvirna ponuda', DB::table('tHE_Order')->where('acKey', $key)->value('acDoc1'));
     }
 }

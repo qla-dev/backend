@@ -20,8 +20,8 @@ This is the difference from the Trendy project (`C:\Users\Public\Documents\trend
 | UI for the connection | Company details → **Integracije** tab | — | `frontend/.../CompanyIntegrations.tsx` |
 | Chart of accounts, partners | `accounting_accounts`, `accounting_partners` | Pull `tHE_SetAccount`, `tHE_SetSubj` (PANTHEON is master); linked in `accounting_pantheon_links` | `PantheonConnector::sync` |
 | Journal postings | `accounting_entries` | Push `tHE_AcctTrans` / `tHE_AcctTransItem` (temeljnica 4700, izdate 4200, primljene 4300) | `PantheonConnector::export` |
-| CRM offers / orders | `crm_documents`, `crm_document_items`, `crm_contacts`, `crm_follow_ups` | Pull `tHE_Order` 0100/0110/0120 + `tHE_LinkMoveItemOrderItem` (read-only) | `PantheonCrmSync` |
-| Work orders (špediterski nalog) | `ops_orders`, `ops_order_items`, `ops_work_logs`, `ops_events`, `ops_order_documents` | Push `tHF_WOEx` / `tHF_WOExItem`; pull closing (Z) | `OpsOrders`, `OpsPantheonSync` |
+| CRM offers / orders | `crm_documents`, `crm_document_items`, `crm_contacts`, `crm_follow_ups` | Pull `tHE_Order` 0100/0110/0120 + `tHE_LinkMoveItemOrderItem`. SmartFreight offers/orders are pushed to `tHE_Order` / `tHE_OrderItem` (status 1 offer, 2 order, Z lost/closed) | `PantheonCrmSync`, `CrmPantheonPush` |
+| Work orders (špediterski nalog) | `ops_orders`, `ops_order_items`, `ops_work_logs`, `ops_events`, `ops_order_documents` | Push `tHF_WOEx` / `tHF_WOExItem`, work time to `tHF_WOExItemWork`, milestones to `tHF_WOExRegOper`; pull closing (Z) | `OpsOrders`, `OpsPantheonSync` |
 | Fiscal receipts (Smart POS) | `invoices.fiscal_*`, `accounting_fiscal_operations` | Not PANTHEON: external `fiscal:*` worker | `SmartPos`, see `smart-pos-fiscal-driver.md` |
 
 Everything runs from one scheduled command: `accounting:pantheon-sync`, every 5 minutes. A failure in one part (accounting, CRM, work orders) never stops the others.
@@ -68,8 +68,29 @@ Spec of the Ops module: `docs/pantheon-proizvodnja/freightbook_ops_prijedlog.sql
 - `setup`: templates, accounts.
 - `post`: pushing postings.
 
+## CRM push details (`CrmPantheonPush`)
+
+- **What is sent:** only SmartFreight documents (`source = smartfreight`) created on or after `crm_push_from`. Leads are never sent. A lost/closed document is sent (as Z) only if PANTHEON already has it.
+- **When:** settings live on the connector (`crm_push_enabled`, `crm_push_doc_type` e.g. 0110). `crm_documents.revision` vs `pantheon_revision` decides what is sent.
+- **Each line needs:** a PANTHEON item code (`tHE_SetItem`) and a VAT code (`tHE_SetTax.acVATCode`). The rate alone is ambiguous: 0 % is export, exempt, ŠP…
+- **Customer:** must be linked to a PANTHEON subject (partner link from the accounting sync).
+- **Currency:** `anPV*` = KM, `anPVOC*` = document currency. EUR uses 1.95583; other currencies wait.
+- **After the push:** once PANTHEON has delivered (a delivery link exists) or closed the order, it is never changed from SmartFreight. The pull then reads back only delivery/invoice progress for these documents and never overwrites their content.
+
+## Work time and milestones (`OpsPantheonSync::pushActivity`)
+
+- **Work logs** → `tHF_WOExItemWork`:
+  - `acLnkKey` = work order key, `anLnkNo` = line, `anWOExItemQid` = PANTHEON line id;
+  - minutes in `anTime`, waiting in `anHoldUp`;
+  - marker `SF:{company}:opswork:{id}` in `acNote`.
+- **Workers:** must be PANTHEON people (`tHR_Prsn.acWorker`).
+  - Map them in `ops_pantheon_sync.worker_map` (user id → worker), or use `default_worker`.
+  - An unmapped log waits and keeps the order one revision behind, so it retries every cycle.
+- **Events** → `tHF_WOExRegOper`:
+  - `acEventType` codes are ours (`OpsPantheonSync::EVENT_CODES`: BK, DS, LD, BR, CC, DL, PD, DM, NT); Trendy does not use this table.
+  - `acFinished = T` for delivered/POD.
+- **Writing rules:** each log and event is written once (`ops_pantheon_links` work/event). Nothing new is written to a work order PANTHEON has closed.
+
 ## Open items
 
-- Push SmartFreight-created CRM offers to PANTHEON as `tHE_Order` (0110). Not built yet; follow the same link + marker pattern.
-- The Ops sync does not push work logs (`tHF_WOExItemWork`) or events (`tHF_WOExRegOper`) yet.
 - The fiscal driver worker is still missing (see `smart-pos-fiscal-driver.md`).
