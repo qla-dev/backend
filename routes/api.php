@@ -97,6 +97,37 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
+    Route::get('accounting/companies', [\App\Http\Controllers\Api\AccountingController::class, 'companies']);
+    Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\AccountingController::class)->group(function (): void {
+        Route::get('context', 'context');
+        Route::get('overview', 'overview');
+        Route::post('permissions', 'permissions');
+        Route::post('settings', 'settings');
+        Route::post('accounts', 'account');
+        Route::post('accounts/import', 'importAccounts');
+        Route::post('periods', 'period');
+        Route::post('periods/{period}/status', 'periodStatus')->whereNumber('period');
+        Route::post('rules', 'rule');
+        Route::post('rules/{rule}/approve', 'approveRule')->whereNumber('rule');
+        Route::post('invoices', 'createInvoice');
+        Route::put('invoices/{invoice}', 'updateInvoice')->whereNumber('invoice');
+        Route::post('invoices/{invoice}/preview', 'preview')->whereNumber('invoice');
+        Route::post('invoices/{invoice}/corrective', 'corrective')->whereNumber('invoice');
+        Route::get('invoices/{invoice}/print', 'printInvoice')->whereNumber('invoice');
+        Route::post('invoices/{invoice}/deliver', 'deliver')->whereNumber('invoice');
+        Route::post('invoices/{invoice}/documents', 'attachDocuments')->whereNumber('invoice');
+        Route::post('invoices/{invoice}/{action}', 'invoiceAction')->whereNumber('invoice')->where('action', 'submit|approve|reject|issue|post');
+        Route::post('bank', 'bank');
+        Route::post('allocations', 'allocate');
+        Route::post('advances', 'advance');
+        Route::post('estimates', 'estimate');
+        Route::post('journal', 'journal');
+        Route::post('entries/{entry}/reverse', 'reverse')->whereNumber('entry');
+        Route::get('vat', 'vat');
+        Route::get('reports', 'reports');
+        Route::post('partners', 'partner');
+        Route::post('jobs/invoice', 'fromJob');
+    });
     Route::get('lena-guest/current', [\App\Http\Controllers\Api\LenaGuestController::class, 'current']);
     Route::post('lena-guest/publish', [\App\Http\Controllers\Api\LenaGuestController::class, 'publish'])->middleware('throttle:5,1');
     Route::middleware('role:superadmin,master')->group(function (): void {

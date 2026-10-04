@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -153,9 +155,24 @@ class DocumentController extends CrudController
         return $this->success((new EntityResource($document))->resolve($request), 'Document uploaded successfully.', status: 201);
     }
 
-    public function download(Request $request, int $id): StreamedResponse
+    public function download(Request $request, int $id): \Symfony\Component\HttpFoundation\Response
     {
         $document = Document::query()->findOrFail($id);
+        if (Schema::hasTable('accounting_invoice_documents')) {
+            $companies = DB::table('accounting_invoice_documents')->join('invoices', 'invoices.id', '=', 'accounting_invoice_documents.invoice_id')
+                ->where('document_id', $id)->distinct()->pluck('invoices.company_id');
+            if ($companies->isNotEmpty()) {
+                $authorized = false;
+                foreach ($companies as $companyId) {
+                    try { app(\App\Services\Accounting\AccountingAccess::class)->authorize($request->user(), (int) $companyId, 'view'); $authorized = true; break; }
+                    catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { if ($e->getStatusCode() !== 403) throw $e; }
+                }
+                abort_unless($authorized, 403);
+            }
+            $issued = DB::table('accounting_issued_documents')->where('document_id', $id)->first();
+            if ($issued) return response($issued->html)->header('Content-Type', 'text/html; charset=UTF-8')
+                ->header('Content-Disposition', 'attachment; filename="invoice-'.$issued->invoice_id.'.html"');
+        }
         $path = "documents/{$document->path}";
         abort_unless(Storage::disk('local')->exists($path), 404);
 
@@ -172,9 +189,16 @@ class DocumentController extends CrudController
     public function destroy(Request $request, int $id): JsonResponse
     {
         $document = Document::query()->findOrFail($id);
+        if (Schema::hasTable('accounting_invoice_documents')) abort_if(DB::table('accounting_invoice_documents')->where('document_id', $id)->exists(), 409, 'Documents linked to accounting records must be preserved.');
         Storage::disk('local')->delete("documents/{$document->path}");
         $document->delete();
 
         return $this->success(null, 'Document deleted successfully.');
+    }
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        if (Schema::hasTable('accounting_invoice_documents')) abort_if(DB::table('accounting_invoice_documents')->where('document_id', $id)->exists(), 409, 'Accounting source documents cannot be replaced through the generic document API.');
+        return parent::update($request, $id);
     }
 }
