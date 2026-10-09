@@ -458,12 +458,49 @@ class LoadController extends CrudController
             return;
         }
 
-        if (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer', 'finance'], true)) {
+        if (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer', 'finance', 'warehouse'], true)) {
             $companyIds = $user->companies()->pluck('companies.id');
             $query->where(function (Builder $scope) use ($user, $companyIds): void {
                 $scope->where('customer_user_id', $user->id)->orWhereIn('company_id', $companyIds);
             });
+
+            return;
         }
+
+        // Every role the branches above do not name - a guest account, for one - used to fall
+        // through with no restriction at all and list every booking on the platform. Such an
+        // account sees only what it posted itself.
+        $query->where('customer_user_id', $user->id);
+    }
+
+    /**
+     * A single load past the public listing stage is only for the parties to it. The generic
+     * show() applied no scope, so any signed-in account could read any booking by id.
+     */
+    public function show(Request $request, int $id): JsonResponse
+    {
+        $query = Load::query()->with($this->relations());
+        // The review aggregates the generic show() adds, so authorising a load does not
+        // quietly change the shape of the response.
+        $this->configureQuery($query);
+        $load = $query->findOrFail($id);
+        $user = $request->user();
+        $role = $user?->role?->name;
+        $companyIds = $user && in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer', 'finance', 'warehouse'], true)
+            ? $user->companies()->pluck('companies.id')
+            : collect();
+        $allowed = $user && (
+            $user->isSuperAdminOrMaster()
+            || $load->status === 'posted'
+            || (int) $load->customer_user_id === (int) $user->id
+            || (int) $load->assigned_driver_user_id === (int) $user->id
+            || ($load->company_id && $companyIds->contains($load->company_id))
+            // A carrier who bid on it keeps seeing the load its offer is attached to.
+            || $load->offers->contains(fn (Offer $offer): bool => (int) $offer->created_by_user_id === (int) $user->id || (int) $offer->driver_user_id === (int) $user->id)
+        );
+        abort_unless($allowed, 403, 'You cannot view this load.');
+
+        return $this->success((new EntityResource($load))->resolve($request), 'Resource retrieved successfully.');
     }
 
     protected function applyOrdering(Builder $query, Request $request): void

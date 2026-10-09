@@ -151,6 +151,11 @@ class ShipmentWorkspaceController extends Controller
         return $query->where(function (Builder $visible) use ($user, $companyIds): void {
             $visible->where('customer_user_id', $user->id)
                 ->orWhere('provider_user_id', $user->id)
+                // The driver carrying the load owns the operational checklist, and when a company
+                // books the load and assigns one of its drivers that driver is neither the customer
+                // nor the provider: the app offered them the checklist (the workspace rides along
+                // with GET /loads/{load}) and every save came back 404.
+                ->orWhereHas('freightLoad', fn (Builder $loads) => $loads->where('assigned_driver_user_id', $user->id))
                 ->orWhereHas('conversation.participants', fn (Builder $participants) => $participants->where('users.id', $user->id));
             if ($companyIds->isNotEmpty()) $visible->orWhereIn('provider_company_id', $companyIds);
         });

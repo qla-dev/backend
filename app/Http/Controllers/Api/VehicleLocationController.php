@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\EntityResource;
+use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleLocation;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class VehicleLocationController extends CrudController
@@ -23,6 +26,43 @@ class VehicleLocationController extends CrudController
     protected function relations(): array
     {
         return ['vehicle', 'user:id,name'];
+    }
+
+    /**
+     * A vehicle's breadcrumbs are visible to the people who may see the vehicle itself. The index
+     * inherited no filter at all, so `?vehicle_id=` was ignored and every authenticated account
+     * could page through every vehicle's position history on the platform - another company's
+     * trucks included. The write path (bulkStore) has always checked this; the read path now does.
+     */
+    protected function applyFilters(Builder $query, Request $request): void
+    {
+        $request->validate(['vehicle_id' => ['sometimes', 'integer']]);
+        if ($request->filled('vehicle_id')) {
+            $query->where('vehicle_id', $request->integer('vehicle_id'));
+        }
+
+        $user = $request->user();
+        if (! $user || $user->isSuperAdminOrMaster()) {
+            return;
+        }
+        $query->whereIn('vehicle_id', $this->permittedVehicleIds($user));
+    }
+
+    /** The vehicles this account owns, drives, has fleet access to, or whose company it belongs to. */
+    private function permittedVehicleIds(User $user): Collection
+    {
+        $companyIds = $user->companies()->pluck('companies.id');
+
+        return Vehicle::query()
+            ->where(function (Builder $scope) use ($user, $companyIds): void {
+                $scope->where('owner_user_id', $user->id)
+                    ->orWhere('assigned_driver_user_id', $user->id)
+                    ->orWhereHas('permittedUsers', fn (Builder $users) => $users->whereKey($user->id));
+                if ($companyIds->isNotEmpty()) {
+                    $scope->orWhereIn('company_id', $companyIds);
+                }
+            })
+            ->pluck('id');
     }
 
     protected function rules(bool $u = false): array
@@ -90,7 +130,12 @@ class VehicleLocationController extends CrudController
             'longitude' => $position['longitude'],
             'speed_kph' => $position['speed_kph'] ?? null,
             'heading' => $position['heading'] ?? null,
-            'recorded_at' => Carbon::parse($position['recorded_at']),
+            // Written through the query builder, so no cast converts it: the Eloquent convention is
+            // that DATETIME columns hold app-timezone wall-clock time (that is how `recorded_at` is
+            // read back and how `created_at` below is written). A phone sends UTC (`...Z`), and
+            // inserting that instant's UTC wall clock unchanged had every position read back two
+            // hours early in Europe/Sarajevo.
+            'recorded_at' => Carbon::parse($position['recorded_at'])->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s'),
             'created_at' => $now,
             'updated_at' => $now,
         ])->all();
