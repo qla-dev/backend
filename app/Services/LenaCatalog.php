@@ -121,7 +121,11 @@ class LenaCatalog
                     $formFields[$field]['choices_by_transport'][$transport] = $this->choices($field, ['options' => false, 'group' => $group], $schema, $text, withSkip: false, transport: $transport);
                 }
             }
-            $locales[$locale] = [...$text, 'steps' => $steps, 'form_fields' => $formFields];
+            $learning = trans('lena-learning', [], $locale);
+            $locales[$locale] = [...$text, 'steps' => $steps, 'form_fields' => $formFields,
+                'learning' => ['hint_button' => $learning['hint_button'], 'lessons' => array_map(
+                    fn (array $lesson) => ['choices' => $lesson['choices']], $learning['lessons'] ?? [],
+                )]];
         }
 
         $locales['sr_cyrl'] = SerbianCyrillic::convert($locales['sr']);

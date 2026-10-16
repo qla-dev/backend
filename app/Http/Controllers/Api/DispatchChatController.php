@@ -48,24 +48,36 @@ class DispatchChatController extends Controller
             return $this->unavailable('You are not part of this conversation.', 403);
         }
 
-        if (! config('services.openrouter.api_key')) {
-            return $this->unavailable('AI dispatcher is not configured on the server.');
-        }
-
         $aiDispatcherId = User::query()->where('username', 'ai_dispatcher')->value('id');
         if (! $aiDispatcherId) {
             return $this->unavailable('AI dispatcher is not configured.');
         }
 
-        $conversation = Conversation::query()->with(['messages', 'freightLoad.stops', 'freightLoad.consignee', 'freightLoad.company', 'freightLoad.shipment.events', 'freightLoadDraft.consignee'])->findOrFail($validated['conversation_id']);
+        $conversation = Conversation::query()->with(['messages'])->findOrFail($validated['conversation_id']);
 
-        $load = $conversation->freightLoad;
         $userMessages = $conversation->messages
             ->where('sender_user_id', '!=', $aiDispatcherId)
             ->sortByDesc('sent_at')
             ->values();
         $latestUserMessageModel = $userMessages->first();
         $latestUserMessage = $latestUserMessageModel?->body;
+        if ($this->activeGuidedMode($userMessages) === 'learn') {
+            try {
+                $message = app(\App\Services\LenaLearning::class)->reply(
+                    $conversation, (int) $request->user()->id, (int) $aiDispatcherId, $interfaceLang,
+                );
+            } catch (RuntimeException | \JsonException $exception) {
+                \Illuminate\Support\Facades\Log::warning('Learning reply failed.', ['conversation_id' => $conversation->id, 'exception' => get_class($exception), 'error' => $exception->getMessage()]);
+                return $this->unavailable($exception->getMessage());
+            }
+            return response()->json(['message' => 'Learning reply generated.',
+                'data' => (new EntityResource($message))->resolve($request), 'meta' => [], 'errors' => []], 201);
+        }
+        if (! config('services.openrouter.api_key')) {
+            return $this->unavailable('AI dispatcher is not configured on the server.');
+        }
+        $conversation->load(['freightLoad.stops', 'freightLoad.consignee', 'freightLoad.company', 'freightLoad.shipment.events', 'freightLoadDraft.consignee']);
+        $load = $conversation->freightLoad;
         [
             'guidedAction' => $guidedAction, 'activeGuidedMode' => $activeGuidedMode, 'explicitPaymentRequest' => $explicitPaymentRequest,
             'legalMode' => $legalMode, 'wasCanvasEnabled' => $wasCanvasEnabled, 'detectedLoadCreationRequest' => $detectedLoadCreationRequest,
@@ -876,6 +888,9 @@ class DispatchChatController extends Controller
             ->values()
             ->all();
         $transport = $this->latestLoadDraft($conversation->messages)['transportType'] ?? $conversation->freightLoadDraft?->transport_type;
+        if ($this->activeGuidedMode($userMessages) === 'learn') {
+            return response()->json(['message' => 'Skills resolved.', 'data' => [], 'meta' => [], 'errors' => []]);
+        }
         $turn = $this->resolveTurn($conversation, $userMessages);
         $selection = $userMessages->first()
             ? app(\App\Services\LenaSkillSelector::class)->select($conversation, $turn, $userMessages->first()->id)
@@ -1082,19 +1097,20 @@ class DispatchChatController extends Controller
             return null;
         }
 
-        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|freeroam|legal|legal_upload_analyze|legal_upload_load|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no|training|training_image_yes|training_image_no)\]\]$/', trim($message), $match) === 1
+        return preg_match('/^\[\[LENA_ACTION:(add|storage|tracking|booking|hs|free|freeroam|legal|legal_upload_analyze|legal_upload_load|upload_yes|upload_no|start_add_yes|start_add_no|continue_add_yes|continue_add_no|learn|training|training_image_yes|training_image_no)\]\]$/', trim($message), $match) === 1
             ? $match[1]
             : null;
     }
 
     private function activeGuidedMode(Collection $userMessages): ?string
     {
-        foreach ($userMessages as $message) {
+        // Server-generated IDs also order mode changes saved within the same timestamp.
+        foreach ($userMessages->sortByDesc('id') as $message) {
             $action = $this->guidedAction($message->body);
             if ($action === 'legal_upload_load') {
                 return 'add';
             }
-            if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free', 'freeroam', 'legal', 'training'], true)) {
+            if (in_array($action, ['add', 'storage', 'tracking', 'booking', 'hs', 'free', 'freeroam', 'legal', 'learn', 'training'], true)) {
                 return $action;
             }
             // Answering the image offer keeps the conversation in training mode.

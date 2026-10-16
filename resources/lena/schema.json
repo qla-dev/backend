@@ -17,6 +17,7 @@
     "start_add_no",
     "continue_add_yes",
     "continue_add_no",
+    "learn",
     "training",
     "training_image_yes",
     "training_image_no"
@@ -30,6 +31,7 @@
     "hs",
     "free",
     "legal",
+    "learn",
     "training"
   ],
   "option_groups": {
