@@ -1,4 +1,37 @@
-# Backend database safety — mandatory
+# Shared agent coordination
+
+This workspace can be edited simultaneously by Codex, Claude and Copilot.
+Before modifying files, read the shared board:
+
+```powershell
+python D:\FreightBook\tools\agent_board.py --board-dir D:\FreightBook\.agent-board status
+```
+
+Use a unique session ID, such as `codex-api`, `claude-models` or `copilot-routes`.
+Create a task and claim files **before editing them**:
+
+```powershell
+python D:\FreightBook\tools\agent_board.py --board-dir D:\FreightBook\.agent-board create my-task --agent codex-api --title "Concrete task"
+python D:\FreightBook\tools\agent_board.py --board-dir D:\FreightBook\.agent-board claim my-task --agent codex-api --scope backend/app/Http/Controllers/ExampleController.php
+```
+
+## Board rules
+
+- Claim files before editing. Directory claims cover all descendants.
+- Refresh leases every 10 min: `heartbeat --agent YOUR_ID`.
+- Reserve `@git-write` before git operations.
+- `finish` puts task in **Ceka test**, not Done. Test separately with `pass` / `fail`.
+- Post a summary at the end of each task.
+- Attach evidence: `screenshot`, `record`, `attach`.
+
+## Dashboard
+
+Central board: `http://api.bosancica.ai:82` (or `http://127.0.0.1:8001`).
+Login with your credentials (ask admin for an account).
+
+---
+
+# Backend database safety - mandatory
 
 The configured database may contain live or irreplaceable data. Never assume that an environment name such as `testing`, a CLI `--env=testing` argument, or `phpunit.xml` makes an Artisan command safe.
 
