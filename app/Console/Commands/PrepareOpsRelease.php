@@ -31,7 +31,9 @@ final class PrepareOpsRelease extends Command
         if (!$memory) {
             if (!in_array($driver,['mysql','mariadb','pgsql'],true)
                 || !in_array($host,['localhost','127.0.0.1','::1'],true) || !$database
-                || !in_array(strtolower((string)parse_url((string)config('app.url'),PHP_URL_HOST)),['freightbook.ai','www.freightbook.ai'],true)) {
+                || !in_array(strtolower((string)parse_url((string)config('app.url'),PHP_URL_HOST)),['freightbook.ai','www.freightbook.ai','cargo.qla.dev'],true)) {
+                $this->line('Preflight: '.json_encode(['driver'=>$driver,'host_scope'=>in_array($host,['localhost','127.0.0.1','::1'],true)?'local':'non-local',
+                    'app_host'=>parse_url((string)config('app.url'),PHP_URL_HOST),'database_configured'=>(bool)$database]));
                 $this->error('Deployment database target is not verified. No schema changes applied.');
                 return self::FAILURE;
             }
