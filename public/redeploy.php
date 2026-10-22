@@ -49,6 +49,12 @@ while (ob_get_level() > 0) {
 }
 ob_implicit_flush(true);
 
+$deployLock = fopen(sys_get_temp_dir().DIRECTORY_SEPARATOR.'freightbook-backend-redeploy.lock', 'c');
+if ($deployLock === false || !flock($deployLock, LOCK_EX | LOCK_NB)) {
+    if (PHP_SAPI !== 'cli') http_response_code(409);
+    exit('Another backend redeploy is already running.');
+}
+
 $startedAt = time();
 $write = static function (string $message): void {
     echo $message;
@@ -189,6 +195,7 @@ $runCommand = static function (string $command, string $cwd, callable $write): i
 $commands = [
     ['label' => 'Pulling latest code', 'command' => 'git pull --ff-only'],
     ['label' => 'Installing Composer dependencies', 'command' => $composer.' install --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-dev --no-ansi'],
+    ['label' => 'Preparing approved OPS schema', 'command' => $phpCommand.' artisan freightbook:prepare-ops-release --no-ansi'],
     ['label' => 'Clearing Laravel config cache', 'command' => $phpCommand.' artisan config:clear --no-ansi'],
     ['label' => 'Clearing Laravel route cache', 'command' => $phpCommand.' artisan route:clear --no-ansi'],
     ['label' => 'Clearing Laravel view cache', 'command' => $phpCommand.' artisan view:clear --no-ansi'],
