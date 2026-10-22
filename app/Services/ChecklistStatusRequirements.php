@@ -74,6 +74,13 @@ class ChecklistStatusRequirements
         $reached = array_search($load->status, self::ORDER, true);
 
         $workspace = $load->shipmentWorkspace;
+        // The accessor adds compatibility tasks (e.g. POD) on read. That must not turn a
+        // genuinely empty stored checklist into a valid departure checklist.
+        $raw = $workspace?->getAttributes()['operational_checklist'] ?? null;
+        $stored = is_array($raw) ? $raw : json_decode($raw ?? '[]', true);
+        if (empty($stored)) {
+            throw ValidationException::withMessages(['status' => 'Complete the shipment workspace checklist before changing this status.']);
+        }
         $items = $workspace?->operational_checklist ?? [];
         if ($items === []) {
             throw ValidationException::withMessages([

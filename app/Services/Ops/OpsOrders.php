@@ -74,6 +74,8 @@ class OpsOrders
         $crmId = $load->crm_document_id ?? null;
 
         return DB::transaction(function () use ($workspace, $companyId, $template, $partner, $customer, $snapshot, $stops, $crmId, $load) {
+            DB::table('companies')->where('id',$companyId)->lockForUpdate()->first();
+            if ($existing = DB::table('ops_orders')->where('workspace_id',$workspace->id)->first()) return $existing;
             $id = DB::table('ops_orders')->insertGetId([
                 'company_id' => $companyId, 'reference' => $this->nextReference($companyId), 'doc_type' => 'SF00',
                 'workspace_id' => $workspace->id, 'load_id' => $workspace->load_id, 'crm_document_id' => $crmId, 'template_id' => $template?->id,
@@ -103,7 +105,9 @@ class OpsOrders
             DB::table('ops_events')->insert(['order_id' => $id, 'event_type' => 'booked', 'occurred_at' => now(), 'user_id' => $workspace->provider_user_id, 'created_at' => now()]);
             $this->followCrm($crmId, 'order');
 
-            return DB::table('ops_orders')->find($id);
+            $order = DB::table('ops_orders')->find($id);
+            if (Schema::hasTable('ops_operational_state')) app(\App\Services\OperationalCompliance::class)->initialize($order);
+            return $order;
         });
     }
 
@@ -139,6 +143,7 @@ class OpsOrders
     public function create(int $companyId, int $actor, array $data): object
     {
         return DB::transaction(function () use ($companyId, $actor, $data) {
+            app(\App\Services\OperationalCompliance::class)->member($companyId, $data['responsible_user_id'] ?? $actor);
             if (! empty($data['customer_partner_id'])) {
                 $this->ledger->require(DB::table('accounting_partners')->where('company_id', $companyId)->where('id', $data['customer_partner_id'])->exists(), 'Customer does not belong to this company.');
             }
@@ -155,9 +160,11 @@ class OpsOrders
                     'unit' => $line->unit, 'planned_qty' => $line->planned_qty, 'planned_price' => $line->item_type === 'revenue' && isset($data['agreed_revenue']) ? Decimal::value((string) $data['agreed_revenue'], 4) : $line->planned_price,
                     'supplier_partner_id' => $line->default_supplier_partner_id, 'created_at' => now(), 'updated_at' => now()] + self::vatOf($line));
             }
-            $this->ledger->audit($companyId, $actor, 'ops_order', $id, 'ops_created', ['template_id' => $template?->id]);
+            if (Schema::hasTable('compliance_audit')) app(\App\Services\OperationalCompliance::class)->audit($companyId,'ops_order',$id,$actor,'created',null,['title'=>$data['title']]);
 
-            return DB::table('ops_orders')->find($id);
+            $order = DB::table('ops_orders')->find($id);
+            if (Schema::hasTable('ops_operational_state')) app(\App\Services\OperationalCompliance::class)->initialize($order);
+            return $order;
         });
     }
 
@@ -208,6 +215,7 @@ class OpsOrders
 
     public function event(int $companyId, int $actor, int $orderId, array $data): object
     {
+        return DB::transaction(function () use ($companyId, $actor, $orderId, $data) {
         $order = $this->editable($companyId, $orderId);
         if (! empty($data['document_id'])) {
             DB::table('ops_order_documents')->insert(['order_id' => $orderId, 'role' => $data['event_type'] === 'pod' ? 'pod' : 'attachment', 'document_id' => $data['document_id'], 'created_at' => now()]);
@@ -217,6 +225,7 @@ class OpsOrders
         $this->touch($order);
 
         return DB::table('ops_events')->find($id);
+        });
     }
 
     /**
@@ -226,39 +235,21 @@ class OpsOrders
     public function close(int $companyId, int $actor, int $orderId): object
     {
         return DB::transaction(function () use ($companyId, $actor, $orderId) {
+            DB::table('accounting_settings')->where('company_id', $companyId)->lockForUpdate()->first();
             $order = DB::table('ops_orders')->where('company_id', $companyId)->where('id', $orderId)->lockForUpdate()->first() ?? abort(404);
-            if ($order->status === 'closed') {
-                return $order;
-            }
-            $this->ledger->require($order->status !== 'cancelled', 'A cancelled work order cannot be closed.');
-            if ($order->workspace_id) {
-                $this->ledger->require(DB::table('shipment_workspace')->where('id', $order->workspace_id)->value('status') === 'completed', 'Complete the shipment before closing its work order.');
-                foreach (DB::table('invoice_items')->join('invoices', 'invoices.id', '=', 'invoice_items.invoice_id')->where('invoices.company_id', $companyId)
-                    ->where('invoice_items.workspace_id', $order->workspace_id)->where('invoices.direction', 'outgoing')->pluck('invoices.id')->unique() as $invoiceId) {
-                    $this->document($orderId, 'revenue', (int) $invoiceId);
-                    if (DB::table('invoices')->where('id', $invoiceId)->value('issuance_status') === 'issued') {
-                        $this->followCrm($order->crm_document_id, 'invoiced');
-                    }
-                }
-                foreach (DB::table('accounting_cost_allocations')->join('invoice_items', 'invoice_items.id', '=', 'accounting_cost_allocations.invoice_item_id')
-                    ->where('accounting_cost_allocations.company_id', $companyId)->where('accounting_cost_allocations.workspace_id', $order->workspace_id)->pluck('invoice_items.invoice_id')->unique() as $invoiceId) {
-                    $this->document($orderId, 'cost', (int) $invoiceId);
-                }
-            }
-            $problems = [];
-            $missingCost = DB::table('ops_order_items')->where('order_id', $orderId)->where('item_type', 'cost')->whereNull('actual_price')->pluck('description')->all();
-            if ($missingCost) {
-                $problems[] = 'missing_actual_cost: '.implode(', ', $missingCost);
-            }
-            if ($order->workspace_id && ! DB::table('ops_events')->where('order_id', $orderId)->where('event_type', 'pod')->exists()
-                && ! DB::table('ops_order_documents')->where('order_id', $orderId)->where('role', 'pod')->exists()) {
-                $problems[] = 'missing_pod';
-            }
+            $this->ledger->require($order->status !== 'cancelled', 'Otkazan nalog nije moguće završiti.');
+            if ($order->workspace_id) $this->ledger->require(DB::table('shipment_workspace')->where('id',$order->workspace_id)->value('status') === 'completed','Prvo završite pošiljku.');
+            $settlement = app(TransportSettlement::class)->read($order);
+            $problems = $settlement['problems'];
+            if ($order->status === 'closed' && !$problems) return $order;
             $status = $problems ? 'partially_closed' : 'closed';
             DB::table('ops_orders')->where('id', $orderId)->update(['status' => $status, 'close_problems' => $problems ? implode("\n", $problems) : null,
                 'finished_at' => $status === 'closed' ? now() : null, 'realised_qty' => $order->realised_qty ?? $order->planned_qty, 'revision' => $order->revision + 1, 'updated_at' => now()]);
             DB::table('ops_order_items')->where('order_id', $orderId)->where('item_type', 'operation')->update(['finished' => true]);
-            $this->ledger->audit($companyId, $actor, 'ops_order', $orderId, 'ops_'.$status, ['problems' => $problems]);
+            if (Schema::hasTable('compliance_audit')) app(\App\Services\OperationalCompliance::class)->audit($companyId, 'ops_order', $orderId, $actor, 'ops_'.$status, $order, ['problems'=>$problems]);
+            if ($status === 'closed' && Schema::hasTable('ops_transport_flows')) {
+                DB::table('ops_transport_flows')->insertOrIgnore(['order_id'=>$orderId,'company_id'=>$companyId,'transport_type'=>'road','legs'=>'[]','transit'=>'[]','revision'=>0,'created_at'=>now(),'updated_at'=>now()]);
+            }
 
             return DB::table('ops_orders')->find($orderId);
         });

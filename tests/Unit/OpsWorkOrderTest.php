@@ -18,9 +18,9 @@ use PHPUnit\Framework\TestCase;
 
 class OpsWorkOrderTest extends TestCase
 {
-    private $app;
+    protected $app;
 
-    private OpsOrders $ops;
+    protected OpsOrders $ops;
 
     protected function setUp(): void
     {
@@ -97,14 +97,14 @@ class OpsWorkOrderTest extends TestCase
         parent::tearDown();
     }
 
-    private function book(?int $company = 1): ShipmentWorkspace
+    protected function book(?int $company = 1): ShipmentWorkspace
     {
         return ShipmentWorkspace::query()->create(['reference' => 'AB12CD', 'load_id' => 3, 'customer_user_id' => 2, 'provider_company_id' => $company, 'provider_user_id' => 1,
             'status' => 'booked', 'currency' => 'BAM', 'agreed_amount' => '1200.00', 'load_snapshot' => ['title' => 'Sarajevo - Hamburg'], 'offer_snapshot' => [],
             'parties_snapshot' => [], 'operational_checklist' => [], 'booked_at' => now()]);
     }
 
-    private function order(): object
+    protected function order(): object
     {
         return DB::table('ops_orders')->first();
     }
@@ -140,7 +140,7 @@ class OpsWorkOrderTest extends TestCase
         self::assertSame('delivered', DB::table('crm_documents')->where('id', 9)->value('stage'));
     }
 
-    public function test_close_is_partial_without_pod_or_actual_cost_then_final_and_idempotent(): void
+    public function test_close_remains_partial_until_delivery_cost_pod_and_payment_are_present(): void
     {
         $workspace = $this->book();
         $order = $this->order();
@@ -159,12 +159,14 @@ class OpsWorkOrderTest extends TestCase
         $cost = DB::table('ops_order_items')->where('order_id', $order->id)->where('item_type', 'cost')->first();
         $this->ops->saveItem(1, 1, $order->id, ['id' => $cost->id, 'actual_price' => '850', 'actual_qty' => '1']);
         $this->ops->event(1, 1, $order->id, ['event_type' => 'pod']);
-        self::assertSame('closed', $this->ops->close(1, 1, $order->id)->status);
+        self::assertSame('partially_closed', $this->ops->close(1, 1, $order->id)->status);
+        self::assertStringContainsString('payment_uninvoiced', $this->order()->close_problems);
         $revision = $this->order()->revision;
-        self::assertSame('closed', $this->ops->close(1, 1, $order->id)->status);
-        self::assertSame($revision, $this->order()->revision);
-        $this->expectException(ValidationException::class);
+        self::assertSame('partially_closed', $this->ops->close(1, 1, $order->id)->status);
+        self::assertStringContainsString('payment_uninvoiced', $this->order()->close_problems);
+        self::assertGreaterThan($revision, $this->order()->revision);
         $this->ops->saveItem(1, 1, $order->id, ['id' => $cost->id, 'actual_price' => '1']);
+        self::assertSame('partially_closed', $this->order()->status);
     }
 
     public function test_margin_replaces_estimates_with_actuals(): void
@@ -248,8 +250,8 @@ class OpsWorkOrderTest extends TestCase
         $sync->sync(1);
         DB::table('tHF_WOEx')->where('acKey', '266A000000005')->update(['acStatusMF' => 'Z', 'anProducedQty' => '1', 'acName' => 'Closed in PANTHEON']);
         $result = $sync->sync(1);
-        self::assertSame('closed', $this->order()->status);
-        self::assertCount(1, $result['pulled_closed']);
+        self::assertSame('open', $this->order()->status);
+        self::assertCount(0, $result['pulled_closed']);
         self::assertSame('Closed in PANTHEON', DB::table('tHF_WOEx')->where('acKey', '266A000000005')->value('acName'));
     }
 

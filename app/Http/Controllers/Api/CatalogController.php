@@ -49,7 +49,7 @@ final class CatalogController extends Controller
 
     public function save(Request $r): JsonResponse
     {
-        $id = $this->company($r, ['prepare', 'setup', 'ops']);
+        $id = $this->company($r, ['prepare', 'setup']);
         $data = $r->validate(['id' => ['nullable', 'integer'], 'code' => ['required_without:id', 'nullable', 'string', 'max:16'], 'name' => ['required_without:id', 'nullable', 'string', 'max:80'],
             'kind' => ['nullable', Rule::in(['service', 'product'])], 'unit' => ['nullable', 'string', 'max:3'], 'item_set' => ['nullable', 'string', 'max:3'],
             'sale_price' => ['nullable', 'numeric', 'min:0'], 'currency' => ['nullable', 'regex:/^[A-Z]{3}$/'], 'vat_percent' => ['nullable', 'numeric', 'between:0,100'],

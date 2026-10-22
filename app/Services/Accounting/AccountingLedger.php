@@ -47,6 +47,7 @@ final class AccountingLedger
             ]);
             DB::table('accounting_entry_lines')->insert(array_map(fn ($line) => ['entry_id' => $id] + $line, $lines));
             $this->audit($companyId, $actor, 'entry', $id, 'posted', ['event_key' => $data['event_key']]);
+            app(\App\Services\Ops\TransportSettlement::class)->reconcile($companyId, $actor);
 
             return DB::table('accounting_entries')->find($id);
         });

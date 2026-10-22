@@ -120,6 +120,7 @@ final class AccountingInvoices
                     DB::table('accounting_invoice_documents')->insert(['invoice_id' => $invoice->id, 'document_id' => $documentId]);
                 }
             }
+            app(\App\Services\Ops\TransportSettlement::class)->reconcile($companyId, $actor);
             $this->ledger->audit($companyId, $actor, 'invoice', $invoice->id, $id ? 'draft_updated' : 'draft_created', ['revision' => $invoice->revision]);
 
             return $invoice->fresh('items');
@@ -154,7 +155,7 @@ final class AccountingInvoices
                 DB::table('accounting_settings')->where('company_id', $companyId)->increment('next_invoice_number');
                 $invoice->issuance_status = 'issued';
                 $invoice->status = 'issued';
-                $this->assertUnbilled($invoice);
+                // A job may have several service invoices. OPS requires settlement of every active invoice.
                 $invoice->issued_snapshot = [
                     'seller' => (array) DB::table('companies')->where('id', $companyId)->first(),
                     'buyer' => (array) DB::table('accounting_partners')->where('company_id', $companyId)->where('id', $invoice->partner_id)->first(),
@@ -187,6 +188,7 @@ final class AccountingInvoices
             }
             $invoice->revision++;
             $invoice->save();
+            app(\App\Services\Ops\TransportSettlement::class)->reconcile($companyId, $actor);
             $this->ledger->audit($companyId, $actor, 'invoice', $id, $action, ['revision' => $invoice->revision]);
 
             return $invoice->fresh('items');
@@ -258,19 +260,6 @@ final class AccountingInvoices
             : ((int) $job->provider_company_id === $companyId || DB::table('loads')->where('id', $job->load_id)->where('company_id', $companyId)->exists())), 'Job does not belong to this company / service provider.');
 
         return $job;
-    }
-
-    private function assertUnbilled(Invoice $invoice): void
-    {
-        if ($invoice->corrects_invoice_id) {
-            return;
-        }
-        foreach ($invoice->items()->whereNotNull('workspace_id')->get() as $item) {
-            $this->ledger->require(! DB::table('invoice_items')->join('invoices', 'invoices.id', '=', 'invoice_items.invoice_id')
-                ->where('invoices.company_id', $invoice->company_id)->where('invoices.direction', 'outgoing')
-                ->where('invoices.issuance_status', 'issued')->whereNull('invoices.corrects_invoice_id')->where('invoices.id', '!=', $invoice->id)
-                ->where('invoice_items.workspace_id', $item->workspace_id)->exists(), 'Job already has an issued invoice. Use a corrective document.');
-        }
     }
 
     public function corrective(int $companyId, int $actor, int $id, string $date, string $reason): Invoice

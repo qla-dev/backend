@@ -102,6 +102,23 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
+    Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\OperationalComplianceController::class)->group(function () {
+        Route::get('ops/today', 'today');
+        Route::get('ops/operational-overview', 'overview');
+        Route::patch('ops/orders/{order}/transport-flow', [\App\Http\Controllers\Api\TransportFlowController::class, 'save'])->whereNumber('order');
+        Route::get('ops/checklist-versions', 'templates');
+        Route::post('ops/checklist-versions', 'templates');
+        Route::get('ops/orders/{order}/compliance', 'show')->whereNumber('order');
+        Route::patch('ops/orders/{order}/checklist', 'checklist')->whereNumber('order');
+        Route::post('ops/orders/{order}/inspections', 'inspection')->whereNumber('order');
+        Route::post('ops/orders/{order}/compliance-documents', 'linkDocument')->whereNumber('order');
+        Route::get('country-profile', 'profile');
+        Route::put('country-profile', 'profile');
+        Route::post('verifications', 'verification');
+        Route::patch('verifications/{verification}/review', 'review')->whereNumber('verification');
+        Route::get('verification-documents/{document}', 'evidence')->whereNumber('document');
+    });
+
     Route::get('accounting/companies', [\App\Http\Controllers\Api\AccountingController::class, 'companies']);
     Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\AccountingController::class)->group(function (): void {
         Route::get('context', 'context');
@@ -124,6 +141,7 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::post('invoices/{invoice}/{action}', 'invoiceAction')->whereNumber('invoice')->where('action', 'submit|approve|reject|issue|post');
         Route::post('bank', 'bank');
         Route::post('allocations', 'allocate');
+        Route::post('allocations/{allocation}/reverse', 'reverseAllocation')->whereNumber('allocation');
         Route::post('advances', 'advance');
         Route::post('estimates', 'estimate');
         Route::post('journal', 'journal');
@@ -174,14 +192,15 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::post('orders', 'store');
         Route::get('orders/{order}', 'show')->whereNumber('order');
         Route::patch('orders/{order}', 'update')->whereNumber('order');
-        Route::post('orders/{order}/items', 'item')->whereNumber('order');
         Route::post('orders/{order}/work', 'work')->whereNumber('order');
         Route::post('orders/{order}/events', 'event')->whereNumber('order');
         Route::post('orders/{order}/close', 'close')->whereNumber('order');
-        Route::post('templates', 'template');
-        Route::get('pantheon', 'pantheon');
-        Route::post('pantheon', 'savePantheon');
-        Route::post('pantheon/sync', 'syncPantheon');
+        Route::post('orders/{order}/reopen', 'reopen')->whereNumber('order');
+    });
+    Route::prefix('accounting/{company}/integrations/ops-pantheon')->whereNumber('company')->controller(\App\Http\Controllers\Api\OpsController::class)->group(function (): void {
+        Route::get('', 'pantheon');
+        Route::post('', 'savePantheon');
+        Route::post('sync', 'syncPantheon');
     });
     Route::get('lena-guest/current', [\App\Http\Controllers\Api\LenaGuestController::class, 'current']);
     Route::post('lena-guest/publish', [\App\Http\Controllers\Api\LenaGuestController::class, 'publish'])->middleware('throttle:5,1');

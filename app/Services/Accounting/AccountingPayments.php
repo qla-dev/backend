@@ -73,8 +73,30 @@ final class AccountingPayments
         });
     }
 
+    public function reverseAllocation(int $companyId, int $actor, int $id, string $date, string $reason): object
+    {
+        return DB::transaction(function () use ($companyId, $actor, $id, $date, $reason) {
+            DB::table('accounting_settings')->where('company_id', $companyId)->lockForUpdate()->first();
+            $allocation = DB::table('accounting_payment_allocations')->where('company_id', $companyId)->where('id', $id)->first() ?? abort(404);
+            $entry = DB::table('accounting_entries')->where('company_id', $companyId)->where('event_key', 'allocation:'.$id)->first() ?? abort(422, 'Knjiženje uplate nije dostupno.');
+            $this->ledger->require($date >= substr($entry->posting_date, 0, 10), 'Poništenje ne može prethoditi uplati.');
+            $lines = DB::table('accounting_entry_lines')->where('entry_id', $entry->id)->get()->map(fn ($line) => [
+                'account_id'=>$line->account_id, 'debit'=>$line->credit, 'credit'=>$line->debit, 'tax_rule_id'=>$line->tax_rule_id, 'invoice_item_id'=>$line->invoice_item_id])->all();
+            $reversal = $this->ledger->post($companyId, $actor, ['event_key'=>'allocation-reversal:'.$id, 'posting_date'=>$date,
+                'description'=>$reason, 'reverses_entry_id'=>$entry->id, 'lines'=>$lines]);
+            $advance = DB::table('accounting_advances')->where('company_id',$companyId)->where('bank_transaction_id',$allocation->bank_transaction_id)->first();
+            if ($advance) DB::table('accounting_advances')->where('id',$advance->id)->update(['settled_amount'=>$this->allocated('bank_transaction_id',$allocation->bank_transaction_id),'updated_at'=>now()]);
+            return $reversal;
+        });
+    }
+
     public function allocated(string $column, int $id): string
     {
-        return Decimal::sum(DB::table('accounting_payment_allocations')->where($column, $id)->pluck('amount'));
+        $values = [];
+        foreach (DB::table('accounting_payment_allocations')->where($column, $id)->get() as $allocation) {
+            $entry = DB::table('accounting_entries')->where('company_id', $allocation->company_id)->where('event_key', 'allocation:'.$allocation->id)->first();
+            if (!$entry || !DB::table('accounting_entries')->where('company_id', $allocation->company_id)->where('reverses_entry_id', $entry->id)->exists()) $values[] = $allocation->amount;
+        }
+        return Decimal::sum($values);
     }
 }

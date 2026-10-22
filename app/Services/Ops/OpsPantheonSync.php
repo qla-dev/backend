@@ -242,8 +242,18 @@ class OpsPantheonSync
                 if (! $row || ! $order || trim((string) $row->acStatusMF) !== 'Z' || $order->status === 'closed') {
                     continue;
                 }
-                DB::table('ops_orders')->where('id', $order->id)->update(['status' => 'closed', 'finished_at' => $order->finished_at ?? now(),
-                    'realised_qty' => (string) ($row->anProducedQty ?? $order->realised_qty), 'updated_at' => now()]);
+                if (!app(TransportSettlement::class)->read($order)['can_finish']) {
+                    $summary['waiting'][] = ['order_id'=>$order->id,'problems'=>['local_delivery_or_settlement_pending']];
+                    continue;
+                }
+                try {
+                    $closed = app(OpsOrders::class)->close($companyId, (int) DB::table('companies')->where('id',$companyId)->value('owner_user_id'), $order->id);
+                    if ($closed->status !== 'closed') { $summary['waiting'][]=['order_id'=>$order->id,'problems'=>explode("\n",$closed->close_problems ?? '')]; continue; }
+                } catch (\Illuminate\Validation\ValidationException) {
+                    $summary['waiting'][]=['order_id'=>$order->id,'problems'=>['local_checklist_pending']]; continue;
+                }
+                DB::table('ops_orders')->where('id', $order->id)->update(['realised_qty'=>(string) ($row->anProducedQty ?? $order->realised_qty),'updated_at'=>now()]);
+                $order->revision = $closed->revision;
                 // Same revision as PANTHEON, so the next push does not try to reopen it.
                 DB::table('ops_pantheon_links')->where('id', $link->id)->update(['local_revision' => $order->revision, 'remote_changed_at' => now()]);
                 $summary['pulled_closed'][] = ['order_id' => $order->id, 'reference' => $order->reference];

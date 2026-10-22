@@ -36,7 +36,8 @@ class ShipmentWorkspaceController extends Controller
 
     public function update(Request $request, ShipmentWorkspace $shipmentWorkspace): JsonResponse
     {
-        $record = $this->visibleQuery($request)->findOrFail($shipmentWorkspace->id);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $shipmentWorkspace): JsonResponse {
+        $record = $this->visibleQuery($request)->lockForUpdate()->findOrFail($shipmentWorkspace->id);
         $data = $request->validate([
             'status' => ['sometimes', Rule::in(ShipmentWorkspace::STATUSES)],
             'offer_status' => ['sometimes', Rule::in([
@@ -102,17 +103,31 @@ class ShipmentWorkspaceController extends Controller
             abort_unless($isProvider || $isAdmin || $isAssignedDriver, 403, 'Only the selected provider or assigned driver can update the operational checklist.');
             // Keep every task and enforce fixed categories, including for older clients.
             $existing = collect($record->operational_checklist)->keyBy('key');
-            $updates = collect($data['operational_checklist'])->keyBy('key');
+            $updates = collect($data['operational_checklist'])->map(fn ($item) => array_intersect_key($item, array_flip(['key','status','due_date','action_value'])))->keyBy('key');
             abort_if($updates->keys()->diff($existing->keys())->isNotEmpty(), 422, 'Unknown checklist item.');
             foreach ($updates as $key => $update) {
                 $previous = $existing->get($key);
+                abort_if(!empty($previous['system']) && ($update['status'] ?? '') !== ($previous['status'] ?? ''),422,'Isporuku i naplatu potvrđuje sistem.');
+                abort_if(!empty($previous['required_documents']) && ($update['status'] ?? '') === 'completed' && ($previous['status'] ?? '') !== 'completed',422,'Potvrdite dokumente kroz operativni pregled naloga.');
                 if ((($update['status'] ?? '') === 'completed' && ($previous['status'] ?? '') !== 'completed')
                     || (array_key_exists('action_value', $update) && $update['action_value'] !== ($previous['action_value'] ?? null))) {
                     \App\Services\ChecklistStatusRequirements::assertTaskAllowed($record->freightLoad, $previous);
                 }
             }
             $data['operational_checklist'] = \App\Services\ChecklistStatusRequirements::withCategories(
-                $existing->map(fn ($item, $key) => array_merge($item, $updates->get($key, [])))->values()->all()
+                $existing->map(function ($item, $key) use ($updates, $user) {
+                    $update = $updates->get($key, []);
+                    unset($update['completed_at'], $update['completed_by_user_id']);
+                    $next = array_merge($item, $update);
+                    if (($next['status'] ?? '') === 'completed' && ($item['status'] ?? '') !== 'completed') {
+                        $next['completed_at'] = now()->toIso8601String();
+                        $next['completed_by_user_id'] = $user->id;
+                        $next['confirmation_source'] = 'human';
+                    } elseif (($next['status'] ?? '') !== 'completed') {
+                        $next['completed_at'] = null; $next['completed_by_user_id'] = null;
+                    }
+                    return $next;
+                })->values()->all()
             );
         }
         if (isset($data['status'])) {
@@ -138,6 +153,7 @@ class ShipmentWorkspaceController extends Controller
         $record->load($this->relations());
 
         return response()->json(['message' => 'Shipment workspace updated successfully.', 'data' => (new EntityResource($record))->resolve($request), 'meta' => [], 'errors' => []]);
+        }, 3);
     }
 
     private function visibleQuery(Request $request): Builder

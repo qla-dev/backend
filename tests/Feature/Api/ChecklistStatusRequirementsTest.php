@@ -140,10 +140,13 @@ class ChecklistStatusRequirementsTest extends TestCase
     }
 
     #[DataProvider('modes')]
-    public function test_sent_requires_the_same_departure_items_for_every_mode(string $mode): void
+    public function test_retired_sent_status_is_read_as_booked_before_departure(string $mode): void
     {
-        $this->expectException(ValidationException::class);
-        app(ChecklistStatusRequirements::class)->assertAllowed($this->loadWith($this->items($mode), 'sent', $mode));
+        // Load::getStatusAttribute deliberately maps historical 'sent' records to 'booked'.
+        // Departure conditions apply when a caller subsequently requests in_delivery.
+        $load = $this->loadWith($this->items($mode), 'sent', $mode);
+        $this->assertSame('booked', $load->status);
+        app(ChecklistStatusRequirements::class)->assertAllowed($load);
     }
 
     #[DataProvider('modes')]

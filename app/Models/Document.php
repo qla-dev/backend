@@ -8,6 +8,13 @@ class Document extends BaseModel
 {
     protected static function booted(): void
     {
+        // Verification evidence has a separate, company-authorized download route. Keep private
+        // records out of generic document listings, show/update/delete and nested resources.
+        static::addGlobalScope('private_compliance', function (\Illuminate\Database\Eloquent\Builder $q): void {
+            if (\Illuminate\Support\Facades\Schema::hasTable('compliance_document_links')) {
+                $q->whereNotIn('documents.id', \Illuminate\Support\Facades\DB::table('compliance_document_links')->select('document_id'));
+            }
+        });
         static::saving(function (Document $document): void {
             if ($document->load_id && ($document->isDirty('load_id') || $document->isDirty('type') || $document->isDirty('path'))
                 && in_array(strtolower($document->type ?? ''), ['pod', 'proof_of_delivery'], true)) {

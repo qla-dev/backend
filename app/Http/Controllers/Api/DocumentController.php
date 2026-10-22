@@ -188,6 +188,7 @@ class DocumentController extends CrudController
      */
     public function destroy(Request $request, int $id): JsonResponse
     {
+        if (Schema::hasTable('ops_inspection_cases')) abort_if(DB::table('ops_inspection_cases')->whereJsonContains('document_ids', $id)->exists(), 409, 'Inspekcijski dokaz mora ostati sačuvan; učitajte novu verziju.');
         $document = Document::query()->findOrFail($id);
         if (Schema::hasTable('accounting_invoice_documents')) abort_if(DB::table('accounting_invoice_documents')->where('document_id', $id)->exists(), 409, 'Documents linked to accounting records must be preserved.');
         Storage::disk('local')->delete("documents/{$document->path}");
@@ -198,6 +199,7 @@ class DocumentController extends CrudController
 
     public function update(Request $request, int $id): JsonResponse
     {
+        if (Schema::hasTable('ops_inspection_cases')) abort_if(DB::table('ops_inspection_cases')->whereJsonContains('document_ids', $id)->exists(), 409, 'Inspekcijski dokaz se ne zamjenjuje; učitajte novu verziju.');
         if (Schema::hasTable('accounting_invoice_documents')) abort_if(DB::table('accounting_invoice_documents')->where('document_id', $id)->exists(), 409, 'Accounting source documents cannot be replaced through the generic document API.');
         return parent::update($request, $id);
     }

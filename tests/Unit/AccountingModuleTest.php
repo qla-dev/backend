@@ -454,19 +454,16 @@ class AccountingModuleTest extends TestCase
         self::assertSame(2, DB::table('accounting_entries')->count());
     }
 
-    public function test_outgoing_invoice_cannot_be_issued_twice_for_same_job(): void
+    public function test_job_supports_multiple_service_invoices_without_reissuing_a_document(): void
     {
-        $overrides = ['direction' => 'outgoing', 'items' => [['description' => 'Job', 'quantity' => '1', 'unit_price' => '1000', 'account_id' => 4, 'tax_rule_id' => 1, 'workspace_id' => 1]]];
-        $a = $this->posted($overrides);
-        $b = $this->draft($overrides);
-        $this->invoices->transition(1, 1, $b->id, 'submit', []);
-        $this->invoices->transition(1, 1, $b->id, 'approve', []);
-        try {
-            $this->invoices->transition(1, 1, $b->id, 'issue', []);
-            self::fail();
-        } catch (ValidationException $e) {
-            self::assertSame('draft', $b->fresh()->issuance_status);
-            self::assertSame(2, DB::table('accounting_settings')->where('company_id', 1)->value('next_invoice_number'));
-        }
+        $overrides = ['direction'=>'outgoing','items'=>[['description'=>'Job','quantity'=>'1','unit_price'=>'1000','account_id'=>4,'tax_rule_id'=>1,'workspace_id'=>1]]];
+        $a=$this->posted($overrides);$b=$this->draft($overrides);
+        $this->invoices->transition(1,1,$b->id,'submit',[]);
+        $this->invoices->transition(1,1,$b->id,'approve',[]);
+        $this->invoices->transition(1,1,$b->id,'issue',[]);
+        self::assertSame('issued',$b->fresh()->issuance_status);
+        self::assertNotSame($a->number,$b->fresh()->number);
+        $this->expectException(ValidationException::class);
+        $this->invoices->transition(1,1,$b->id,'issue',[]);
     }
 }

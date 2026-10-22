@@ -121,7 +121,7 @@ final class AccountingController extends Controller
             ->where('accounting_entries.company_id', $id)->selectRaw('account_id, SUM(debit) as debit, SUM(credit) as credit')->groupBy('account_id')->get();
 
         return $this->response(compact('settings', 'accounts', 'periods', 'rules', 'jobs', 'entries', 'bank', 'audit', 'balances') + [
-            'invoices' => $invoiceRows, 'allocations' => DB::table('accounting_payment_allocations')->where('company_id', $id)->get(),
+            'invoices' => $invoiceRows, 'allocations' => DB::table('accounting_payment_allocations')->where('company_id', $id)->get()->map(function ($a) use ($id) { $entry=DB::table('accounting_entries')->where('company_id',$id)->where('event_key','allocation:'.$a->id)->first(); $a->reversed=$entry && DB::table('accounting_entries')->where('company_id',$id)->where('reverses_entry_id',$entry->id)->exists(); return $a; }),
             'advances' => DB::table('accounting_advances')->where('company_id', $id)->get(),
             'estimates' => DB::table('accounting_cost_estimates')->where('company_id', $id)->get(),
             'deliveries' => DB::table('accounting_invoice_deliveries')->where('company_id', $id)->orderByDesc('id')->get(),
@@ -294,6 +294,14 @@ final class AccountingController extends Controller
 
             return DB::table('accounting_bank_transactions')->find($key);
         }), 201);
+    }
+
+    public function reverseAllocation(Request $r): JsonResponse
+    {
+        $id = $this->company($r, 'payments');
+        $this->company($r, 'post');
+        $data = $r->validate(['posting_date'=>['required','date_format:Y-m-d'], 'reason'=>['required','string','min:5','max:1000']]);
+        return $this->response($this->payments->reverseAllocation($id, $r->user()->id, (int) $r->route('allocation'), $data['posting_date'], $data['reason']));
     }
 
     public function allocate(Request $r): JsonResponse
