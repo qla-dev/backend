@@ -803,7 +803,8 @@ class LoadController extends CrudController
         $stops = $data['stops'] ?? [];
         unset($data['stops']);
         $load = DB::transaction(function () use ($request, $id, $data, $hasStops, $stops) {
-            $load = Load::query()->findOrFail($id);
+            $load = Load::query()->lockForUpdate()->findOrFail($id);
+            app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
             if (array_key_exists('status', $data) && $data['status'] !== $load->status) {
                 abort_unless($request->user()?->isSuperAdminOrMaster(), 403, 'Only a superadmin can change a load status.');
             }
@@ -851,6 +852,7 @@ class LoadController extends CrudController
         $canManageStatus = $canManageStatus || $isStorageOperator;
 
         $target = $data['status'] ?? null;
+        if($target&&$target!=='cancelled')app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
         $adminReversal = $role === 'superadmin' && $target !== null
             && \App\Services\LoadStatusProgression::isBackward($load->status, $target);
         if ($target !== null && $role !== 'superadmin' && \App\Services\LoadStatusProgression::isBackward($load->status, $target)) {

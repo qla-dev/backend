@@ -69,6 +69,7 @@ class OpsPantheonSync
             $orders = DB::table('ops_orders')->where('company_id', $companyId)->where('created_at', '>=', $state->push_orders_from ?? '9999-12-31')->orderBy('id')->get();
             $links = DB::table('ops_pantheon_links')->where('company_id', $companyId)->where('entity_type', 'order')->get()->keyBy('local_id');
             foreach ($orders as $order) {
+                if(app(OpsOrders::class)->intake($order)['kind']==='inquiry'){ $summary['waiting'][]=['order_id'=>$order->id,'reference'=>$order->reference,'problems'=>['inquiry_not_confirmed']];continue; }
                 $link = $links->get($order->id);
                 if ($link && (int) $link->local_revision >= (int) $order->revision) {
                     continue;

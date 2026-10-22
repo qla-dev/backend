@@ -70,6 +70,7 @@ class ChecklistStatusRequirements
 
     public function assertAllowed(Load $load): void
     {
+        if($load->status!=='cancelled')app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
         if (! in_array($load->status, self::GATED, true)) return;
         $reached = array_search($load->status, self::ORDER, true);
 
@@ -82,6 +83,7 @@ class ChecklistStatusRequirements
             throw ValidationException::withMessages(['status' => 'Complete the shipment workspace checklist before changing this status.']);
         }
         $items = $workspace?->operational_checklist ?? [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('ops_operational_state')&&($order=\Illuminate\Support\Facades\DB::table('ops_orders')->where('workspace_id',$workspace?->id)->first())) $items=app(\App\Services\OperationalCompliance::class)->read($order,false)['items'];
         if ($items === []) {
             throw ValidationException::withMessages([
                 'status' => 'Complete the shipment workspace checklist before changing this status.',
@@ -89,7 +91,7 @@ class ChecklistStatusRequirements
         }
 
         $pending = array_filter($items, fn (array $item): bool =>
-            array_search(self::category($item), self::ORDER, true) <= $reached
+            ($item['applicable']??true) && array_search(self::category($item), self::ORDER, true) <= $reached
             && ($item['status'] ?? 'pending') !== 'completed');
         if ($pending !== []) {
             throw ValidationException::withMessages([

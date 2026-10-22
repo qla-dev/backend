@@ -15,7 +15,7 @@ final class TransportFlow
     public function read(object $order): array
     {
         $flow = DB::table('ops_transport_flows')->where('company_id', $order->company_id)->where('order_id', $order->id)->first();
-        $mode = $flow?->transport_type ?? ($order->load_id ? DB::table('loads')->where('id', $order->load_id)->value('transport_type') : null) ?? 'road';
+        $mode = $flow?->transport_type ?? ($order->load_id ? DB::table('loads')->where('id', $order->load_id)->value('transport_type') : null) ?? (app(OpsOrders::class)->intake($order)['department'] ?: 'road');
         $state=DB::table('ops_operational_state')->where('order_id',$order->id)->first();
         $items=$order->workspace_id ? (\App\Models\ShipmentWorkspace::find($order->workspace_id)?->operational_checklist ?? []) : json_decode($state?->items ?? '[]',true);
         $legs=json_decode($flow?->legs ?? '[]',true);
@@ -29,7 +29,7 @@ final class TransportFlow
             'phases' => self::PHASES, 'modes' => self::MODES, 'active' => $flow !== null, 'checklist_revision' => (int) DB::table('ops_operational_state')->where('order_id',$order->id)->value('revision')];
     }
 
-    public function tasks(string $mode, array $legs, ?string $variant = null): array
+    public function tasks(string $mode, array $legs, ?string $variant = null, bool $verifiedSea = false): array
     {
         $items = [];
         foreach (self::PHASES as $key => $label) {
@@ -58,12 +58,12 @@ final class TransportFlow
                 'responsible_user_id'=>$leg['responsible_user_id'] ?? null, 'due_date'=>$leg['due_date'] ?? null, 'next_action'=>'Potvrditi preuzimanje, dionicu i dokumentaciju'];
         }
         foreach ($legs as $leg) {
-            foreach ($this->serviceTasks($leg) as $task) $items[] = $task;
+            foreach ($this->serviceTasks($leg, $verifiedSea) as $task) $items[] = $task;
         }
-        return $items;
+        return array_map(fn($item)=>$item+['plan_version'=>2],$items);
     }
 
-    private function serviceTasks(array $leg): array
+    private function serviceTasks(array $leg, bool $verifiedSea): array
     {
         $definitions = match ($leg['mode']) {
             'road' => [['carrier','Prijevoznik i vozilo',[]], ['cmr','CMR',['CMR']]],
@@ -74,7 +74,13 @@ final class TransportFlow
             'customs' => [['declaration','Deklaracija',['Carinska deklaracija']], ['release','Puštanje',['Carinsko puštanje']]],
             default => [],
         };
-        return array_map(fn($d) => ['key'=>'service_'.$leg['key'].'_'.$d[0], 'leg_key'=>$leg['key'], 'label'=>$d[1].' · '.$leg['from'].' → '.$leg['to'], 'phase'=>'transport', 'status'=>'pending', 'generated'=>true, 'required_documents'=>$d[2], 'responsible_user_id'=>$leg['responsible_user_id'] ?? null, 'due_date'=>$leg['due_date'] ?? null], $definitions);
+        if ($leg['mode'] === 'sea' && $verifiedSea) {
+            $definitions = [...$definitions,
+                ['booking_cutoff', 'Booking i terminalski cut-off', []],
+                ['si_vgm', 'Predaja SI i primjenjivog VGM', ['SI / VGM potvrda']],
+                ['arrival_release', 'Najava dolaska i preuzimanje kontejnera', ['Arrival notice / delivery order']]];
+        }
+        return array_map(fn($d) => ['verified_sea_only'=>in_array($d[0], ['booking_cutoff','si_vgm','arrival_release'], true), 'key'=>'service_'.$leg['key'].'_'.$d[0], 'leg_key'=>$leg['key'], 'label'=>$d[1].' · '.$leg['from'].' → '.$leg['to'], 'phase'=>'transport', 'status'=>'pending', 'generated'=>true, 'required_documents'=>$d[2], 'responsible_user_id'=>$leg['responsible_user_id'] ?? null, 'due_date'=>$leg['due_date'] ?? null], $definitions);
     }
 
     public function validateVariant(string $mode, ?string $variant): void
@@ -88,9 +94,24 @@ final class TransportFlow
             $ops = app(OperationalCompliance::class);
             $order = $ops->order($order->company_id, $order->id, true);
             abort_if($order->status === 'cancelled', 422, 'Otkazan nalog je samo za čitanje.');
+            if(collect($data['legs'])->contains(fn($leg)=>($leg['status']??'planned')!=='planned'))app(OpsOrders::class)->assertConfirmed($order);
             $this->validateVariant($data['transport_type'], $data['variant'] ?? null);
             foreach ($data['legs'] as $leg) $this->validateVariant($leg['mode'], $leg['variant'] ?? null);
             $before = $this->read($order);
+            if (collect($data['legs'])->contains(fn($leg)=>($leg['status']??'planned')!=='planned')) app(CargoReview::class)->assertUnblocked($order->load_id);
+            $actorUser = \App\Models\User::findOrFail($actor);
+            if (!app(OpsTaskAccess::class)->manages($actorUser, (int) $order->company_id)) {
+                abort_unless($before['transport_type'] === $data['transport_type'] && $before['variant'] === ($data['variant'] ?? null), 403);
+                foreach (['legs','transit'] as $group) {
+                    $previous = collect($before[$group])->keyBy('key');
+                    abort_unless(array_column($before[$group], 'key') === array_column($data[$group], 'key'), 403);
+                    foreach ($data[$group] as $entry) {
+                        $oldEntry = $previous[$entry['key']]; unset($oldEntry['document_hashes']);
+                        if ($oldEntry == $entry) continue;
+                        abort_unless((int) ($oldEntry['responsible_user_id'] ?? 0) === $actor && (int) ($entry['responsible_user_id'] ?? 0) === $actor, 403, 'Možete uređivati samo vlastitu uslugu.');
+                    }
+                }
+            }
             abort_unless(array_key_exists('checklist_revision', $data) && $data['checklist_revision'] === $before['checklist_revision'],409,'Operativni zadaci su izmijenjeni. Osvježite tok.');
             foreach ($before['legs'] as $previousLeg) {
                 if (in_array($previousLeg['key'],array_column($data['legs'],'key'),true)) continue;
@@ -126,7 +147,7 @@ final class TransportFlow
             $state = $ops->read($order);
             abort_if($data['checklist_revision'] !== $state['revision'],409,'Operativni zadaci su izmijenjeni. Osvježite tok.');
             $old = collect($state['items'])->keyBy('key');
-            $items = $this->tasks($data['transport_type'], $data['legs'], $data['variant'] ?? null);
+            $items = $this->tasks($data['transport_type'], $data['legs'], $data['variant'] ?? null, app(OpsTaskAccess::class)->verifiedSeaOrganizer($order));
             $template = DB::table('ops_checklist_versions')->where('company_id',$order->company_id)->where('transport_type',$data['transport_type'])
                 ->where('variant',$data['variant'] ?? null)->latest('version')->first();
             // Pin active jobs to their selected template; publishing a newer version affects new configurations only.
@@ -157,8 +178,9 @@ final class TransportFlow
             }
             unset($item);
             // Retain additional source shipment tasks; there is still one list, not a parallel OPS copy.
+            if(isset($state['context']['intake']))$items=array_values(array_filter($items,fn($item)=>$old->has($item['key'])));
             $keys = array_column($items, 'key');
-            foreach ($state['items'] as $item) if (!in_array($item['key'], $keys) && empty($item['generated'])) $items[] = $item;
+            foreach ($state['items'] as $item) if (!in_array($item['key'], $keys) && (empty($item['generated']) || !empty($item['verified_sea_only']) || !empty($item['optional_selected']) || !empty($item['controlled']))) $items[] = $item;
             if ($order->workspace_id) {
                 $workspace = \App\Models\ShipmentWorkspace::whereKey($order->workspace_id)->lockForUpdate()->firstOrFail();
                 $workspace->update(['operational_checklist'=>$items]);

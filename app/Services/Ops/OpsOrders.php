@@ -168,6 +168,70 @@ class OpsOrders
         });
     }
 
+    public const INTAKE_OPERATIONS = ['booking'=>'Order confirmation','goods_documents'=>'Cargo and documents','pickup'=>'Pickup coordination','transport'=>'Transport execution','cmr'=>'CMR / consignment note','delivery'=>'Delivery / proof of delivery','customs_export'=>'Export customs clearance','customs_import'=>'Import customs clearance','transit'=>'Transit / NCTS'];
+
+    /** Source and lifecycle metadata share the canonical operational state, never a duplicate booking. */
+    public function intake(object $order): array
+    {
+        if(!Schema::hasTable('ops_operational_state'))return ['kind'=>'order','source'=>$order->workspace_id?'marketplace':'manual','department'=>null];
+        $context = json_decode(DB::table('ops_operational_state')->where('order_id',$order->id)->value('context') ?? '{}',true);
+        return $context['intake'] ?? ['kind'=>'order','source'=>$order->workspace_id ? 'marketplace' : 'manual','department'=>null];
+    }
+
+    public function assertConfirmed(object $order): void
+    {
+        abort_if($this->intake($order)['kind']==='inquiry',422,'Confirm this inquiry as a transport order before starting operations.');
+    }
+
+    public function register(int $company, int $actor, array $data): object
+    {
+        return DB::transaction(function() use($company,$actor,$data) {
+            $documents=DB::table('documents')->whereIn('id',$data['document_ids']??[])->get();
+            abort_unless($documents->count()===count($data['document_ids']??[]),422,'An imported document is unavailable.');
+            foreach($documents as $doc) abort_unless((int)$doc->uploaded_by_user_id===$actor && empty($doc->load_id) && empty($doc->vehicle_id) && empty($doc->user_id) && empty($doc->load_draft_id),403,'Use transport documents from your own archive.');
+            abort_if(($data['source']??'manual')==='external' && $documents->isEmpty(),422,'Attach the external transport order.');
+            if(!empty($data['cmr_document_id'])) abort_unless(in_array($data['cmr_document_id'],$data['document_ids']??[],true),422,'Select an attached CMR document.');
+            $link=null;
+            if(!empty($data['customer_link_id'])) {
+                $type=$data['customer_link_type'];
+                $query=DB::table(match($type){'partner'=>'accounting_partners','customer'=>'customers','company'=>'companies'})->where('id',$data['customer_link_id']);
+                if($type==='partner')$query->where('company_id',$company);
+                $linked=$query->first() ?? abort(422,'Customer record is unavailable.');
+                $data['customer_name']=$type==='customer' ? ($linked->company_name ?: DB::table('users')->where('id',$linked->user_id)->value('name')) : $linked->name;
+                if($type==='partner')$data['customer_partner_id']=$linked->id;
+                $link=['type'=>$type,'id'=>(int)$linked->id];
+            }
+            $order=$this->create($company,$actor,$data);
+            $metadata=['kind'=>$data['kind']??'order','source'=>$data['source']??'manual','department'=>$data['department']??'road','external_reference'=>$data['external_reference']??null,
+                'customer_link'=>$link,'cargo'=>$data['cargo']??[],'route'=>$data['route']??[],'document_ids'=>$data['document_ids']??[],'cmr_document_id'=>$data['cmr_document_id']??null,'reviewed_by'=>$actor,'reviewed_at'=>now()->toIso8601String()];
+            $items=[];
+            foreach($data['operations']??['booking','goods_documents','pickup','transport','delivery'] as $key) $items[]=['key'=>$key,'label'=>self::INTAKE_OPERATIONS[$key], 'status'=>'pending','plan_version'=>2,'optional_selected'=>true,'source'=>'selected_intake','responsible_user_id'=>$data['responsible_user_id']??$actor,'audience'=>'provider','required_documents'=>$key==='cmr'?['CMR']:[]];
+            $state=DB::table('ops_operational_state')->where('order_id',$order->id)->first();
+            $context=json_decode($state->context??'{}',true);$context['intake']=$metadata;
+            DB::table('ops_operational_state')->where('order_id',$order->id)->update(['context'=>json_encode($context),'items'=>json_encode($items),'revision'=>1,'updated_at'=>now()]);
+            foreach($documents as $doc) DB::table('ops_order_documents')->insert(['order_id'=>$order->id,'document_id'=>$doc->id,'role'=>(int)($data['cmr_document_id']??0)===(int)$doc->id?'cmr':'external_order','created_at'=>now()]);
+            app(\App\Services\OperationalCompliance::class)->audit($company,'ops_order',$order->id,$actor,'intake_reviewed',null,$metadata);
+            return $order;
+        });
+    }
+
+    public function confirmInquiry(int $company,int $actor,int $id,int $revision): object
+    {
+        return DB::transaction(function()use($company,$actor,$id,$revision){
+            $order=app(\App\Services\OperationalCompliance::class)->order($company,$id,true);
+            abort_unless(app(OpsTaskAccess::class)->manages(\App\Models\User::findOrFail($actor),$company)||(int)$order->responsible_user_id===$actor,403);
+            abort_if($order->workspace_id||in_array($order->status,['closed','cancelled'],true),422,'This record cannot be converted.');
+            abort_unless((int)$order->revision===$revision,409,'The inquiry changed. Refresh before confirming.');
+            $state=DB::table('ops_operational_state')->where('order_id',$id)->first();$context=json_decode($state->context??'{}',true);
+            abort_unless(($context['intake']['kind']??'order')==='inquiry',422,'This record is already a confirmed order.');
+            $context['intake']['kind']='order';$context['intake']['confirmed_by']=$actor;$context['intake']['confirmed_at']=now()->toIso8601String();
+            DB::table('ops_operational_state')->where('order_id',$id)->update(['context'=>json_encode($context),'revision'=>$state->revision+1,'updated_at'=>now()]);
+            DB::table('ops_orders')->where('id',$id)->update(['revision'=>$order->revision+1,'updated_at'=>now()]);
+            app(\App\Services\OperationalCompliance::class)->audit($company,'ops_order',$id,$actor,'inquiry_confirmed',null,$context['intake']);
+            return DB::table('ops_orders')->find($id);
+        });
+    }
+
     public function saveItem(int $companyId, int $actor, int $orderId, array $data): object
     {
         return DB::transaction(function () use ($companyId, $actor, $orderId, $data) {
@@ -217,6 +281,8 @@ class OpsOrders
     {
         return DB::transaction(function () use ($companyId, $actor, $orderId, $data) {
         $order = $this->editable($companyId, $orderId);
+        if($data['event_type']!=='note')$this->assertConfirmed($order);
+        if(in_array($data['event_type'],['dispatched','loaded','border','customs_cleared','delivered','pod'],true))app(CargoReview::class)->assertUnblocked($order->load_id);
         if (! empty($data['document_id'])) {
             DB::table('ops_order_documents')->insert(['order_id' => $orderId, 'role' => $data['event_type'] === 'pod' ? 'pod' : 'attachment', 'document_id' => $data['document_id'], 'created_at' => now()]);
         }
@@ -237,6 +303,7 @@ class OpsOrders
         return DB::transaction(function () use ($companyId, $actor, $orderId) {
             DB::table('accounting_settings')->where('company_id', $companyId)->lockForUpdate()->first();
             $order = DB::table('ops_orders')->where('company_id', $companyId)->where('id', $orderId)->lockForUpdate()->first() ?? abort(404);
+            $this->assertConfirmed($order);
             $this->ledger->require($order->status !== 'cancelled', 'Otkazan nalog nije moguće završiti.');
             if ($order->workspace_id) $this->ledger->require(DB::table('shipment_workspace')->where('id',$order->workspace_id)->value('status') === 'completed','Prvo završite pošiljku.');
             $settlement = app(TransportSettlement::class)->read($order);

@@ -56,10 +56,15 @@ final class TransportSettlement
         }
         $payment = !$active ? 'uninvoiced' : ($draft ? 'unposted' : ($allPaid ? 'paid' : ($paidAny ? 'partial' : 'unpaid')));
         $problems = [];
+        if(app(OpsOrders::class)->intake($order)['kind']==='inquiry')$problems[]='inquiry_not_confirmed';
         if (!$delivered) $problems[] = 'delivery_not_confirmed';
         if ($payment !== 'paid') $problems[] = 'payment_'.$payment;
         if ($currencyMismatch) $problems[] = 'invoice_currency_review';
         if ($order->agreed_revenue !== null && bccomp($coverage, (string) $order->agreed_revenue, 2) < 0) $problems[] = 'incomplete_billing';
+        if($order->workspace_id&&$order->agreed_revenue!==null&&bccomp($coverage,(string)$order->agreed_revenue,2)>0){
+            $charges=json_decode(DB::table('shipment_workspace')->where('id',$order->workspace_id)->value('additional_charges')??'[]',true);
+            if(collect($charges)->contains(fn($charge)=>($charge['source']??'')==='cargo_reconciliation'))$problems[]='billing_amendment_review';
+        }
         $problems = array_merge($problems, app(\App\Services\OperationalCompliance::class)->blockers($order));
         if ($order->workspace_id && !DB::table('ops_events')->where('order_id',$order->id)->where('event_type','pod')->exists() && !DB::table('ops_order_documents')->where('order_id',$order->id)->where('role','pod')->exists()) $problems[]='missing_pod';
         return ['transport' => $delivered ? 'delivered' : (in_array($order->status, ['in_progress','partially_closed']) ? 'in_progress' : 'planned'),

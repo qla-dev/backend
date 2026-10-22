@@ -100,13 +100,24 @@ class ShipmentWorkspaceController extends Controller
 
         if (array_key_exists('operational_checklist', $data)) {
             $isAssignedDriver = (int) $record->freightLoad?->assigned_driver_user_id === (int) $user->id;
-            abort_unless($isProvider || $isAdmin || $isAssignedDriver, 403, 'Only the selected provider or assigned driver can update the operational checklist.');
+            abort_unless($isCustomer || $isProvider || $isAdmin || $isAssignedDriver, 403, 'Only the selected provider or assigned driver can update the operational checklist.');
             // Keep every task and enforce fixed categories, including for older clients.
             $existing = collect($record->operational_checklist)->keyBy('key');
             $updates = collect($data['operational_checklist'])->map(fn ($item) => array_intersect_key($item, array_flip(['key','status','due_date','action_value'])))->keyBy('key');
             abort_if($updates->keys()->diff($existing->keys())->isNotEmpty(), 422, 'Unknown checklist item.');
             foreach ($updates as $key => $update) {
                 $previous = $existing->get($key);
+                abort_if(!empty($previous['controlled']),422,'Use the cargo / price amendment workflow for this task.');
+                if (($update['status']??'')==='completed') app(\App\Services\Ops\CargoReview::class)->assertUnblocked($record->load_id);
+                $changed = collect($update)->contains(fn ($value, $field) => $value != ($previous[$field] ?? null));
+                if (!$changed) continue;
+                abort_if(in_array($record->status, ['completed','cancelled'], true) || \Illuminate\Support\Facades\DB::table('ops_orders')->where('workspace_id',$record->id)->whereIn('status',['closed','cancelled'])->exists(),422,'Završen nalog prvo ponovo otvorite za pregled.');
+                $customerTask = in_array($key, \App\Services\Ops\OpsTaskAccess::CUSTOMER_KEYS, true);
+                abort_unless($isAdmin || ($customerTask ? $isCustomer : ($isProvider || ($isAssignedDriver && in_array($key, ['confirm_pickup_time','cmr_and_documents','proof_of_delivery','vehicle_return'], true)))), 403, 'Ovu radnju potvrđuje odgovorna strana pošiljke.');
+                if (!$isAdmin && !$customerTask && $record->provider_company_id && !$isAssignedDriver) {
+                    $taskAccess = app(\App\Services\Ops\OpsTaskAccess::class);
+                    abort_unless((int) ($previous['responsible_user_id'] ?? $record->provider_user_id) === (int) $user->id, 403, 'Možete uređivati samo vlastita zaduženja.');
+                }
                 abort_if(!empty($previous['system']) && ($update['status'] ?? '') !== ($previous['status'] ?? ''),422,'Isporuku i naplatu potvrđuje sistem.');
                 abort_if(!empty($previous['required_documents']) && ($update['status'] ?? '') === 'completed' && ($previous['status'] ?? '') !== 'completed',422,'Potvrdite dokumente kroz operativni pregled naloga.');
                 if ((($update['status'] ?? '') === 'completed' && ($previous['status'] ?? '') !== 'completed')
@@ -130,6 +141,7 @@ class ShipmentWorkspaceController extends Controller
                 })->values()->all()
             );
         }
+        if ((isset($data['status'])&&$data['status']!=='cancelled') || array_key_exists('offer_status',$request->all())) app(\App\Services\Ops\CargoReview::class)->assertUnblocked($record->load_id);
         if (isset($data['status'])) {
             $allowed = $isAdmin
                 || ($isProvider && in_array($data['status'], ['in_execution', 'completed', 'cancelled'], true))
@@ -146,14 +158,23 @@ class ShipmentWorkspaceController extends Controller
         if (array_key_exists('additional_charges', $data)) {
             // The original bid amount already includes its approved bid lines. Only workspace
             // additions increment the agreed amount after customer approval.
-            $increment = collect($data['additional_charges'])->filter(fn (array $charge) => ($charge['source'] ?? '') === 'workspace' && ($charge['approved'] ?? false))->sum('rate');
-            $base = (float) $record->acceptedOffer?->amount;
+            $increment = collect($data['additional_charges'])->filter(fn (array $charge) => in_array($charge['source'] ?? '', ['workspace','cargo_reconciliation'],true) && ($charge['approved'] ?? false))->sum('rate');
+            $base = (float) ($record->acceptedOffer?->amount ?? $record->offer_snapshot['amount'] ?? 0);
             $record->update(['agreed_amount' => $base + $increment]);
+            \Illuminate\Support\Facades\DB::table('ops_orders')->where('workspace_id',$record->id)->update(['agreed_revenue'=>$record->agreed_amount,'updated_at'=>now()]);
         }
         $record->load($this->relations());
 
         return response()->json(['message' => 'Shipment workspace updated successfully.', 'data' => (new EntityResource($record))->resolve($request), 'meta' => [], 'errors' => []]);
         }, 3);
+    }
+
+    public function cargoReview(Request $request, ShipmentWorkspace $shipmentWorkspace): JsonResponse
+    {
+        // The service checks exact customer identity or authorized provider assignment.
+        $order=\Illuminate\Support\Facades\DB::table('ops_orders')->where('workspace_id',$shipmentWorkspace->id)->first() ?? abort(404);
+        $service=app(\App\Services\Ops\CargoReview::class);
+        return response()->json(['data'=>$request->isMethod('get')?$service->read($order,$request->user()):$service->act($order,$request->user(),$request->validate($service::rules()))]);
     }
 
     private function visibleQuery(Request $request): Builder

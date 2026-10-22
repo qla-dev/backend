@@ -108,6 +108,8 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::patch('ops/orders/{order}/transport-flow', [\App\Http\Controllers\Api\TransportFlowController::class, 'save'])->whereNumber('order');
         Route::get('ops/checklist-versions', 'templates');
         Route::post('ops/checklist-versions', 'templates');
+        Route::match(['get','post'],'ops/orders/{order}/cargo-review','cargoReview')->whereNumber('order');
+        Route::post('ops/orders/{order}/optional-tasks','optionalTasks')->whereNumber('order');
         Route::get('ops/orders/{order}/compliance', 'show')->whereNumber('order');
         Route::patch('ops/orders/{order}/checklist', 'checklist')->whereNumber('order');
         Route::post('ops/orders/{order}/inspections', 'inspection')->whereNumber('order');
@@ -190,6 +192,9 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
     Route::prefix('accounting/{company}/ops')->whereNumber('company')->controller(\App\Http\Controllers\Api\OpsController::class)->group(function (): void {
         Route::get('', 'overview');
         Route::post('orders', 'store');
+        Route::get('intake-options', 'intakeOptions');
+        Route::post('intake-scan', 'scanIntake')->middleware('throttle:10,1');
+        Route::post('orders/{order}/confirm', 'confirmInquiry')->whereNumber('order');
         Route::get('orders/{order}', 'show')->whereNumber('order');
         Route::patch('orders/{order}', 'update')->whereNumber('order');
         Route::post('orders/{order}/work', 'work')->whereNumber('order');
@@ -360,6 +365,7 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         ->middleware('role:user,driver,company,manager,dispatcher,customs_officer,superadmin,master');
     Route::get('shipment-workspaces', [ShipmentWorkspaceController::class, 'index']);
     Route::get('shipment-workspaces/{shipmentWorkspace}', [ShipmentWorkspaceController::class, 'show']);
+    Route::match(['get','post'],'shipment-workspaces/{shipmentWorkspace}/cargo-review',[ShipmentWorkspaceController::class,'cargoReview']);
     Route::patch('shipment-workspaces/{shipmentWorkspace}', [ShipmentWorkspaceController::class, 'update']);
 
     // Workspace checklist searches are available to every authenticated role.

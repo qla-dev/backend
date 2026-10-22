@@ -42,6 +42,7 @@ final class OperationalCompliance
         if (!\Illuminate\Support\Facades\Schema::hasTable('ops_operational_state')) return [];
         try { $this->assertClosable($order); return []; }
         catch (ValidationException $e) { return array_keys($e->errors()); }
+        catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { if($e->getStatusCode()===409)return ['cargo_review'];throw $e; }
     }
 
     public function assertClosable(object $order): void
@@ -50,6 +51,7 @@ final class OperationalCompliance
         // historic orders merely because the migration was installed.
         if (!DB::table('ops_operational_state')->where('order_id', $order->id)->exists()) return;
         $state = $this->read($order, false);
+        app(\App\Services\Ops\CargoReview::class)->assertUnblocked($order->load_id);
         foreach ($state['items'] as $item) {
             if (($item['key'] ?? '') === 'financial_review') continue;
             if (empty($item['system']) && ($item['applicable'] ?? true) && !in_array($item['status'] ?? '', ['completed','not_applicable'], true)) {
@@ -124,9 +126,16 @@ final class OperationalCompliance
             $item['applicable'] = collect($item['applies_when'] ?? [])->every(fn ($condition) => ($context[$condition] ?? false) === true);
             return $item;
         }, $items);
+        if($workspace)foreach($items as &$item){
+            if(empty($item['responsible_user_id'])&&($item['assignment_source']??'')!=='manual'){
+                $customer=in_array($item['key'],\App\Services\Ops\OpsTaskAccess::CUSTOMER_KEYS,true)||($item['audience']??'')==='customer';
+                $item['responsible_user_id']=$customer?$workspace->customer_user_id:$workspace->provider_user_id;
+                $item['assignment_source']='accepted_offer';
+            }
+        }unset($item);
         return ['revision' => (int) ($state?->revision ?? 0), 'fingerprint' => $fingerprint, 'template_version' => $template?->version ?? 'builtin-1',
             'source' => $workspace ? 'shipment_workspace' : 'ops_order', 'context' => $context,
-            'items' => $items, 'workspace_id' => $order->workspace_id];
+            'items' => app(\App\Services\Ops\OperationsPlan::class)->project($items, \Illuminate\Support\Facades\Schema::hasTable('ops_transport_flows') ? (DB::table('ops_transport_flows')->where('order_id',$order->id)->value('transport_type') ?? ($workspace?->load_snapshot['transport_type'] ?? 'road')) : ($workspace?->load_snapshot['transport_type'] ?? 'road'), $context), 'workspace_id' => $order->workspace_id];
     }
 
     public function update(int $company, int $id, int $actor, array $data): array
@@ -139,7 +148,10 @@ final class OperationalCompliance
             abort_unless($data['revision'] === $before['revision'], 409, 'Podaci su izmijenjeni. Osvježite nalog.');
             abort_unless(hash_equals($before['fingerprint'], $data['fingerprint']), 409, 'Shipment checklista je izmijenjena. Osvježite nalog.');
             $items = collect($before['items'])->keyBy('key');
-            $context = $data['context'] ?? $before['context'];
+            $context = array_replace($before['context'], $data['context'] ?? []);
+            $user = \App\Models\User::findOrFail($actor);
+            $access = app(\App\Services\Ops\OpsTaskAccess::class);
+            abort_if($context !== $before['context'] && !$access->manages($user, $company), 403, 'Samo voditelj operative mijenja uslove naloga.');
             if ($context !== $before['context']) {
                 $items = $items->map(function ($item) {
                     if (($item['status'] ?? '') === 'completed') {
@@ -151,12 +163,19 @@ final class OperationalCompliance
                 });
             }
             foreach ($data['items'] ?? [] as $update) {
+                if(in_array($update['status']??'pending',['in_progress','completed','waiting_external'],true))app(\App\Services\Ops\OpsOrders::class)->assertConfirmed($order);
                 $key = $update['key'];
                 abort_unless($items->has($key), 422, 'Nepoznata stavka checkliste.');
                 $old = $items[$key];
+                abort_if(!empty($old['controlled']),422,'Use the cargo / price amendment workflow for this task.');
+                if (($update['status']??'')==='completed') app(\App\Services\Ops\CargoReview::class)->assertUnblocked($order->load_id);
+                // Validate against stored assignment, never the assignment supplied by the caller.
+                if (empty($old['system']) && ($old['applicable'] ?? true)) abort_unless($access->canEdit($user, $order, $old), 403, 'Možete uređivati samo vlastita zaduženja.');
+                abort_if(!$access->manages($user, $company) && (int) ($update['responsible_user_id'] ?? $old['responsible_user_id'] ?? 0) !== (int) ($old['responsible_user_id'] ?? 0), 403, 'Zaduženja dodjeljuje voditelj operative.');
                 abort_if(!empty($old['system']), 422, 'Ovu stavku potvrđuje isporuka ili postojeće računovodstvo.');
                 abort_unless(collect($old['applies_when'] ?? [])->every(fn ($condition) => ($context[$condition] ?? false) === true), 422, 'Stavka nije primjenjiva u ovom kontekstu.');
                 $item = array_merge($old, $update);
+                if(array_key_exists('responsible_user_id',$update))$item['assignment_source']='manual';
                 $this->member($company, $item['responsible_user_id'] ?? null);
                 $item['updated_by'] = $actor; $item['updated_at'] = now()->toIso8601String();
                 if (in_array($item['status'], ['blocked', 'not_applicable'], true)) {
@@ -186,7 +205,7 @@ final class OperationalCompliance
                 }
                 $items[$key] = $item;
             }
-            $values = $items->values()->all();
+            $values = app(\App\Services\Ops\OperationsPlan::class)->withRequirements($items->values()->all(),['requires_adr'=>$context['dangerous_goods']??false,'temperature_min'=>!empty($context['temperature_controlled'])?0:null],$order->responsible_user_id??$actor);
             if ($order->workspace_id) ShipmentWorkspace::findOrFail($order->workspace_id)->update(['operational_checklist' => $values]);
             $template = DB::table('ops_checklist_versions')->where('company_id', $company)->latest('version')->first();
             $oldState = DB::table('ops_operational_state')->where('order_id', $id)->first();

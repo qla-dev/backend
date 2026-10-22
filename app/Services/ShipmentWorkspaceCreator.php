@@ -59,7 +59,7 @@ class ShipmentWorkspaceCreator
                 'source' => 'accepted_bid',
             ])->values()->all(),
             'parties_snapshot' => $this->partiesSnapshot($load, $offer),
-            'operational_checklist' => $this->checklist($load->for_storage ? 'warehouse' : (string) $load->transport_type),
+            'operational_checklist' => app(\App\Services\Ops\OperationsPlan::class)->booking($load,$offer,(int)($offer->created_by_user_id?:$providerUserId)),
             'booked_at' => now(),
         ]);
 
@@ -93,6 +93,7 @@ class ShipmentWorkspaceCreator
             'for_storage' => $load->for_storage,
             'cargo_type' => $load->cargo_type,
             'goods_type' => $load->goods_type,
+            'requirements' => $load->only(['requires_adr','temperature_min','temperature_max','customs_required','requires_customs_bonded','inspection_services_required','certification_required']),
             'weight_kg' => $load->weight_kg,
             'dimensions' => ['length_m' => $load->length_m, 'width_m' => $load->width_m, 'height_m' => $load->height_m],
             'stops' => $load->stops->map->only(['type', 'position', 'city', 'country_code', 'address', 'window_starts_at', 'window_ends_at'])->values()->all(),

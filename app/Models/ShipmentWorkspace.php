@@ -14,6 +14,7 @@ class ShipmentWorkspace extends BaseModel
     {
         $items = is_array($value) ? $value : (json_decode($value ?? '[]', true) ?: []);
         $snapshot = $this->load_snapshot ?? [];
+        if (collect($items)->contains(fn($item)=>($item['plan_version']??0)===2)) return \App\Services\ChecklistStatusRequirements::withCategories(app(\App\Services\Ops\OperationsPlan::class)->project($items,$snapshot['transport_type']??'road'));
         $isStorage = ($snapshot['transport_type'] ?? '') === 'warehouse' || !empty($snapshot['for_storage']);
         // Older storage bookings inherited the road checklist. Adapt untouched lists
         // on read; retain any list with recorded work instead of discarding progress.

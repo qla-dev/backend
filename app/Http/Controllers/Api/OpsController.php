@@ -38,6 +38,7 @@ final class OpsController extends Controller
             ->when($f['search'] ?? null, fn ($q, $s) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$s.'%')->orWhere('title', 'like', '%'.$s.'%')->orWhere('customer_name', 'like', '%'.$s.'%')))
             ->orderByDesc('id')->limit(300)->get();
         foreach ($orders as $o) {
+            $o->intake=$this->orders->intake($o);
             $o->settlement = app(\App\Services\Ops\TransportSettlement::class)->read($o);
             $o->transport_type = DB::table('ops_transport_flows')->where('order_id', $o->id)->value('transport_type') ?? 'road';
         }
@@ -53,6 +54,7 @@ final class OpsController extends Controller
     {
         $id = $this->company($r);
         $order = DB::table('ops_orders')->where('company_id', $id)->where('id', $r->route('order'))->first() ?? abort(404);
+        $order->intake=$this->orders->intake($order);
         $items = DB::table('ops_order_items')->where('order_id', $order->id)->orderBy('position')->get();
 
         return $this->response(['order' => $order, 'items' => [],
@@ -70,10 +72,50 @@ final class OpsController extends Controller
         $id = $this->company($r);
         $data = $r->validate(['title' => ['required', 'string', 'max:255'], 'template_id' => ['prohibited'], 'customer_partner_id' => ['nullable', 'integer'],
             'customer_name' => ['nullable', 'string', 'max:255'], 'responsible_user_id' => ['nullable', 'integer'], 'currency' => ['prohibited'],
-            'agreed_revenue' => ['prohibited'], 'planned_start_at' => ['nullable', 'date'], 'planned_end_at' => ['nullable', 'date'], 'note' => ['nullable', 'string', 'max:5000']]);
+            'agreed_revenue' => ['prohibited'], 'planned_start_at' => ['nullable', 'date'], 'planned_end_at' => ['nullable', 'date'], 'note' => ['nullable', 'string', 'max:5000'],
+            'kind'=>['sometimes',Rule::in(['order','inquiry'])],'source'=>['sometimes',Rule::in(['manual','external'])],
+            'department'=>['sometimes',Rule::in(\App\Services\Ops\TransportFlow::MODES)],'external_reference'=>['nullable','string','max:120'],
+            'customer_link_type'=>['required_with:customer_link_id',Rule::in(['partner','customer','company'])],'customer_link_id'=>['nullable','integer','min:1'],
+            'operations'=>['sometimes','array','min:1'],'operations.*'=>['string','distinct',Rule::in(array_keys(OpsOrders::INTAKE_OPERATIONS))],
+            'document_ids'=>['sometimes','array','max:10'],'document_ids.*'=>['integer','distinct'],'cmr_document_id'=>['nullable','integer'],
+            'route'=>['sometimes','array:from,to'],'route.from'=>['nullable','string','max:255'],'route.to'=>['nullable','string','max:255'],
+            'cargo'=>['sometimes','array:goods_type,weight_kg,volume_m3,pallets'],'cargo.goods_type'=>['nullable','string','max:255'],
+            'cargo.weight_kg'=>['nullable','numeric','min:0'],'cargo.volume_m3'=>['nullable','numeric','min:0'],'cargo.pallets'=>['nullable','integer','min:0']]);
 
         $this->schedule($data['planned_start_at'] ?? null, $data['planned_end_at'] ?? null);
-        return $this->response($this->orders->create($id, $r->user()->id, $data), 201);
+        return $this->response($this->orders->register($id, $r->user()->id, $data), 201);
+    }
+
+    public function intakeOptions(Request $r): JsonResponse
+    {
+        $company=$this->company($r);$data=$r->validate(['search'=>['nullable','string','max:100']]);$term=trim($data['search']??'');
+        $options=DB::table('accounting_partners')->where('company_id',$company)->when($term,fn($q)=>$q->where('name','like','%'.$term.'%'))->orderBy('name')->limit(20)->get(['id','name'])->map(fn($v)=>['id'=>$v->id,'name'=>$v->name,'type'=>'partner'])->all();
+        if(mb_strlen($term)>=2){
+            foreach(DB::table('companies')->where('name','like','%'.$term.'%')->orderBy('name')->limit(15)->get(['id','name']) as $v)$options[]=['id'=>$v->id,'name'=>$v->name,'type'=>'company'];
+            foreach(DB::table('customers')->where('company_name','like','%'.$term.'%')->orderBy('company_name')->limit(15)->get(['id','company_name']) as $v)$options[]=['id'=>$v->id,'name'=>$v->company_name,'type'=>'customer'];
+        }
+        return $this->response(['customers'=>$options,'operations'=>OpsOrders::INTAKE_OPERATIONS,'documents'=>DB::table('documents')->where('uploaded_by_user_id',$r->user()->id)->whereNull('load_id')->whereNull('vehicle_id')->whereNull('user_id')->whereNull('load_draft_id')->where('type','CMR')->latest('id')->limit(20)->get(['id','name'])]);
+    }
+
+    public function scanIntake(Request $r): JsonResponse
+    {
+        $this->company($r);$data=$r->validate(['document_id'=>['required','integer']]);
+        $doc=DB::table('documents')->where('id',$data['document_id'])->where('uploaded_by_user_id',$r->user()->id)->first()??abort(404);
+        abort_if(!empty($doc->load_id)||!empty($doc->vehicle_id)||!empty($doc->user_id)||!empty($doc->load_draft_id),403,'Use your own archive document.');
+        $disk=\Illuminate\Support\Facades\Storage::disk('local');$path='documents/'.$doc->path;
+        abort_unless($disk->exists($path),422,'The source document is unavailable.');
+        abort_if($disk->size($path)>10*1024*1024,422,'Scanning supports files up to 10 MB.');
+        $mime=$disk->mimeType($path);
+        abort_unless(in_array($mime,['application/pdf','image/jpeg','image/png','image/webp','text/plain'],true),422,'Use PDF, an image, or plain text for scanning. Other files can be attached and entered manually.');
+        abort_unless(config('services.openrouter.api_key'),503,'Document scanning is unavailable. The file is saved; enter and review the data manually.');
+        $scan=app(\App\Services\OpenRouterLoadScanner::class)->scan([['filename'=>$doc->name,'mimeType'=>$mime,'base64'=>base64_encode($disk->get($path))]]);
+        return $this->response(['scan'=>$scan,'requires_review'=>true]);
+    }
+
+    public function confirmInquiry(Request $r): JsonResponse
+    {
+        $company=$this->company($r);$data=$r->validate(['revision'=>['required','integer','min:0']]);
+        return $this->response($this->orders->confirmInquiry($company,$r->user()->id,(int)$r->route('order'),$data['revision']));
     }
 
     public function update(Request $r): JsonResponse
@@ -85,6 +127,7 @@ final class OpsController extends Controller
         return DB::transaction(function () use ($id, $data, $r) {
         if (array_key_exists('responsible_user_id', $data)) app(\App\Services\OperationalCompliance::class)->member($id, $data['responsible_user_id']);
         $order = DB::table('ops_orders')->where('company_id', $id)->where('id', $r->route('order'))->lockForUpdate()->first() ?? abort(404);
+        if(isset($data['status'])&&$data['status']!=='open')$this->orders->assertConfirmed($order);
         abort_if(in_array($order->status, ['closed', 'cancelled'], true), 422, 'A closed or cancelled work order cannot be changed.');
         $this->schedule(array_key_exists('planned_start_at',$data) ? $data['planned_start_at'] : $order->planned_start_at, array_key_exists('planned_end_at',$data) ? $data['planned_end_at'] : $order->planned_end_at);
         DB::table('ops_orders')->where('id', $order->id)->update($data + ['revision' => $order->revision + 1, 'updated_at' => now()]);
@@ -106,6 +149,7 @@ final class OpsController extends Controller
     {
         $id = $this->company($r);
         $data = $r->validate(['event_type' => ['required', Rule::in(OpsOrders::EVENTS)], 'occurred_at' => ['nullable', 'date'], 'note' => ['nullable', 'string', 'max:500'], 'document_id' => ['nullable', 'integer']]);
+        if(in_array($data['event_type'],['dispatched','loaded','border','customs_cleared','delivered','pod'],true))app(\App\Services\Ops\CargoReview::class)->assertUnblocked(app(\App\Services\OperationalCompliance::class)->order($id,(int)$r->route('order'))->load_id);
         if (! empty($data['document_id'])) {
             abort_unless(DB::table('documents')->where('id', $data['document_id'])->where('uploaded_by_user_id', $r->user()->id)->exists(), 422, 'Attach a document you uploaded.');
         }

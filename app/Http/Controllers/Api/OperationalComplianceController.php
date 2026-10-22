@@ -41,18 +41,69 @@ final class OperationalComplianceController extends Controller
         return [$company, $manage];
     }
 
+    private function optionalCatalog(object $order): array
+    {
+        $catalog=\App\Services\Ops\OperationsPlan::EXTRA;
+        if(!$order->workspace_id){
+            unset($catalog['cargo_documents']);
+            foreach(\App\Services\Ops\OpsOrders::INTAKE_OPERATIONS as $key=>$label)$catalog[$key]=[$label,null];
+        }
+        return $catalog;
+    }
+
     public function show(Request $r)
     {
         $company = $this->company($r);
         $order = $this->ops->order($company, (int) $r->route('order'));
-        return $this->response(['checklist' => $this->ops->read($order),
-            'inspections' => DB::table('ops_inspection_cases')->where('company_id', $company)->where('order_id', $order->id)->get()->map(fn ($x) => $this->decodeCase($x)),
-            'documents' => DB::table('ops_order_documents')->join('documents', 'documents.id', '=', 'ops_order_documents.document_id')
-                ->where('ops_order_documents.order_id', $order->id)->get(['documents.id', 'documents.name'])->unique('id')->values(),
+        return $this->response(['optional_catalog'=>$this->optionalCatalog($order),'checklist' => app(\App\Services\Ops\OpsTaskAccess::class)->project($r->user(), $order, $this->ops->read($order)),
+            'inspections' => DB::table('ops_inspection_cases')->where('company_id', $company)->where('order_id', $order->id)->when(!app(\App\Services\Ops\OpsTaskAccess::class)->manages($r->user(), $company), fn($q)=>$q->where('responsible_user_id',$r->user()->id))->get()->map(fn ($x) => $this->decodeCase($x)),
+            'documents' => Document::query()->where(function ($q) use ($order) {
+                $q->whereIn('id', DB::table('ops_order_documents')->where('order_id',$order->id)->whereNotNull('document_id')->select('document_id'));
+                if ($order->load_id) $q->orWhere('load_id',$order->load_id);
+            })->get(['id','name'])->map(fn($doc)=>['id'=>$doc->id,'name'=>$doc->name,'linked'=>DB::table('ops_order_documents')->where('order_id',$order->id)->where('document_id',$doc->id)->exists()]),
             'audit' => DB::table('compliance_audit')->where('company_id', $company)->where(function ($q) use ($order) {
                 $q->where(fn ($q) => $q->where('entity', 'checklist')->where('entity_id', $order->id))
                     ->orWhere(fn ($q) => $q->where('entity', 'inspection')->whereIn('entity_id', DB::table('ops_inspection_cases')->where('order_id', $order->id)->pluck('id')));
             })->latest('id')->limit(50)->get(['id', 'entity', 'entity_id', 'actor_id', 'action', 'created_at'])]);
+    }
+
+    public function cargoReview(Request $r)
+    {
+        $company=$this->company($r);$order=$this->ops->order($company,(int)$r->route('order'));
+        $service=app(\App\Services\Ops\CargoReview::class);
+        return $this->response($r->isMethod('get')?$service->read($order,$r->user()):$service->act($order,$r->user(),$r->validate($service::rules())));
+    }
+
+    public function optionalTasks(Request $r)
+    {
+        $company=$this->company($r);
+        abort_unless(app(\App\Services\Ops\OpsTaskAccess::class)->manages($r->user(),$company),403);
+        $data=$r->validate(['revision'=>['required','integer'],'fingerprint'=>['required','string','size:64'],'key'=>['required','string','max:100'],'reason'=>['required','string','min:5','max:1000']]);
+        return DB::transaction(function()use($r,$company,$data){
+            $order=$this->ops->order($company,(int)$r->route('order'),true);
+            abort_if(in_array($order->status,['closed','cancelled'],true),422);
+            if($order->workspace_id)\App\Models\ShipmentWorkspace::whereKey($order->workspace_id)->lockForUpdate()->firstOrFail();
+            $before=$this->ops->read($order,false);
+            abort_unless($before['revision']===$data['revision']&&hash_equals($before['fingerprint'],$data['fingerprint']),409,'The plan changed. Refresh before adding work.');
+            $items=array_map(fn($item)=>$item+['plan_version'=>2],$before['items']);$index=array_search($data['key'],array_column($items,'key'));
+            $catalog=$this->optionalCatalog($order);
+            abort_unless(($index!==false&&!empty($items[$index]['optional']))||isset($catalog[$data['key']]),422,'Unknown optional operation.');
+            if($data['key']==='sea_si_vgm'||($index!==false&&!empty($items[$index]['verified_sea_only']))){
+                $flow=app(\App\Services\Ops\TransportFlow::class)->read($order);
+                abort_unless(($flow['transport_type']==='sea'||collect($flow['legs'])->contains('mode','sea'))&&app(\App\Services\Ops\OpsTaskAccess::class)->verifiedSeaOrganizer($order),422,'This operation requires a sea service and its verified organizer.');
+            }
+            if($index===false){$items[]=['key'=>$data['key'],'label'=>$catalog[$data['key']][0],'status'=>'pending','responsible_user_id'=>$order->responsible_user_id??$r->user()->id,'controlled'=>$data['key']==='cargo_documents','required_documents'=>$data['key']==='cmr'?['CMR']:[]];$index=count($items)-1;}
+            if($data['key']==='sea_si_vgm')$items[$index]['verified_sea_only']=true;
+            $items[$index]['optional_selected']=true;$items[$index]['requirement_reason']=$data['reason'];$items[$index]['requirement_source']='operator_review';$items[$index]['applicable']=true;
+            $context=$before['context'];foreach($items[$index]['applies_when']??[] as $flag)$context[$flag]=true;
+            if($flag=$catalog[$data['key']][1]??null)$context[$flag]=true;
+            if($order->workspace_id)\App\Models\ShipmentWorkspace::findOrFail($order->workspace_id)->update(['operational_checklist'=>$items]);
+            $this->ops->initialize($order);
+            DB::table('ops_operational_state')->where('order_id',$order->id)->update(['items'=>$order->workspace_id?null:json_encode($items),'context'=>json_encode($context),'revision'=>$before['revision']+1,'updated_at'=>now()]);
+            DB::table('ops_orders')->where('id',$order->id)->increment('revision');
+            $this->ops->audit($company,'checklist',$order->id,$r->user()->id,'optional_operation_added',$before,['key'=>$data['key'],'reason'=>$data['reason']]);
+            return $this->response($this->ops->read($order));
+        });
     }
 
     public function checklist(Request $r)
@@ -136,6 +187,9 @@ final class OperationalComplianceController extends Controller
             abort_if(in_array($order->status, ['closed','cancelled'], true), 422, 'Nalog je zatvoren ili otkazan.');
             $this->ops->member($company, $data['responsible_user_id'] ?? null);
             $before = isset($data['id']) ? DB::table('ops_inspection_cases')->where('company_id', $company)->where('order_id', $order->id)->where('id', $data['id'])->first() ?? abort(404) : null;
+            if (!app(\App\Services\Ops\OpsTaskAccess::class)->manages($r->user(), $company)) {
+                abort_unless($before && (int) $before->responsible_user_id === (int) $r->user()->id && (int) ($data['responsible_user_id'] ?? 0) === (int) $before->responsible_user_id, 403);
+            }
             abort_unless($data['revision'] === (int) ($before?->revision ?? 0), 409, 'Predmet je izmijenjen. Osvježite prikaz.');
             $documents = DB::table('ops_order_documents')->where('order_id', $order->id)->whereIn('document_id', $data['document_ids'])->pluck('document_id')->all();
             abort_if(array_diff($data['document_ids'], $documents) !== [], 422, 'Dokaz mora biti dokument ovog naloga.');
@@ -161,9 +215,10 @@ final class OperationalComplianceController extends Controller
     {
         $company = $this->company($r); $rows = [];
         foreach (DB::table('ops_orders')->where('company_id',$company)->whereNotIn('status',['closed','cancelled'])->orderByDesc('id')->cursor() as $order) {
+            if(app(\App\Services\Ops\OpsOrders::class)->intake($order)['kind']==='inquiry')continue;
             $flow = app(\App\Services\Ops\TransportFlow::class)->read($order);
             $payment = app(\App\Services\Ops\TransportSettlement::class)->read($order)['payment'];
-            foreach ($this->ops->read($order)['items'] as $item) {
+            foreach (app(\App\Services\Ops\OpsTaskAccess::class)->project($r->user(), $order, $this->ops->read($order))['items'] as $item) {
                 if (($item['key'] ?? '') === 'financial_review') continue;
                 if (($item['applicable'] ?? true) === false) continue;
                 $rows[] = ['order_id'=>$order->id,'reference'=>$order->reference,'transport_type'=>$flow['transport_type'],'payment'=>$payment,'kind'=>'checklist','item'=>$item];
@@ -176,7 +231,8 @@ final class OperationalComplianceController extends Controller
     {
         $company = $this->company($r); $result = [];
         foreach (DB::table('ops_orders')->where('company_id', $company)->whereNotIn('status', ['closed','cancelled'])->orderBy('id')->cursor() as $order) {
-            foreach ($this->ops->read($order)['items'] as $item) {
+            if(app(\App\Services\Ops\OpsOrders::class)->intake($order)['kind']==='inquiry')continue;
+            foreach (app(\App\Services\Ops\OpsTaskAccess::class)->project($r->user(), $order, $this->ops->read($order))['items'] as $item) {
                 if (($item['key'] ?? '') === 'financial_review') continue;
                 if (($item['applicable'] ?? true) === false || in_array($item['status'] ?? '', ['completed','not_applicable'], true)) continue;
                 if (in_array($item['status'] ?? '', ['blocked','waiting_external']) || (!empty($item['due_date']) && substr($item['due_date'], 0, 10) <= now(config('app.timezone'))->toDateString())) {
@@ -187,11 +243,12 @@ final class OperationalComplianceController extends Controller
         foreach (DB::table('ops_inspection_cases')->join('ops_orders', 'ops_orders.id', '=', 'ops_inspection_cases.order_id')
             ->where('ops_inspection_cases.company_id', $company)->whereNotIn('ops_orders.status', ['closed','cancelled'])
             ->whereNotIn('ops_inspection_cases.status', ['approved','rejected','archived'])->whereNotNull('due_at')->where('due_at', '<=', now()->endOfDay())->get(['ops_inspection_cases.*', 'ops_orders.reference']) as $case) {
+            if (!app(\App\Services\Ops\OpsTaskAccess::class)->manages($r->user(), $company) && (int) $case->responsible_user_id !== (int) $r->user()->id) continue;
             $result[] = ['order_id' => $case->order_id, 'reference' => $case->reference, 'kind' => 'inspection', 'item' => $this->decodeCase($case)];
         }
         if (\Illuminate\Support\Facades\Schema::hasTable('ops_transport_flows')) {
             foreach (DB::table('ops_transport_flows')->join('ops_orders','ops_orders.id','=','ops_transport_flows.order_id')->where('ops_transport_flows.company_id',$company)->where('ops_orders.status','!=','cancelled')->get(['ops_transport_flows.*','ops_orders.reference']) as $flow) {
-                foreach (json_decode($flow->transit,true) as $transit) if (($transit['status'] ?? '') !== 'discharged') $result[]=['order_id'=>$flow->order_id,'reference'=>$flow->reference,'kind'=>'transit','item'=>$transit+['label'=>'Otvoren tranzit / NCTS','next_action'=>'Provjeriti službeni status tranzita']];
+                foreach (json_decode($flow->transit,true) as $transit) if (($transit['status'] ?? '') !== 'discharged' && (app(\App\Services\Ops\OpsTaskAccess::class)->manages($r->user(), $company) || (int) ($transit['responsible_user_id'] ?? 0) === (int) $r->user()->id)) $result[]=['order_id'=>$flow->order_id,'reference'=>$flow->reference,'kind'=>'transit','item'=>$transit+['label'=>'Otvoren tranzit / NCTS','next_action'=>'Provjeriti službeni status tranzita']];
             }
         }
         return $this->response($result);
@@ -204,7 +261,7 @@ final class OperationalComplianceController extends Controller
         return DB::transaction(function () use ($r, $company, $data) {
             $order = $this->ops->order($company, (int) $r->route('order'), true);
             abort_if(in_array($order->status, ['closed','cancelled'], true), 422);
-            $document = Document::whereKey($data['document_id'])->where('uploaded_by_user_id', $r->user()->id)->first() ?? abort(422, 'Dokument nije dostupan.');
+            $document = Document::whereKey($data['document_id'])->where(function($q) use ($r,$order) { $q->where('uploaded_by_user_id',$r->user()->id); if ($order->load_id) $q->orWhere('load_id',$order->load_id); })->first() ?? abort(422, 'Dokument nije dostupan.');
             abort_if($document->load_id && (int) $document->load_id !== (int) $order->load_id, 422, 'Dokument pripada drugom teretu.');
             abort_if($document->vehicle_id || $document->user_id || $document->load_draft_id, 422, 'Lični dokument ili dokument vozila ne pripada inspekcijskom predmetu.');
             if (!DB::table('ops_order_documents')->where('order_id', $order->id)->where('document_id', $document->id)->exists()) {
@@ -218,7 +275,11 @@ final class OperationalComplianceController extends Controller
     public function profile(Request $r)
     {
         [$company, $manage] = $this->profileAccess($r, !$r->isMethod('get'));
-        if ($r->isMethod('get')) return $this->response(['profile' => DB::table('company_country_profiles')->where('company_id', $company)->first(),
+        $record=DB::table('companies')->where('id',$company)->first() ?? abort(404);
+        $headquarters=strtoupper(trim((string)($record->country_code??'')));
+        $countryProfile=DB::table('company_country_profiles')->where('company_id',$company)->first();
+        $defaultCountry=in_array($headquarters,['BA','HR','RS'],true)?$headquarters:($countryProfile?->country_code??null);
+        if ($r->isMethod('get')) return $this->response(['company'=>['id'=>(int)$record->id,'name'=>$record->name,'country_code'=>$headquarters?:null], 'default_country_code'=>$defaultCountry,'profile' => DB::table('company_country_profiles')->where('company_id', $company)->first(),
             'can_manage' => $manage, 'rules' => config('country_verification'), 'verifications' => DB::table('company_capability_verifications')->where('company_id', $company)->latest('id')->get()->map(function ($v) use ($manage) {
                 $v->document_ids = $manage ? json_decode($v->document_ids, true) : [];
                 if (!$manage) { $v->reason = null; $v->registry_reference = null; }
