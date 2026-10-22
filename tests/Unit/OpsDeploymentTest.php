@@ -21,11 +21,11 @@ class OpsDeploymentTest extends TransportFlowTest
         foreach(['ops_transport_flows','ops_operational_state','ops_inspection_cases','company_country_profiles','company_capability_verifications','compliance_document_links','compliance_audit','ops_checklist_versions'] as $table) Schema::drop($table);
         $before=['companies'=>DB::table('companies')->count(),'documents'=>DB::table('documents')->count(),'invoices'=>DB::table('invoices')->count(),'entries'=>DB::table('accounting_entries')->count()];
         self::assertSame(0,Artisan::call('freightbook:prepare-ops-release'));
-        self::assertSame(2,DB::table('migrations')->count());
+        self::assertSame(3,DB::table('migrations')->count());
         self::assertTrue(Schema::hasTable('ops_transport_flows'));
         self::assertTrue(Schema::hasColumn('ops_checklist_versions','variant'));
         self::assertSame(0,Artisan::call('freightbook:prepare-ops-release'));
-        self::assertSame(2,DB::table('migrations')->count());
+        self::assertSame(3,DB::table('migrations')->count());
         self::assertSame($before,['companies'=>DB::table('companies')->count(),'documents'=>DB::table('documents')->count(),'invoices'=>DB::table('invoices')->count(),'entries'=>DB::table('accounting_entries')->count()]);
     }
 
@@ -43,7 +43,7 @@ class OpsDeploymentTest extends TransportFlowTest
             ['migration'=>'2026_10_22_000001_create_transport_flows','batch'=>2],
         ]);
         self::assertSame(0,Artisan::call('freightbook:prepare-ops-release'));
-        self::assertSame(2,DB::table('migrations')->count());
+        self::assertSame(3,DB::table('migrations')->count());
         self::assertStringContainsString('OPS schema ready',Artisan::output());
     }
 }

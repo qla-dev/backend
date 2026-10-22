@@ -94,7 +94,7 @@ final class TransportFlow
             $ops = app(OperationalCompliance::class);
             $order = $ops->order($order->company_id, $order->id, true);
             abort_if($order->status === 'cancelled', 422, 'Otkazan nalog je samo za čitanje.');
-            if(collect($data['legs'])->contains(fn($leg)=>($leg['status']??'planned')!=='planned'))app(OpsOrders::class)->assertConfirmed($order);
+            if(collect($data['legs'])->contains(fn($leg)=>($leg['status']??'planned')!=='planned')){app(OpsOrders::class)->assertConfirmed($order);app(OpsPortal::class)->assertDocumentsReady($order);}
             $this->validateVariant($data['transport_type'], $data['variant'] ?? null);
             foreach ($data['legs'] as $leg) $this->validateVariant($leg['mode'], $leg['variant'] ?? null);
             $before = $this->read($order);

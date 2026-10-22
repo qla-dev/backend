@@ -169,6 +169,13 @@ class ShipmentWorkspaceController extends Controller
         }, 3);
     }
 
+    public function opsToday(Request $request, ShipmentWorkspace $shipmentWorkspace): JsonResponse
+    {
+        $workspace=$this->visibleQuery($request)->findOrFail($shipmentWorkspace->id);
+        $order=\Illuminate\Support\Facades\DB::table('ops_orders')->where('workspace_id',$workspace->id)->first();
+        return response()->json(['data'=>app(\App\Services\Ops\OperationalSignals::class)->timeline($workspace,$order)]);
+    }
+
     public function cargoReview(Request $request, ShipmentWorkspace $shipmentWorkspace): JsonResponse
     {
         // The service checks exact customer identity or authorized provider assignment.

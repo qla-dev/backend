@@ -121,6 +121,14 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
         Route::get('verification-documents/{document}', 'evidence')->whereNumber('document');
     });
 
+    Route::prefix('transport-orders')->controller(\App\Http\Controllers\Api\OpsPortalController::class)->group(function(){
+        Route::get('','index');Route::post('sync-bookings','syncMine');Route::get('{order}','show')->whereNumber('order');
+        Route::post('{order}/prepare','prepare')->whereNumber('order');Route::post('{order}/link-customer','linkCustomer')->whereNumber('order');Route::post('{order}/documents','documents')->whereNumber('order');Route::get('{order}/documents/{document}','download')->whereNumber('order')->whereNumber('document');
+        Route::post('{order}/assign-documents','assignDocuments')->whereNumber('order');Route::post('{order}/receive','receive')->whereNumber('order');Route::post('{order}/invite','invite')->whereNumber('order');
+        Route::post('{order}/accept','accept')->whereNumber('order');Route::post('{order}/revoke','revoke')->whereNumber('order');Route::get('{order}/participants','participants')->whereNumber('order');
+        Route::match(['get','post'],'{order}/cargo-review','review')->whereNumber('order');
+    });
+    Route::get('shipment-workspaces/{shipmentWorkspace}/ops-today',[\App\Http\Controllers\Api\ShipmentWorkspaceController::class,'opsToday'])->whereNumber('shipmentWorkspace');
     Route::get('accounting/companies', [\App\Http\Controllers\Api\AccountingController::class, 'companies']);
     Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\AccountingController::class)->group(function (): void {
         Route::get('context', 'context');
@@ -192,6 +200,7 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
     Route::prefix('accounting/{company}/ops')->whereNumber('company')->controller(\App\Http\Controllers\Api\OpsController::class)->group(function (): void {
         Route::get('', 'overview');
         Route::post('orders', 'store');
+        Route::post('sync-bookings','syncBookings');
         Route::get('intake-options', 'intakeOptions');
         Route::post('intake-scan', 'scanIntake')->middleware('throttle:10,1');
         Route::post('orders/{order}/confirm', 'confirmInquiry')->whereNumber('order');

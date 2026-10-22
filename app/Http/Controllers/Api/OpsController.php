@@ -40,12 +40,17 @@ final class OpsController extends Controller
         foreach ($orders as $o) {
             $o->intake=$this->orders->intake($o);
             $o->settlement = app(\App\Services\Ops\TransportSettlement::class)->read($o);
-            $o->transport_type = DB::table('ops_transport_flows')->where('order_id', $o->id)->value('transport_type') ?? 'road';
+            $o->transport_type = $o->load_id?(DB::table('loads')->where('id',$o->load_id)->value('transport_type')??'road'):(app(\App\Services\Ops\OpsOrders::class)->intake($o)['department']??'road');
+            $o->flow_type = DB::table('ops_transport_flows')->where('order_id', $o->id)->value('transport_type') ?? 'road';
+            if($o->load_id&&DB::table('loads')->where('id',$o->load_id)->value('for_storage'))$o->transport_type='warehouse';
+            $legs=json_decode(DB::table('ops_transport_flows')->where('order_id',$o->id)->value('legs')??'[]',true);
+            $o->departments=array_values(array_unique(array_filter([$o->transport_type,...array_column($legs,'mode')])));
         }
 
         return $this->response(['orders' => $orders,
             'status_counts' => DB::table('ops_orders')->where('company_id', $id)->selectRaw('status, COUNT(*) as orders')->groupBy('status')->pluck('orders', 'status'),
             'partners' => DB::table('accounting_partners')->where('company_id', $id)->orderBy('name')->get(['id', 'name', 'tax_number']),
+            'departments'=>app(\App\Services\Ops\OpsDepartments::class)->forUser($id,(int)$r->user()->id),
             'members' => DB::table('users')->whereIn('id', DB::table('company_user')->where('company_id', $id)->where('status', 'active')->pluck('user_id')
                 ->push(DB::table('companies')->where('id', $id)->value('owner_user_id')))->get(['id', 'name'])]);
     }
@@ -62,6 +67,7 @@ final class OpsController extends Controller
                 ->orderByDesc('work_date')->get(['ops_work_logs.*', 'users.name as user_name']),
             'events' => DB::table('ops_events')->leftJoin('users', 'users.id', '=', 'ops_events.user_id')->where('order_id', $order->id)->orderBy('occurred_at')->get(['ops_events.*', 'users.name as user_name']),
             'documents' => DB::table('ops_order_documents')->join('documents','documents.id','=','ops_order_documents.document_id')->where('order_id',$order->id)->get(['documents.id','documents.name','ops_order_documents.role']),
+            'source_links'=>['workspace_id'=>$order->workspace_id,'load_id'=>$order->load_id,'crm_document_id'=>$order->crm_document_id,'accepted_offer_id'=>$order->workspace_id?DB::table('shipment_workspace')->where('id',$order->workspace_id)->value('accepted_offer_id'):null],
             'settlement' => app(\App\Services\Ops\TransportSettlement::class)->read($order),
             'flow' => app(\App\Services\Ops\TransportFlow::class)->read($order),
             'workspace' => $order->workspace_id ? DB::table('shipment_workspace')->where('id', $order->workspace_id)->first(['id', 'reference', 'status']) : null]);
@@ -71,7 +77,7 @@ final class OpsController extends Controller
     {
         $id = $this->company($r);
         $data = $r->validate(['title' => ['required', 'string', 'max:255'], 'template_id' => ['prohibited'], 'customer_partner_id' => ['nullable', 'integer'],
-            'customer_name' => ['nullable', 'string', 'max:255'], 'responsible_user_id' => ['nullable', 'integer'], 'currency' => ['prohibited'],
+            'customer_name' => ['nullable', 'string', 'max:255'], 'responsible_user_id' => ['nullable', 'integer'], 'currency' => ['prohibited'], 'intake_currency'=>['sometimes', 'string', 'in:BAM,EUR,USD,GBP,CHF'],
             'agreed_revenue' => ['prohibited'], 'planned_start_at' => ['nullable', 'date'], 'planned_end_at' => ['nullable', 'date'], 'note' => ['nullable', 'string', 'max:5000'],
             'kind'=>['sometimes',Rule::in(['order','inquiry'])],'source'=>['sometimes',Rule::in(['manual','external'])],
             'department'=>['sometimes',Rule::in(\App\Services\Ops\TransportFlow::MODES)],'external_reference'=>['nullable','string','max:120'],
@@ -83,7 +89,14 @@ final class OpsController extends Controller
             'cargo.weight_kg'=>['nullable','numeric','min:0'],'cargo.volume_m3'=>['nullable','numeric','min:0'],'cargo.pallets'=>['nullable','integer','min:0']]);
 
         $this->schedule($data['planned_start_at'] ?? null, $data['planned_end_at'] ?? null);
+        $data['currency']=$data['intake_currency']??'BAM';unset($data['intake_currency']);
         return $this->response($this->orders->register($id, $r->user()->id, $data), 201);
+    }
+
+    public function syncBookings(Request $r): JsonResponse
+    {
+        $id=$this->company($r);abort_unless(app(\App\Services\Ops\OpsTaskAccess::class)->manages($r->user(),$id),403);
+        return $this->response($this->orders->syncBookings($id,(int)$r->user()->id));
     }
 
     public function intakeOptions(Request $r): JsonResponse
@@ -127,7 +140,7 @@ final class OpsController extends Controller
         return DB::transaction(function () use ($id, $data, $r) {
         if (array_key_exists('responsible_user_id', $data)) app(\App\Services\OperationalCompliance::class)->member($id, $data['responsible_user_id']);
         $order = DB::table('ops_orders')->where('company_id', $id)->where('id', $r->route('order'))->lockForUpdate()->first() ?? abort(404);
-        if(isset($data['status'])&&$data['status']!=='open')$this->orders->assertConfirmed($order);
+        if(isset($data['status'])&&$data['status']!=='open'){$this->orders->assertConfirmed($order);app(\App\Services\Ops\OpsPortal::class)->assertDocumentsReady($order);}
         abort_if(in_array($order->status, ['closed', 'cancelled'], true), 422, 'A closed or cancelled work order cannot be changed.');
         $this->schedule(array_key_exists('planned_start_at',$data) ? $data['planned_start_at'] : $order->planned_start_at, array_key_exists('planned_end_at',$data) ? $data['planned_end_at'] : $order->planned_end_at);
         DB::table('ops_orders')->where('id', $order->id)->update($data + ['revision' => $order->revision + 1, 'updated_at' => now()]);

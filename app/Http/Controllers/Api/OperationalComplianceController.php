@@ -71,7 +71,7 @@ final class OperationalComplianceController extends Controller
     {
         $company=$this->company($r);$order=$this->ops->order($company,(int)$r->route('order'));
         $service=app(\App\Services\Ops\CargoReview::class);
-        return $this->response($r->isMethod('get')?$service->read($order,$r->user()):$service->act($order,$r->user(),$r->validate($service::rules())));
+        return app(OpsPortalController::class)->review($r);
     }
 
     public function optionalTasks(Request $r)
@@ -250,6 +250,10 @@ final class OperationalComplianceController extends Controller
             foreach (DB::table('ops_transport_flows')->join('ops_orders','ops_orders.id','=','ops_transport_flows.order_id')->where('ops_transport_flows.company_id',$company)->where('ops_orders.status','!=','cancelled')->get(['ops_transport_flows.*','ops_orders.reference']) as $flow) {
                 foreach (json_decode($flow->transit,true) as $transit) if (($transit['status'] ?? '') !== 'discharged' && (app(\App\Services\Ops\OpsTaskAccess::class)->manages($r->user(), $company) || (int) ($transit['responsible_user_id'] ?? 0) === (int) $r->user()->id)) $result[]=['order_id'=>$flow->order_id,'reference'=>$flow->reference,'kind'=>'transit','item'=>$transit+['label'=>'Otvoren tranzit / NCTS','next_action'=>'Provjeriti službeni status tranzita']];
             }
+        }
+        if(\Illuminate\Support\Facades\Schema::hasTable('crm_follow_ups'))foreach(DB::table('crm_follow_ups')->where('company_id',$company)->where('owner_user_id',$r->user()->id)->whereNull('done_at')->whereDate('due_on','<=',now()->toDateString())->get() as $follow){
+            $order=DB::table('ops_orders')->where('company_id',$company)->where('crm_document_id',$follow->crm_document_id)->whereNotIn('status',['closed','cancelled'])->first();
+            if($order&&app(\App\Services\Ops\OpsOrders::class)->intake($order)['kind']==='order')$result[]=['order_id'=>$order->id,'reference'=>$order->reference,'kind'=>'crm_follow_up','item'=>['key'=>'crm_'.$follow->id,'label'=>$follow->note,'next_action'=>$follow->note,'due_date'=>$follow->due_on,'responsible_user_id'=>$follow->owner_user_id,'source_id'=>$follow->id]];
         }
         return $this->response($result);
     }

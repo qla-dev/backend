@@ -10,11 +10,12 @@ use Illuminate\Support\Facades\Schema;
 final class PrepareOpsRelease extends Command
 {
     protected $signature = 'freightbook:prepare-ops-release {--deployment-site= : Verified host invoking the deployment script}';
-    protected $description = 'Verify the deployment database and apply the two additive OPS migrations';
+    protected $description = 'Verify the deployment database and apply the approved additive OPS migrations';
 
     private const MIGRATIONS = [
         '2026_10_21_000001_create_operational_compliance',
         '2026_10_22_000001_create_transport_flows',
+        '2026_10_23_000001_link_ops_departments_and_participants',
     ];
     private const COMPLIANCE_TABLES = ['ops_checklist_versions','ops_operational_state','ops_inspection_cases',
         'company_country_profiles','company_capability_verifications','compliance_document_links','compliance_audit'];
@@ -76,6 +77,7 @@ final class PrepareOpsRelease extends Command
             $this->error('Unregistered or partial transport schema requires review. No schema changes applied.');
             return self::FAILURE;
         }
+        if(!in_array(self::MIGRATIONS[2],$ran,true)&&(Schema::hasTable('ops_order_participants')||Schema::hasColumn('company_user','departments'))){$this->error('Unregistered or partial OPS participant schema requires review.');return self::FAILURE;}
         $paths = array_map(fn($migration)=>database_path('migrations/'.$migration.'.php'),self::MIGRATIONS);
         foreach ($paths as $path) {
             if (!is_file($path)) {
@@ -84,13 +86,13 @@ final class PrepareOpsRelease extends Command
             }
         }
         $migrator->setOutput($this->output)->run($paths,['pretend'=>false,'step'=>true]);
-        foreach ([...self::COMPLIANCE_TABLES,'ops_transport_flows'] as $table) {
+        foreach ([...self::COMPLIANCE_TABLES,'ops_transport_flows','ops_order_participants'] as $table) {
             if (!Schema::hasTable($table)) {
                 $this->error('OPS schema verification failed after migration.');
                 return self::FAILURE;
             }
         }
-        if (!Schema::hasColumn('ops_checklist_versions','transport_type') || !Schema::hasColumn('ops_checklist_versions','variant')) {
+        if (!Schema::hasColumn('company_user','departments') || !Schema::hasColumn('ops_checklist_versions','transport_type') || !Schema::hasColumn('ops_checklist_versions','variant')) {
             $this->error('Transport template columns are missing.');
             return self::FAILURE;
         }

@@ -25,7 +25,7 @@ class OpsWorkflowTest extends TransportFlowTest
         $created=$this->apiCall('ops/orders','POST',$payload)['data'];$id=$created['id'];$service=app(\App\Services\Ops\OpsOrders::class);$order=DB::table('ops_orders')->find($id);
         self::assertNull($order->workspace_id);self::assertSame('Customer d.o.o.',$order->customer_name);
         self::assertSame('inquiry',$service->intake($order)['kind']);self::assertSame('external',$service->intake($order)['source']);
-        self::assertSame(['goods_documents','cmr','delivery'],array_column(json_decode(DB::table('ops_operational_state')->where('order_id',$id)->value('items'),true),'key'));
+        self::assertSame(['documents_received','goods_documents','cmr','delivery'],array_column(json_decode(DB::table('ops_operational_state')->where('order_id',$id)->value('items'),true),'key'));
         self::assertSame('cmr',DB::table('ops_order_documents')->where('order_id',$id)->value('role'));
         self::assertSame([],$this->apiCall('ops/operational-overview')['data']);
         self::assertSame([],$this->apiCall('ops/today')['data']);
@@ -33,8 +33,8 @@ class OpsWorkflowTest extends TransportFlowTest
         $this->reject(fn()=>$service->close(1,1,$id),422);
         $this->reject(fn()=>$service->confirmInquiry(1,1,$id,99),409);
         $confirmed=$this->apiCall('ops/orders/'.$id.'/confirm','POST',['revision'=>(int)$order->revision])['data'];
-        self::assertSame('order',$service->intake((object)$confirmed)['kind']);self::assertNotEmpty($this->apiCall('ops/operational-overview')['data']);$service->event(1,1,$id,['event_type'=>'loaded']);
-        self::assertSame(1,DB::table('ops_events')->where('order_id',$id)->where('event_type','loaded')->count());
+        self::assertSame('order',$service->intake((object)$confirmed)['kind']);self::assertNotEmpty($this->apiCall('ops/operational-overview')['data']);$this->reject(fn()=>$service->event(1,1,$id,['event_type'=>'loaded']),409);
+        self::assertSame(0,DB::table('ops_events')->where('order_id',$id)->where('event_type','loaded')->count());
         self::assertSame(0,DB::table('accounting_entries')->count());
     }
 
@@ -67,7 +67,7 @@ class OpsWorkflowTest extends TransportFlowTest
         $state=$this->apiCall('ops/orders/'.$id.'/compliance')['data']['checklist'];
         $this->apiCall('ops/orders/'.$id.'/transport-flow','PATCH',['revision'=>0,'checklist_revision'=>$state['revision'],'transport_type'=>'sea','variant'=>'FCL','legs'=>[['key'=>'sea','mode'=>'sea','from'=>'Nansha','to'=>'Rijeka','status'=>'planned','document_ids'=>[]]],'transit'=>[]]);
         $items=json_decode(DB::table('ops_operational_state')->where('order_id',$id)->value('items'),true);
-        self::assertEqualsCanonicalizing(['goods_documents','cmr','delivery'],array_column($items,'key'));
+        self::assertEqualsCanonicalizing(['documents_received','goods_documents','cmr','delivery'],array_column($items,'key'));
         $view=$this->apiCall('ops/orders/'.$id.'/compliance')['data'];self::assertArrayHasKey('pickup',$view['optional_catalog']);self::assertArrayNotHasKey('cargo_documents',$view['optional_catalog']);
         $this->apiCall('ops/orders/'.$id.'/optional-tasks','POST',['revision'=>$view['checklist']['revision'],'fingerprint'=>$view['checklist']['fingerprint'],'key'=>'pickup','reason'=>'Pickup coordination requested after document review.']);
         self::assertContains('pickup',array_column(json_decode(DB::table('ops_operational_state')->where('order_id',$id)->value('items'),true),'key'));

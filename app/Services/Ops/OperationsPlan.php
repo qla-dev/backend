@@ -29,7 +29,8 @@ final class OperationsPlan
             default=>['assign_driver_and_vehicle','confirm_pickup_time','cmr_and_documents','proof_of_delivery','vehicle_return'],
         };
         if ($mode==='road' && ($load->customs_required || $load->requires_customs_bonded)) array_splice($keys,2,0,['cargo_documents']);
-        $items=[];
+        $keys=array_values(array_diff($keys,['cargo_documents']));
+        $items=[['key'=>'documents_received','label'=>'Prijem i provjera dokumentacije','status'=>'pending','plan_version'=>2,'controlled'=>true,'source'=>'document_intake','accepted_offer_id'=>$offer->id,'responsible_user_id'=>$provider,'audience'=>'provider']];
         foreach($keys as $key){
             $customer=in_array($key,OpsTaskAccess::CUSTOMER_KEYS,true);
             $driver=in_array($key,['cmr_and_documents','proof_of_delivery'],true)&&$mode==='road'?$offer->driver_user_id:null;
@@ -72,11 +73,12 @@ final class OperationsPlan
         $core=array_intersect($preferred,$keys);
         if(!$core&&!collect($items)->contains(fn($item)=>!empty($item['generated'])))$core=$keys;
         if(!$core)$core=['booking','goods_documents','pickup','delivery',...match($mode){'road'=>['mode_carrier','mode_cmr'],'sea'=>['mode_final_bl_release'],'air'=>['mode_awb'],'rail'=>['mode_rail_note'],'warehouse'=>['mode_receipt','mode_dispatch'],default=>[]}];
-        $core=[...$core,'cargo_documents','cargo_reconciliation'];
+        $hasIntake=in_array('documents_received',$keys,true);
+        $core=[...$core,'documents_received','cargo_documents','cargo_reconciliation'];
         $known=['booking','goods_documents','pickup','transport','delivery','arrival','vehicle_return','vehicle_registrations','confirm_storage_arrival','assign_storage_location',
             'shipping_line_and_agent','container_details','vessel_and_voyage','approve_shipping_instructions','draft_bill_of_lading',
             'airline_and_agent','cargo_acceptance','security_and_customs_documents','draft_awb','rail_operator','terminals','wagon_or_container','departure_schedule','transit_status'];
-        return array_map(function($item)use($core,$known,$context){
+        $projected=array_map(function($item)use($core,$known,$context,$hasIntake){
             $key=$item['key'];
             $extra=isset(self::EXTRA[$key]);
             $condition=self::EXTRA[$key][1]??null;
@@ -86,8 +88,11 @@ final class OperationsPlan
             $item['optional']=$optional;
             $item['plan_active']=!$optional||$started||$automatic||!empty($item['optional_selected']);
             $item['applicable']=collect($item['applies_when']??[])->every(fn($flag)=>!empty($context[$flag]))&&$item['plan_active'];
-            if($key==='cargo_documents')$item['controlled']=true;
+            if($hasIntake&&$key==='goods_documents'&&!$started){$item['plan_active']=false;$item['applicable']=false;$item['optional']=false;}
+            if($key==='cargo_documents'){$item['controlled']=true;if($hasIntake){$item['plan_active']=false;$item['applicable']=false;$item['optional']=false;}}
             return $item;
         },$items);
+        usort($projected,fn($a,$b)=>(int)($b['key']==='documents_received')<=>(int)($a['key']==='documents_received'));
+        return $projected;
     }
 }

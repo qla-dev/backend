@@ -26,6 +26,7 @@ final class CargoReview
         if(!$loadId||!Schema::hasTable('ops_operational_state'))return;
         foreach(DB::table('ops_orders')->where('load_id',$loadId)->get() as $order){
             $review=$this->stored($order);
+            app(OpsPortal::class)->assertDocumentsReady($order);
             abort_if(!empty($review['document_ids'])&&app(OperationalCompliance::class)->documentHashes($review['document_ids'])!==($review['document_hashes']??[]),409,'CI or packing-list evidence changed. A new provider review is required.');
             abort_if(in_array($review['status']??'',['pending_customer','rejected'],true),409,'Urgent cargo / price amendment requires customer acceptance before operations can continue.');
         }
@@ -49,7 +50,7 @@ final class CargoReview
             try {
                 if(!$user->isSuperAdminOrMaster())app(AccountingAccess::class)->authorize($user,(int)$order->company_id,'ops');
                 $provider=app(OpsTaskAccess::class)->manages($user,(int)$order->company_id)||(int)$workspace->provider_user_id===(int)$user->id
-                    ||collect(app(OperationalCompliance::class)->read($order,false)['items'])->contains(fn($item)=>(int)($item['responsible_user_id']??0)===(int)$user->id&&in_array($item['key'],['cargo_documents','goods_documents','check_storage_documents'],true));
+                    ||collect(app(OperationalCompliance::class)->read($order,false)['items'])->contains(fn($item)=>(int)($item['responsible_user_id']??0)===(int)$user->id&&in_array($item['key'],['documents_received','cargo_documents','goods_documents','check_storage_documents'],true));
             } catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){if($e->getStatusCode()!==403)throw $e;}
         }
         return [$customer,$provider];
@@ -57,7 +58,7 @@ final class CargoReview
 
     public function read(object $order,User $user): array
     {
-        if(!$order->workspace_id||!$order->load_id)return ['available'=>false];
+        if(!$order->workspace_id||!$order->load_id)return isset(app(OpsPortal::class)->context($order)['intake'])?app(ExternalCargoReview::class)->read($order,$user):['available'=>false];
         $workspace=ShipmentWorkspace::findOrFail($order->workspace_id);$load=Load::findOrFail($order->load_id);
         [$customer,$provider]=$this->permissions($order,$workspace,$user);abort_unless($customer||$provider,403);
         $review=$this->stored($order);
@@ -83,6 +84,7 @@ final class CargoReview
 
     public function act(object $order,User $user,array $data): array
     {
+        if(!$order->workspace_id)return app(ExternalCargoReview::class)->act($order,$user,$data);
         return DB::transaction(function()use($order,$user,$data){
             $ops=app(OperationalCompliance::class);$order=$ops->order((int)$order->company_id,(int)$order->id,true);
             abort_if(in_array($order->status,['closed','cancelled'],true),422,'Reopen this order before requesting an amendment.');
@@ -97,7 +99,8 @@ final class CargoReview
             $items=$state['items'];
             if($data['action']==='report'){
                 abort_unless($provider,403,'Only the responsible service provider can propose an amendment.');
-                $ids=[(int)$data['ci_document_id'],(int)$data['pl_document_id']];abort_if($ids[0]===$ids[1],422,'Select a separate CI and packing list.');
+                if(collect($items)->contains('key','documents_received'))abort_unless(app(OpsPortal::class)->documentState($order)['receipt_valid'],422,'Confirm receipt of the CI and PL first.');
+                $ids=[(int)$data['ci_document_id'],(int)$data['pl_document_id']];if(collect($items)->contains('key','documents_received'))abort_unless((app(OpsPortal::class)->documentState($order)['receipt']['document_ids']??[])===$ids,409,'Confirm receipt of these CI/PL files first.');abort_if($ids[0]===$ids[1],422,'Select a separate CI and packing list.');
                 app(TransportFlow::class)->documents($order,$ids);
                 $actual=array_replace($this->values($load),array_intersect_key($data['actual'],array_flip(self::FIELDS)));
                 $changes=[];
@@ -110,6 +113,7 @@ final class CargoReview
                     'reported_by'=>$user->id,'reported_at'=>now()->toIso8601String(),'baseline_token'=>$this->token($load,$workspace)];
             }else{
                 abort_unless($customer&&(int)($before['reported_by']??0)!==(int)$user->id,403,'Only the shipment customer can accept or reject this proposal.');
+                if(collect($items)->contains('key','documents_received'))abort_unless(app(OpsPortal::class)->documentState($order)['receipt_valid']&&(app(OpsPortal::class)->documentState($order)['receipt']['document_ids']??[])===$before['document_ids']&&(int)($before['revision']??0)>(int)(app(OpsPortal::class)->documentState($order)['receipt']['review_revision']??0),409,'The document receipt changed. A new provider review is required.');
                 abort_unless(($before['status']??'')==='pending_customer',409,'There is no pending customer proposal.');
                 abort_unless(hash_equals($before['baseline_token'],$this->token($load,$workspace)),409,'The original cargo or price changed. A new proposal is required.');
                 abort_unless($ops->documentHashes($before['document_ids'])===$before['document_hashes'],409,'CI or packing-list evidence changed. A new proposal is required.');

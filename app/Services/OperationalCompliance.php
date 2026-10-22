@@ -126,6 +126,8 @@ final class OperationalCompliance
             $item['applicable'] = collect($item['applies_when'] ?? [])->every(fn ($condition) => ($context[$condition] ?? false) === true);
             return $item;
         }, $items);
+        $items=app(\App\Services\Ops\OperationalSignals::class)->derive($order,$items);
+        $items=app(\App\Services\Ops\OpsPortal::class)->deriveDocumentOperation($order,$items);
         if($workspace)foreach($items as &$item){
             if(empty($item['responsible_user_id'])&&($item['assignment_source']??'')!=='manual'){
                 $customer=in_array($item['key'],\App\Services\Ops\OpsTaskAccess::CUSTOMER_KEYS,true)||($item['audience']??'')==='customer';
@@ -167,6 +169,7 @@ final class OperationalCompliance
                 $key = $update['key'];
                 abort_unless($items->has($key), 422, 'Nepoznata stavka checkliste.');
                 $old = $items[$key];
+                if(in_array($update['status']??'pending',['in_progress','completed','waiting_external'],true))app(\App\Services\Ops\OpsPortal::class)->assertDocumentsReady($order);
                 abort_if(!empty($old['controlled']),422,'Use the cargo / price amendment workflow for this task.');
                 if (($update['status']??'')==='completed') app(\App\Services\Ops\CargoReview::class)->assertUnblocked($order->load_id);
                 // Validate against stored assignment, never the assignment supplied by the caller.

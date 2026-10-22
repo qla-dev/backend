@@ -211,6 +211,7 @@ class OpsOrders
             DB::table('ops_operational_state')->where('order_id',$order->id)->update(['context'=>json_encode($context),'items'=>json_encode($items),'revision'=>1,'updated_at'=>now()]);
             foreach($documents as $doc) DB::table('ops_order_documents')->insert(['order_id'=>$order->id,'document_id'=>$doc->id,'role'=>(int)($data['cmr_document_id']??0)===(int)$doc->id?'cmr':'external_order','created_at'=>now()]);
             app(\App\Services\OperationalCompliance::class)->audit($company,'ops_order',$order->id,$actor,'intake_reviewed',null,$metadata);
+            app(OpsPortal::class)->ensureDocumentOperation($order);
             return $order;
         });
     }
@@ -229,6 +230,18 @@ class OpsOrders
             DB::table('ops_orders')->where('id',$id)->update(['revision'=>$order->revision+1,'updated_at'=>now()]);
             app(\App\Services\OperationalCompliance::class)->audit($company,'ops_order',$id,$actor,'inquiry_confirmed',null,$context['intake']);
             return DB::table('ops_orders')->find($id);
+        });
+    }
+
+    public function syncBookings(int $company,int $actor): array
+    {
+        return DB::transaction(function()use($company,$actor){
+            $created=0;$linked=0;
+            foreach(ShipmentWorkspace::where('provider_company_id',$company)->whereNotNull('accepted_offer_id')->orderBy('id')->get() as $workspace){
+                $existing=DB::table('ops_orders')->where('workspace_id',$workspace->id)->exists();$order=$this->createFromWorkspace($workspace);
+                if($order){if(!$existing)$created++;$linked++;app(OpsPortal::class)->ensureDocumentOperation($order);}
+            }
+            return ['created'=>$created,'linked'=>$linked];
         });
     }
 
@@ -282,6 +295,7 @@ class OpsOrders
         return DB::transaction(function () use ($companyId, $actor, $orderId, $data) {
         $order = $this->editable($companyId, $orderId);
         if($data['event_type']!=='note')$this->assertConfirmed($order);
+        if(in_array($data['event_type'],['dispatched','loaded','border','customs_cleared','delivered','pod'],true))app(OpsPortal::class)->assertDocumentsReady($order);
         if(in_array($data['event_type'],['dispatched','loaded','border','customs_cleared','delivered','pod'],true))app(CargoReview::class)->assertUnblocked($order->load_id);
         if (! empty($data['document_id'])) {
             DB::table('ops_order_documents')->insert(['order_id' => $orderId, 'role' => $data['event_type'] === 'pod' ? 'pod' : 'attachment', 'document_id' => $data['document_id'], 'created_at' => now()]);
