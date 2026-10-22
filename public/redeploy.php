@@ -192,10 +192,14 @@ $runCommand = static function (string $command, string $cwd, callable $write): i
     return is_int($exitCode) && $exitCode >= 0 ? $exitCode : $closeCode;
 };
 
+$deploymentHost = PHP_SAPI !== 'cli' ? strtolower(explode(':', (string) ($_SERVER['HTTP_HOST'] ?? ''))[0]) : '';
+$opsSchemaCommand = $phpCommand.' artisan freightbook:prepare-ops-release --no-ansi';
+if ($deploymentHost !== '') $opsSchemaCommand .= ' --deployment-site='.$shellArg($deploymentHost);
+
 $commands = [
     ['label' => 'Pulling latest code', 'command' => 'git pull --ff-only'],
     ['label' => 'Installing Composer dependencies', 'command' => $composer.' install --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-dev --no-ansi'],
-    ['label' => 'Preparing approved OPS schema', 'command' => $phpCommand.' artisan freightbook:prepare-ops-release --no-ansi'],
+    ['label' => 'Preparing approved OPS schema', 'command' => $opsSchemaCommand],
     ['label' => 'Clearing Laravel config cache', 'command' => $phpCommand.' artisan config:clear --no-ansi'],
     ['label' => 'Clearing Laravel route cache', 'command' => $phpCommand.' artisan route:clear --no-ansi'],
     ['label' => 'Clearing Laravel view cache', 'command' => $phpCommand.' artisan view:clear --no-ansi'],

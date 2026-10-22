@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 /** Bounded schema preparation for the explicitly approved OPS deployment; never seeds business data. */
 final class PrepareOpsRelease extends Command
 {
-    protected $signature = 'freightbook:prepare-ops-release';
+    protected $signature = 'freightbook:prepare-ops-release {--deployment-site= : Verified host invoking the deployment script}';
     protected $description = 'Verify the deployment database and apply the two additive OPS migrations';
 
     private const MIGRATIONS = [
@@ -29,9 +29,12 @@ final class PrepareOpsRelease extends Command
         $database = $connection->getConfig('database');
         $memory = $driver === 'sqlite' && $database === ':memory:' && $host === null;
         if (!$memory) {
+            // The hosting instance still has APP_URL=localhost; use the actual redeploy request
+            // host when explicitly supplied, while retaining the same finite site allow-list.
+            $site = strtolower((string)($this->option('deployment-site') ?: parse_url((string)config('app.url'),PHP_URL_HOST)));
             if (!in_array($driver,['mysql','mariadb','pgsql'],true)
                 || !in_array($host,['localhost','127.0.0.1','::1'],true) || !$database
-                || !in_array(strtolower((string)parse_url((string)config('app.url'),PHP_URL_HOST)),['freightbook.ai','www.freightbook.ai','cargo.qla.dev'],true)) {
+                || !in_array($site,['freightbook.ai','www.freightbook.ai','cargo.qla.dev'],true)) {
                 $this->line('Preflight: '.json_encode(['driver'=>$driver,'host_scope'=>in_array($host,['localhost','127.0.0.1','::1'],true)?'local':'non-local',
                     'app_host'=>parse_url((string)config('app.url'),PHP_URL_HOST),'database_configured'=>(bool)$database]));
                 $this->error('Deployment database target is not verified. No schema changes applied.');
