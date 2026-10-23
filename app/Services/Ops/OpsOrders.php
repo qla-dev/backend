@@ -237,7 +237,7 @@ class OpsOrders
     {
         return DB::transaction(function()use($company,$actor){
             $created=0;$linked=0;
-            foreach(ShipmentWorkspace::where('provider_company_id',$company)->whereNotNull('accepted_offer_id')->orderBy('id')->get() as $workspace){
+            foreach(ShipmentWorkspace::where('provider_company_id',$company)->whereNotNull('booked_at')->orderBy('id')->get() as $workspace){
                 $existing=DB::table('ops_orders')->where('workspace_id',$workspace->id)->exists();$order=$this->createFromWorkspace($workspace);
                 if($order){if(!$existing)$created++;$linked++;app(OpsPortal::class)->ensureDocumentOperation($order);}
             }

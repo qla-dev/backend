@@ -170,7 +170,7 @@ class OpsWorkflowTest extends TransportFlowTest
 
     public function test_workflow_booking_plan_is_short_assigned_and_requirement_driven(): void
     {
-        $load=(new Load())->forceFill(['transport_type'=>'sea','customer_user_id'=>2,'requires_adr'=>true]);$offer=(new Offer())->forceFill(['created_by_user_id'=>1]);$offer->id=42;
+        $load=(new Load())->forceFill(['transport_type'=>'sea','customer_user_id'=>2,'requires_adr'=>true]);$offer=(new Offer())->forceFill(['company_id'=>1,'created_by_user_id'=>1]);$offer->id=42;
         $items=app(OperationsPlan::class)->booking($load,$offer,1);
         self::assertLessThanOrEqual(7,count($items));self::assertSame(2,collect($items)->firstWhere('key','shipping_instructions')['responsible_user_id']);
         self::assertSame(1,collect($items)->firstWhere('key','final_bill_of_lading')['responsible_user_id']);

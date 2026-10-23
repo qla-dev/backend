@@ -29,8 +29,9 @@ final class OperationsPlan
             default=>['assign_driver_and_vehicle','confirm_pickup_time','cmr_and_documents','proof_of_delivery','vehicle_return'],
         };
         if ($mode==='road' && ($load->customs_required || $load->requires_customs_bonded)) array_splice($keys,2,0,['cargo_documents']);
-        $keys=array_values(array_diff($keys,['cargo_documents']));
+        if($offer->company_id)$keys=array_values(array_diff($keys,['cargo_documents']));
         $items=[['key'=>'documents_received','label'=>'Prijem i provjera dokumentacije','status'=>'pending','plan_version'=>2,'controlled'=>true,'source'=>'document_intake','accepted_offer_id'=>$offer->id,'responsible_user_id'=>$provider,'audience'=>'provider']];
+        if(!$offer->company_id)$items=[];
         foreach($keys as $key){
             $customer=in_array($key,OpsTaskAccess::CUSTOMER_KEYS,true);
             $driver=in_array($key,['cmr_and_documents','proof_of_delivery'],true)&&$mode==='road'?$offer->driver_user_id:null;

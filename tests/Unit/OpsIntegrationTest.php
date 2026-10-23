@@ -153,8 +153,14 @@ class OpsIntegrationTest extends TransportFlowTest
         $order=$this->external();$state=app(OperationalCompliance::class)->read($order);
         $this->denied(fn()=>app(OperationalCompliance::class)->update(1,$order->id,1,['revision'=>$state['revision'],'fingerprint'=>$state['fingerprint'],'items'=>[['key'=>'delivery','status'=>'in_progress']]]),409);
     }
+    public function test_assigned_driver_keeps_their_shipment_actions_without_joining_accounting(): void {
+        Schema::table('loads',fn(Blueprint $t)=>$t->unsignedBigInteger('assigned_driver_user_id')->nullable());$workspace=$this->book();DB::table('loads')->where('id',3)->update(['assigned_driver_user_id'=>3]);
+        $rows=$this->call('transport-orders',actor:3)['data'];self::assertCount(1,$rows);self::assertSame('assigned',$rows[0]['access']);self::assertSame($workspace->id,$rows[0]['workspace_id']);self::assertNull($rows[0]['id']);
+        self::assertSame([],$this->call('transport-orders',actor:1)['data']);
+        $offer=(new \App\Models\Offer())->forceFill(['driver_user_id'=>3]);$load=(new \App\Models\Load())->forceFill(['transport_type'=>'road']);$items=app(\App\Services\Ops\OperationsPlan::class)->booking($load,$offer,3);self::assertNotContains('documents_received',array_column($items,'key'));self::assertContains('proof_of_delivery',array_column($items,'key'));
+    }
     public function test_real_bookings_link_idempotently_and_keep_their_original_workspace(): void {
-        $workspace=$this->book();$workspace->update(['accepted_offer_id'=>99]);$order=$this->order();
+        $workspace=$this->book();$order=$this->order();self::assertTrue(collect(app(OperationalSignals::class)->timeline($workspace,$order)['stages'])->firstWhere('key','booked')['complete']);self::assertSame(0,$this->apiCall('ops/sync-bookings','POST')['data']['created']);$workspace->update(['accepted_offer_id'=>99]);
         $first=$this->apiCall('ops/sync-bookings','POST')['data'];$again=$this->apiCall('ops/sync-bookings','POST')['data'];
         self::assertSame(0,$first['created']);self::assertSame(0,$again['created']);self::assertSame(1,DB::table('ops_orders')->where('workspace_id',$workspace->id)->count());
         $read=app(OperationalCompliance::class)->read($order);self::assertSame('documents_received',$read['items'][0]['key']);

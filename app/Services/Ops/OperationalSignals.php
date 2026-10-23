@@ -48,7 +48,7 @@ final class OperationalSignals
         $date=function(array $keys)use($items){return collect($items)->first(fn($item)=>in_array($item['key'],$keys,true)&&($item['status']??'')==='completed')['completed_at']??null;};
         $load=DB::table('loads')->find($workspace->load_id);$status=strtolower((string)($load->status??''));
         $receipt=$order&&collect($items)->contains('key','documents_received')?app(OpsPortal::class)->documentState($order):null;
-        $stages=[['key'=>'booked','label'=>'Booking confirmed','complete'=>(bool)$workspace->accepted_offer_id,'at'=>$workspace->booked_at?->toIso8601String(),'source'=>'accepted_offer'],
+        $stages=[['key'=>'booked','label'=>'Booking confirmed','complete'=>(bool)($workspace->accepted_offer_id||$workspace->booked_at),'at'=>$workspace->booked_at?->toIso8601String(),'source'=>'accepted_offer'],
             ['key'=>'documents','label'=>'Documents received and reviewed','complete'=>$receipt?$receipt['review_complete']:$done(['goods_documents','check_storage_documents','cargo_documents']),'at'=>$date(['documents_received','cargo_documents']),'source'=>'document_review'],
             ['key'=>'pickup','label'=>'Pickup confirmed','complete'=>$events->contains('event_type','loaded'),'at'=>$events->firstWhere('event_type','loaded')->occurred_at??null,'source'=>'pickup_operation'],
             ['key'=>'in_transit','label'=>'In transit','complete'=>in_array($status,['in_delivery','received','review','finished'],true)||$events->contains(fn($e)=>in_array($e->event_type,['loaded','border','delivered'],true)),'at'=>null,'source'=>'tracking']];

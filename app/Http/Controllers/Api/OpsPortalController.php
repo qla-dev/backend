@@ -16,7 +16,7 @@ final class OpsPortalController extends Controller
     private function order(Request $r): object {return DB::table('ops_orders')->where('id',$r->route('order'))->first()??abort(404);}
     private function response($data){return response()->json(['data'=>$data]);}
     public function syncMine(Request $r){
-        $created=0;foreach(ShipmentWorkspace::where('customer_user_id',$r->user()->id)->whereNotNull('provider_company_id')->whereNotNull('accepted_offer_id')->orderBy('id')->limit(300)->get() as $workspace){
+        $created=0;foreach(ShipmentWorkspace::where('customer_user_id',$r->user()->id)->whereNotNull('provider_company_id')->whereNotNull('booked_at')->orderBy('id')->limit(300)->get() as $workspace){
             $existed=DB::table('ops_orders')->where('workspace_id',$workspace->id)->exists();$order=app(\App\Services\Ops\OpsOrders::class)->createFromWorkspace($workspace);if($order){$this->portal->ensureDocumentOperation($order);if(!$existed)$created++;}
         }return $this->response(['created'=>$created]);
     }
@@ -27,8 +27,12 @@ final class OpsPortalController extends Controller
             return ['id'=>$order->id,'reference'=>$order->reference,'title'=>$order->title,'status'=>$order->status,'provider'=>DB::table('companies')->where('id',$order->company_id)->value('name'),'workspace_id'=>$order->workspace_id,'load_id'=>$order->load_id,
                 'access'=>$this->portal->buyer($order,$user)?'active':'invited','invitation'=>$participant?collect((array)$participant)->only(['status','revision','expires_at'])->all():null];});
         // Bookings without a logistics-company work order remain visible without inventing a company.
-        foreach(ShipmentWorkspace::where('customer_user_id',$user->id)->whereNotIn('id',DB::table('ops_orders')->whereNotNull('workspace_id')->select('workspace_id'))->latest('id')->limit(100)->get() as $w)
-            $rows->push(['id'=>null,'reference'=>$w->reference,'title'=>$w->load_snapshot['title']??$w->reference,'status'=>$w->status,'workspace_id'=>$w->id,'load_id'=>$w->load_id,'access'=>'booking','provider'=>null]);
+        $assigned=ShipmentWorkspace::where(function($q)use($user){$q->where('provider_user_id',$user->id)->orWhere(function($q)use($user){$q->where('customer_user_id',$user->id)->whereNotIn('id',DB::table('ops_orders')->whereNotNull('workspace_id')->select('workspace_id'));});if(Schema::hasColumn('loads','assigned_driver_user_id'))$q->orWhereHas('freightLoad',fn($loads)=>$loads->where('assigned_driver_user_id',$user->id));});
+        foreach($assigned->latest('id')->limit(100)->get() as $w){
+            if($rows->contains(fn($row)=>(int)$row['workspace_id']===(int)$w->id))continue;
+            $linked=DB::table('ops_orders')->where('workspace_id',$w->id)->first();if($linked&&$this->portal->provider($linked,$user))continue;
+            $rows->push(['id'=>null,'reference'=>$w->reference,'title'=>$w->load_snapshot['title']??$w->reference,'status'=>$w->status,'workspace_id'=>$w->id,'load_id'=>$w->load_id,'access'=>(int)$w->customer_user_id===(int)$user->id?'booking':'assigned','provider'=>null]);
+        }
         return $this->response($rows->values());
     }
     public function show(Request $r){
