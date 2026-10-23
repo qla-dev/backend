@@ -169,9 +169,9 @@ final class OperationalCompliance
                 $key = $update['key'];
                 abort_unless($items->has($key), 422, 'Nepoznata stavka checkliste.');
                 $old = $items[$key];
-                if(in_array($update['status']??'pending',['in_progress','completed','waiting_external'],true))app(\App\Services\Ops\OpsPortal::class)->assertDocumentsReady($order);
+                if(app(\App\Services\Ops\OpsPortal::class)->requiresDocuments($key)&&in_array($update['status']??'pending',['in_progress','completed'],true))app(\App\Services\Ops\OpsPortal::class)->assertDocumentsReady($order);
                 abort_if(!empty($old['controlled']),422,'Use the cargo / price amendment workflow for this task.');
-                if (($update['status']??'')==='completed') app(\App\Services\Ops\CargoReview::class)->assertUnblocked($order->load_id);
+                if (($update['status']??'')==='completed'&&app(\App\Services\Ops\OpsPortal::class)->requiresDocuments($key)) app(\App\Services\Ops\CargoReview::class)->assertUnblocked($order->load_id);
                 // Validate against stored assignment, never the assignment supplied by the caller.
                 if (empty($old['system']) && ($old['applicable'] ?? true)) abort_unless($access->canEdit($user, $order, $old), 403, 'Možete uređivati samo vlastita zaduženja.');
                 abort_if(!$access->manages($user, $company) && (int) ($update['responsible_user_id'] ?? $old['responsible_user_id'] ?? 0) !== (int) ($old['responsible_user_id'] ?? 0), 403, 'Zaduženja dodjeljuje voditelj operative.');

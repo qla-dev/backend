@@ -124,7 +124,7 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
     Route::prefix('transport-orders')->controller(\App\Http\Controllers\Api\OpsPortalController::class)->group(function(){
         Route::get('','index');Route::post('sync-bookings','syncMine');Route::get('{order}','show')->whereNumber('order');
         Route::post('{order}/prepare','prepare')->whereNumber('order');Route::post('{order}/link-customer','linkCustomer')->whereNumber('order');Route::post('{order}/documents','documents')->whereNumber('order');Route::get('{order}/documents/{document}','download')->whereNumber('order')->whereNumber('document');
-        Route::post('{order}/assign-documents','assignDocuments')->whereNumber('order');Route::post('{order}/receive','receive')->whereNumber('order');Route::post('{order}/invite','invite')->whereNumber('order');
+        Route::match(['get','post'],'{order}/supply-chain','supplyChain')->whereNumber('order');Route::post('{order}/assign-documents','assignDocuments')->whereNumber('order');Route::post('{order}/receive','receive')->whereNumber('order');Route::post('{order}/invite','invite')->whereNumber('order');
         Route::post('{order}/accept','accept')->whereNumber('order');Route::post('{order}/revoke','revoke')->whereNumber('order');Route::get('{order}/participants','participants')->whereNumber('order');
         Route::match(['get','post'],'{order}/cargo-review','review')->whereNumber('order');
     });

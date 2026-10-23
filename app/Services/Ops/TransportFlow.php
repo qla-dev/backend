@@ -94,11 +94,11 @@ final class TransportFlow
             $ops = app(OperationalCompliance::class);
             $order = $ops->order($order->company_id, $order->id, true);
             abort_if($order->status === 'cancelled', 422, 'Otkazan nalog je samo za čitanje.');
-            if(collect($data['legs'])->contains(fn($leg)=>($leg['status']??'planned')!=='planned')){app(OpsOrders::class)->assertConfirmed($order);app(OpsPortal::class)->assertDocumentsReady($order);}
+            if(collect($data['legs'])->contains(fn($leg)=>in_array($leg['status']??'planned',['in_progress','completed'],true))){app(OpsOrders::class)->assertConfirmed($order);app(OpsPortal::class)->assertDocumentsReady($order);}
             $this->validateVariant($data['transport_type'], $data['variant'] ?? null);
             foreach ($data['legs'] as $leg) $this->validateVariant($leg['mode'], $leg['variant'] ?? null);
             $before = $this->read($order);
-            if (collect($data['legs'])->contains(fn($leg)=>($leg['status']??'planned')!=='planned')) app(CargoReview::class)->assertUnblocked($order->load_id);
+            if (collect($data['legs'])->contains(fn($leg)=>in_array($leg['status']??'planned',['in_progress','completed'],true))) app(CargoReview::class)->assertUnblocked($order->load_id);
             $actorUser = \App\Models\User::findOrFail($actor);
             if (!app(OpsTaskAccess::class)->manages($actorUser, (int) $order->company_id)) {
                 abort_unless($before['transport_type'] === $data['transport_type'] && $before['variant'] === ($data['variant'] ?? null), 403);

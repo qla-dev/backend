@@ -140,7 +140,7 @@ final class OpsController extends Controller
         return DB::transaction(function () use ($id, $data, $r) {
         if (array_key_exists('responsible_user_id', $data)) app(\App\Services\OperationalCompliance::class)->member($id, $data['responsible_user_id']);
         $order = DB::table('ops_orders')->where('company_id', $id)->where('id', $r->route('order'))->lockForUpdate()->first() ?? abort(404);
-        if(isset($data['status'])&&$data['status']!=='open'){$this->orders->assertConfirmed($order);app(\App\Services\Ops\OpsPortal::class)->assertDocumentsReady($order);}
+        if(isset($data['status'])&&$data['status']!=='open'){$this->orders->assertConfirmed($order);}
         abort_if(in_array($order->status, ['closed', 'cancelled'], true), 422, 'A closed or cancelled work order cannot be changed.');
         $this->schedule(array_key_exists('planned_start_at',$data) ? $data['planned_start_at'] : $order->planned_start_at, array_key_exists('planned_end_at',$data) ? $data['planned_end_at'] : $order->planned_end_at);
         DB::table('ops_orders')->where('id', $order->id)->update($data + ['revision' => $order->revision + 1, 'updated_at' => now()]);
@@ -162,7 +162,7 @@ final class OpsController extends Controller
     {
         $id = $this->company($r);
         $data = $r->validate(['event_type' => ['required', Rule::in(OpsOrders::EVENTS)], 'occurred_at' => ['nullable', 'date'], 'note' => ['nullable', 'string', 'max:500'], 'document_id' => ['nullable', 'integer']]);
-        if(in_array($data['event_type'],['dispatched','loaded','border','customs_cleared','delivered','pod'],true))app(\App\Services\Ops\CargoReview::class)->assertUnblocked(app(\App\Services\OperationalCompliance::class)->order($id,(int)$r->route('order'))->load_id);
+        if(in_array($data['event_type'],['loaded','border','customs_cleared','delivered','pod'],true))app(\App\Services\Ops\CargoReview::class)->assertUnblocked(app(\App\Services\OperationalCompliance::class)->order($id,(int)$r->route('order'))->load_id);
         if (! empty($data['document_id'])) {
             abort_unless(DB::table('documents')->where('id', $data['document_id'])->where('uploaded_by_user_id', $r->user()->id)->exists(), 422, 'Attach a document you uploaded.');
         }

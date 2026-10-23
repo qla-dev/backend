@@ -295,8 +295,8 @@ class OpsOrders
         return DB::transaction(function () use ($companyId, $actor, $orderId, $data) {
         $order = $this->editable($companyId, $orderId);
         if($data['event_type']!=='note')$this->assertConfirmed($order);
-        if(in_array($data['event_type'],['dispatched','loaded','border','customs_cleared','delivered','pod'],true))app(OpsPortal::class)->assertDocumentsReady($order);
-        if(in_array($data['event_type'],['dispatched','loaded','border','customs_cleared','delivered','pod'],true))app(CargoReview::class)->assertUnblocked($order->load_id);
+        if(in_array($data['event_type'],['loaded','border','customs_cleared','delivered','pod'],true))app(OpsPortal::class)->assertDocumentsReady($order);
+        if(in_array($data['event_type'],['loaded','border','customs_cleared','delivered','pod'],true))app(CargoReview::class)->assertUnblocked($order->load_id);
         if (! empty($data['document_id'])) {
             DB::table('ops_order_documents')->insert(['order_id' => $orderId, 'role' => $data['event_type'] === 'pod' ? 'pod' : 'attachment', 'document_id' => $data['document_id'], 'created_at' => now()]);
         }

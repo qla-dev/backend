@@ -14,7 +14,7 @@ final class OpsPortal
     public function buyer(object $order, User $user): bool
     {
         if($order->workspace_id && (int)DB::table('shipment_workspace')->where('id',$order->workspace_id)->value('customer_user_id')===(int)$user->id)return true;
-        return Schema::hasTable('ops_order_participants') && DB::table('ops_order_participants')->where('order_id',$order->id)->where('user_id',$user->id)->where('status','active')->exists();
+        return Schema::hasTable('ops_order_participants') && DB::table('ops_order_participants')->where('order_id',$order->id)->where('user_id',$user->id)->where('status','active')->where('role','customer')->exists();
     }
 
     public function provider(object $order, User $user): bool
@@ -68,6 +68,8 @@ final class OpsPortal
         }return $item;},$items);
     }
 
+    public function requiresDocuments(string $key): bool {return in_array($key,['transport','delivery','mode_receipt','mode_dispatch','customs_export','customs_import','transit','cmr','mode_cmr','cmr_and_documents','proof_of_delivery','final_bill_of_lading','record_storage_receipt','confirm_storage_dispatch','cargo_acceptance'],true)||str_starts_with($key,'leg_')||collect(['_release','_declaration','_cmr','_awb','_bl','_receipt','_dispatch'])->contains(fn($suffix)=>str_ends_with($key,$suffix));}
+
     public function assertDocumentsReady(object $order): void
     {
         if(!collect($this->rawItems($order))->contains('key','documents_received'))return;
@@ -84,7 +86,7 @@ final class OpsPortal
     {
         return DB::transaction(function()use($order,$user,$documentId,$role){
             $order=app(OperationalCompliance::class)->order((int)$order->company_id,(int)$order->id,true);
-            abort_unless($this->buyer($order,$user)||$this->provider($order,$user),403);
+            abort_unless($this->buyer($order,$user)||$this->provider($order,$user)||app(SupplyChain::class)->canUpload($order,$user,$role),403);
             abort_if(in_array($order->status,['closed','cancelled'],true),422,'This order is read-only.');
             $doc=DB::table('documents')->where('id',$documentId)->where('uploaded_by_user_id',$user->id)->first()??abort(404);
             abort_if(!empty($doc->vehicle_id)||!empty($doc->user_id)||!empty($doc->load_draft_id)||(!empty($doc->load_id)&&(int)$doc->load_id!==(int)$order->load_id),422,'Use a document for this order only.');
@@ -151,6 +153,7 @@ final class OpsPortal
             $query=DB::table('ops_order_participants')->where('order_id',$order->id);
             if($action==='accept')$query->where('user_id',$user->id);else{abort_unless($this->provider($order,$user),403);$query->where('user_id',$this->linkedCustomer($order));}
             $old=$query->lockForUpdate()->first()??abort(404);abort_unless((int)$old->revision===$revision,409,'The invitation changed. Refresh first.');
+            if($action==='accept'&&$old->role==='supplier')abort_unless($user->email_verified_at,422,'Verify your email before accepting this shipment invitation.');
             if($action==='accept')abort_unless($old->status==='invited'&&$old->expires_at&&\Carbon\Carbon::parse($old->expires_at)->isFuture(),422,'The invitation expired or is no longer pending.');
             else abort_unless(in_array($old->status,['active','invited'],true),422);
             $query->update(['status'=>$action==='accept'?'active':'revoked','revision'=>$old->revision+1,$action==='accept'?'accepted_at':'revoked_at'=>now(),'updated_at'=>now()]);

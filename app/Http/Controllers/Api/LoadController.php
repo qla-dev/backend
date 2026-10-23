@@ -804,7 +804,8 @@ class LoadController extends CrudController
         unset($data['stops']);
         $load = DB::transaction(function () use ($request, $id, $data, $hasStops, $stops) {
             $load = Load::query()->lockForUpdate()->findOrFail($id);
-            app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
+            if(in_array($data['status']??'',['in_delivery','received','review','finished'],true))app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
+            if($load->shipmentWorkspace()->exists()&&array_intersect(array_keys($data),\App\Services\Ops\CargoReview::FIELDS))abort(422,'Use the cargo and price review in Transport orders to amend booked cargo.');
             if (array_key_exists('status', $data) && $data['status'] !== $load->status) {
                 abort_unless($request->user()?->isSuperAdminOrMaster(), 403, 'Only a superadmin can change a load status.');
             }
@@ -852,7 +853,7 @@ class LoadController extends CrudController
         $canManageStatus = $canManageStatus || $isStorageOperator;
 
         $target = $data['status'] ?? null;
-        if($target&&$target!=='cancelled')app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
+        if(in_array($target,['in_delivery','received','review','finished'],true))app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
         $adminReversal = $role === 'superadmin' && $target !== null
             && \App\Services\LoadStatusProgression::isBackward($load->status, $target);
         if ($target !== null && $role !== 'superadmin' && \App\Services\LoadStatusProgression::isBackward($load->status, $target)) {

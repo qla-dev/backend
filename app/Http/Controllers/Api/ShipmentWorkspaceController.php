@@ -108,7 +108,7 @@ class ShipmentWorkspaceController extends Controller
             foreach ($updates as $key => $update) {
                 $previous = $existing->get($key);
                 abort_if(!empty($previous['controlled']),422,'Use the cargo / price amendment workflow for this task.');
-                if (($update['status']??'')==='completed') app(\App\Services\Ops\CargoReview::class)->assertUnblocked($record->load_id);
+                if (($update['status']??'')==='completed'&&app(\App\Services\Ops\OpsPortal::class)->requiresDocuments($update['key'])) app(\App\Services\Ops\CargoReview::class)->assertUnblocked($record->load_id);
                 $changed = collect($update)->contains(fn ($value, $field) => $value != ($previous[$field] ?? null));
                 if (!$changed) continue;
                 abort_if(in_array($record->status, ['completed','cancelled'], true) || \Illuminate\Support\Facades\DB::table('ops_orders')->where('workspace_id',$record->id)->whereIn('status',['closed','cancelled'])->exists(),422,'Završen nalog prvo ponovo otvorite za pregled.');
@@ -141,7 +141,7 @@ class ShipmentWorkspaceController extends Controller
                 })->values()->all()
             );
         }
-        if ((isset($data['status'])&&$data['status']!=='cancelled') || array_key_exists('offer_status',$request->all())) app(\App\Services\Ops\CargoReview::class)->assertUnblocked($record->load_id);
+        if (isset($data['status'])&&in_array($data['status'],['in_execution','completed'],true)) app(\App\Services\Ops\CargoReview::class)->assertUnblocked($record->load_id);
         if (isset($data['status'])) {
             $allowed = $isAdmin
                 || ($isProvider && in_array($data['status'], ['in_execution', 'completed', 'cancelled'], true))

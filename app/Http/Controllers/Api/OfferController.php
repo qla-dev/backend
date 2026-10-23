@@ -162,6 +162,7 @@ class OfferController extends CrudController
         $isCreator = (int) $existing->created_by_user_id === (int) $user->id;
         abort_unless($user->isSuperAdminOrMaster() || $isOwner || $isCreator, 403, 'You cannot update this offer.');
 
+        if($request->input('status')==='accepted')return $this->approve($request,$id,app(ShipmentWorkspaceCreator::class),app(WarehouseMovementCreator::class));
         if ($request->has('status')) {
             $nextStatus = (string) $request->input('status');
             abort_unless(
@@ -205,40 +206,8 @@ class OfferController extends CrudController
     {
         $data = $request->validate(['driver_user_id' => ['nullable', 'integer', 'exists:users,id']]);
 
-        [$offer, $workspace] = DB::transaction(function () use ($request, $id, $data, $workspaceCreator, $movementCreator) {
-            $offer = Offer::query()->lockForUpdate()->findOrFail($id);
-            $load = Load::query()->with('shipment')->lockForUpdate()->findOrFail($offer->load_id);
-            $user = $request->user();
-            abort_unless(
-                $user->isSuperAdminOrMaster() || (int) $load->customer_user_id === (int) $user->id,
-                403,
-                'Only the load owner can approve this request.'
-            );
-            abort_unless($offer->status === 'pending', 409, 'This request has already been decided.');
-            abort_unless($load->status === 'posted', 409, 'This load is no longer open for offers or reservations.');
-            abort_unless(! $load->shipmentWorkspace()->exists(), 409, 'A provider has already been selected for this load.');
-
-            $driverId = $data['driver_user_id'] ?? $offer->driver_user_id;
-            $isDriver = ! $driverId || User::query()->whereKey($driverId)->whereHas('role', fn ($query) => $query->where('name', 'driver'))->exists();
-            if (! $isDriver) {
-                throw ValidationException::withMessages(['driver_user_id' => 'Select a user with the driver role.']);
-            }
-
-            Offer::query()->where('load_id', $offer->load_id)->whereKeyNot($offer->id)->where('status', 'pending')->update(['status' => 'not_selected']);
-            $offer->update(['driver_user_id' => $driverId, 'status' => 'accepted']);
-            $movementCreator->create($load, $offer);
-            $workspace = $workspaceCreator->create($load, $offer->fresh(), $user);
-            $load->update([
-                'assigned_driver_user_id' => $driverId,
-                'company_id' => $offer->company_id ?? $load->company_id,
-                'status' => 'booked',
-                'pre_delivery_status' => null,
-                'booking_status' => 'confirmed',
-                'booking_reference' => $workspace->reference,
-            ]);
-
-            return [$offer->fresh($this->relations()), $workspace];
-        });
+        [$offer,$workspace]=app(\App\Services\OfferBooking::class)->confirm($request->user(),$id,$data['driver_user_id']??null);
+        $offer->load($this->relations());
 
         return $this->success(array_merge(
             (new EntityResource($offer))->resolve($request),
