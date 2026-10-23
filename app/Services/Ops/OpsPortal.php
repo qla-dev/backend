@@ -63,7 +63,7 @@ final class OpsPortal
         $state=$this->documentState($order);
         return array_map(function($item)use($state){if(($item['key']??'')==='documents_received'){
             $item['status']=$state['status']==='review_required'?'blocked':$state['status'];$item['controlled']=true;
-            $item['next_action']=$state['review_complete']?'Dokumentacija provjerena':($state['receipt_valid']?'Provjeriti podatke CI/PL i potvrditi uslove':'Kupac dostavlja CI i PL; odgovorna osoba potvrđuje prijem');
+            $item['next_action']=$state['review_complete']?'Dokumentacija provjerena':($state['receipt_valid']?'Provjeriti komercijalnu fakturu i pakirnu listu i potvrditi uslove':'Kupac dostavlja komercijalnu fakturu i pakirnu listu; odgovorna osoba potvrđuje prijem');
             $item['completed_at']=$state['review_complete']?($state['reviewed_at']??null):null;
         }return $item;},$items);
     }
@@ -73,7 +73,7 @@ final class OpsPortal
     public function assertDocumentsReady(object $order): void
     {
         if(!collect($this->rawItems($order))->contains('key','documents_received'))return;
-        abort_unless($this->documentState($order)['review_complete'],409,'Receive and review the required CI/PL documentation in Transport orders before continuing.');
+        abort_unless($this->documentState($order)['review_complete'],409,'Receive and review the required commercial invoice and packing list documentation in Transport orders before continuing.');
     }
 
     public function documents(object $order): array
@@ -113,7 +113,7 @@ final class OpsPortal
             $assigned=collect($this->rawItems($order))->firstWhere('key','documents_received')['responsible_user_id']??$order->responsible_user_id;
             abort_unless($user->isSuperAdminOrMaster()||!$assigned||(int)$assigned===(int)$user->id,403,'The assigned documentation operator must confirm receipt.');
             $state=DB::table('ops_operational_state')->where('order_id',$order->id)->first();abort_unless((int)$state->revision===$data['revision'],409,'Documents changed. Refresh before confirming receipt.');
-            $ids=[(int)$data['ci_document_id'],(int)$data['pl_document_id']];abort_if($ids[0]===$ids[1],422,'CI and PL must be separate documents.');
+            $ids=[(int)$data['ci_document_id'],(int)$data['pl_document_id']];abort_if($ids[0]===$ids[1],422,'Commercial invoice and packing list must be separate documents.');
             app(TransportFlow::class)->documents($order,$ids);$hashes=$ops->documentHashes($ids);abort_unless(count($hashes)===2,422,'Both document files must be available.');
             $context=$this->context($order);$context['document_intake']['receipt']=['document_ids'=>$ids,'document_hashes'=>$hashes,'review_revision'=>(int)($context['cargo_review']['revision']??0),'received_by'=>$user->id,'received_at'=>now()->toIso8601String()];
             DB::table('ops_operational_state')->where('order_id',$order->id)->update(['context'=>json_encode($context),'revision'=>$state->revision+1,'updated_at'=>now()]);

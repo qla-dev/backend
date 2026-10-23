@@ -99,8 +99,8 @@ final class CargoReview
             $items=$state['items'];
             if($data['action']==='report'){
                 abort_unless($provider,403,'Only the responsible service provider can propose an amendment.');
-                if(collect($items)->contains('key','documents_received'))abort_unless(app(OpsPortal::class)->documentState($order)['receipt_valid'],422,'Confirm receipt of the CI and PL first.');
-                $ids=[(int)$data['ci_document_id'],(int)$data['pl_document_id']];if(collect($items)->contains('key','documents_received'))abort_unless((app(OpsPortal::class)->documentState($order)['receipt']['document_ids']??[])===$ids,409,'Confirm receipt of these CI/PL files first.');abort_if($ids[0]===$ids[1],422,'Select a separate CI and packing list.');
+                if(collect($items)->contains('key','documents_received'))abort_unless(app(OpsPortal::class)->documentState($order)['receipt_valid'],422,'Confirm receipt of the commercial invoice and packing list first.');
+                $ids=[(int)$data['ci_document_id'],(int)$data['pl_document_id']];if(collect($items)->contains('key','documents_received'))abort_unless((app(OpsPortal::class)->documentState($order)['receipt']['document_ids']??[])===$ids,409,'Confirm receipt of these commercial invoice and packing list files first.');abort_if($ids[0]===$ids[1],422,'Select a separate commercial invoice and packing list.');
                 app(TransportFlow::class)->documents($order,$ids);
                 $actual=array_replace($this->values($load),array_intersect_key($data['actual'],array_flip(self::FIELDS)));
                 $changes=[];

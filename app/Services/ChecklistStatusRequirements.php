@@ -70,7 +70,11 @@ class ChecklistStatusRequirements
 
     public function assertAllowed(Load $load): void
     {
-        if($load->status!=='cancelled')app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
+        // Booking and preparation create the workspace where documents will later be supplied.
+        // Gate physical execution, never the acceptance transaction that creates that workspace.
+        if (in_array($load->status, [...self::GATED, 'finished'], true)) {
+            app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
+        }
         if (! in_array($load->status, self::GATED, true)) return;
         $reached = array_search($load->status, self::ORDER, true);
 

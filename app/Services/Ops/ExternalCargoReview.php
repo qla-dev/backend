@@ -25,8 +25,8 @@ final class ExternalCargoReview
             $context=$portal->context($order);$before=$context['cargo_review']??[];
             abort_unless((int)($before['revision']??0)===$data['revision']&&hash_equals($this->token($order),$data['load_fingerprint']),409,'The external order or proposal changed. Refresh first.');
             if($data['action']==='report'){
-                abort_unless($portal->provider($order,$user),403);abort_unless($portal->documentState($order)['receipt_valid'],422,'Confirm receipt of CI and PL first.');
-                $ids=[(int)$data['ci_document_id'],(int)$data['pl_document_id']];abort_unless(($portal->documentState($order)['receipt']['document_ids']??[])===$ids,409,'Receive these CI/PL documents first.');app(TransportFlow::class)->documents($order,$ids);abort_if($ids[0]===$ids[1],422);
+                abort_unless($portal->provider($order,$user),403);abort_unless($portal->documentState($order)['receipt_valid'],422,'Confirm receipt of Commercial invoice and packing list first.');
+                $ids=[(int)$data['ci_document_id'],(int)$data['pl_document_id']];abort_unless(($portal->documentState($order)['receipt']['document_ids']??[])===$ids,409,'Receive these commercial invoice and packing list documents first.');app(TransportFlow::class)->documents($order,$ids);abort_if($ids[0]===$ids[1],422);
                 $actual=array_replace($this->current($order),$data['actual']);$changes=[];
                 foreach($actual as $key=>$value){$old=$this->current($order)[$key]??null;if(($old===null||$value===null)?$old!==$value:((is_numeric($old)&&is_numeric($value))?bccomp((string)$old,(string)$value,6)!==0:(string)$old!==(string)$value))$changes[$key]=['before'=>$old,'after'=>$value];}
                 $total=Decimal::value((string)$data['proposed_total']);$pending=$changes||$order->agreed_revenue===null||bccomp($total,(string)$order->agreed_revenue,2)!==0;
