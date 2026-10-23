@@ -52,7 +52,7 @@ final class OpsPortal
         if(!$order->workspace_id){$context=$this->context($order);if(!isset($context['intake'])){$context['intake']=['kind'=>'order','source'=>'manual','department'=>'road','cargo'=>[]];DB::table('ops_operational_state')->where('order_id',$order->id)->update(['context'=>json_encode($context)]);}}
         if(collect($items)->contains('key','documents_received'))return;
         array_unshift($items,['key'=>'documents_received','label'=>'Prijem i provjera dokumentacije','status'=>'pending','controlled'=>true,'plan_version'=>2,
-            'responsible_user_id'=>$order->responsible_user_id,'audience'=>'provider','source'=>'document_intake','required_documents'=>['CI','PL']]);
+            'responsible_user_id'=>$order->responsible_user_id,'audience'=>'provider','source'=>'document_intake','required_documents'=>['Commercial invoice','Packing list']]);
         if($order->workspace_id)ShipmentWorkspace::findOrFail($order->workspace_id)->update(['operational_checklist'=>$items]);
         else DB::table('ops_operational_state')->where('order_id',$order->id)->update(['items'=>json_encode($items)]);
         DB::table('ops_operational_state')->where('order_id',$order->id)->increment('revision');

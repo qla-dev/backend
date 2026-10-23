@@ -27,7 +27,7 @@ final class CargoReview
         foreach(DB::table('ops_orders')->where('load_id',$loadId)->get() as $order){
             $review=$this->stored($order);
             app(OpsPortal::class)->assertDocumentsReady($order);
-            abort_if(!empty($review['document_ids'])&&app(OperationalCompliance::class)->documentHashes($review['document_ids'])!==($review['document_hashes']??[]),409,'CI or packing-list evidence changed. A new provider review is required.');
+            abort_if(!empty($review['document_ids'])&&app(OperationalCompliance::class)->documentHashes($review['document_ids'])!==($review['document_hashes']??[]),409,'Commercial invoice or packing-list evidence changed. A new provider review is required.');
             abort_if(in_array($review['status']??'',['pending_customer','rejected'],true),409,'Urgent cargo / price amendment requires customer acceptance before operations can continue.');
         }
     }
@@ -116,7 +116,7 @@ final class CargoReview
                 if(collect($items)->contains('key','documents_received'))abort_unless(app(OpsPortal::class)->documentState($order)['receipt_valid']&&(app(OpsPortal::class)->documentState($order)['receipt']['document_ids']??[])===$before['document_ids']&&(int)($before['revision']??0)>(int)(app(OpsPortal::class)->documentState($order)['receipt']['review_revision']??0),409,'The document receipt changed. A new provider review is required.');
                 abort_unless(($before['status']??'')==='pending_customer',409,'There is no pending customer proposal.');
                 abort_unless(hash_equals($before['baseline_token'],$this->token($load,$workspace)),409,'The original cargo or price changed. A new proposal is required.');
-                abort_unless($ops->documentHashes($before['document_ids'])===$before['document_hashes'],409,'CI or packing-list evidence changed. A new proposal is required.');
+                abort_unless($ops->documentHashes($before['document_ids'])===$before['document_hashes'],409,'Commercial invoice or packing-list evidence changed. A new proposal is required.');
                 $review=array_merge($before,['revision'=>$data['revision']+1,'status'=>$data['action']==='approve'?'accepted':'rejected',
                     'decided_by'=>$user->id,'decided_at'=>now()->toIso8601String(),'decision_reason'=>$data['reason']]);
                 if($data['action']==='approve'){
@@ -139,7 +139,7 @@ final class CargoReview
             $items=array_values(array_filter($items,fn($item)=>!in_array($item['key'],['cargo_documents','cargo_reconciliation'],true)));
             $items[]=['key'=>'cargo_documents','label'=>'Receive and verify commercial invoice + packing list','status'=>$pending?'blocked':'completed','controlled'=>true,
                 'plan_version'=>2,'required_documents'=>['Commercial invoice','Packing list'],'responsible_user_id'=>$workspace->provider_user_id,'document_ids'=>$review['document_ids'],'document_hashes'=>$review['document_hashes'],
-                'next_action'=>$pending?'Await customer acceptance of cargo and price amendment':'CI and packing list verified','completed_by_user_id'=>$pending?null:$user->id,'completed_at'=>$pending?null:now()->toIso8601String()];
+                'next_action'=>$pending?'Await customer acceptance of cargo and price amendment':'Commercial invoice and packing list verified','completed_by_user_id'=>$pending?null:$user->id,'completed_at'=>$pending?null:now()->toIso8601String()];
             if($pending)$items[]=['key'=>'cargo_reconciliation','label'=>'URGENT: approve cargo data and revised price','status'=>'blocked','controlled'=>true,'plan_version'=>2,'urgent'=>true,
                 'audience'=>'customer','responsible_user_id'=>$workspace->customer_user_id,'due_date'=>now()->toDateString(),'next_action'=>'Customer must accept the full cargo and price proposal before operations continue.'];
             $items=app(OperationsPlan::class)->withRequirements($items,$load->toArray(),(int)$workspace->provider_user_id);
