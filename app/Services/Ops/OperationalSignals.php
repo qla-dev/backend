@@ -7,6 +7,22 @@ use Illuminate\Support\Facades\Schema;
 /** Read-through signals: the source record remains the evidence, no duplicate confirmations. */
 final class OperationalSignals
 {
+    /** Supplier projection: shipment milestones only, without commercial holds or internal evidence. */
+    public function supplierTimeline(object $order): array
+    {
+        $timeline = $this->orderTimeline($order);
+        $stages = array_values(array_map(
+            fn (array $stage) => array_intersect_key($stage, array_flip(['key', 'label', 'complete', 'at'])),
+            array_filter($timeline['stages'], fn (array $stage) => in_array($stage['key'], ['booked', 'confirmed', 'pickup', 'in_transit', 'delivered'], true))
+        ));
+        return [
+            'current' => collect($stages)->filter(fn ($stage) => $stage['complete'])->last()['label'] ?? 'Order pending',
+            'next' => collect($stages)->first(fn ($stage) => !$stage['complete'])['label'] ?? 'All operational milestones completed',
+            'hold' => null,
+            'stages' => $stages,
+        ];
+    }
+
     public function derive(object $order,array $items): array
     {
         if(!$order->load_id)return $items;

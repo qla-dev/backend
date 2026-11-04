@@ -36,6 +36,15 @@ class OpsSupplyChainTest extends TransportFlowTest
         $read=app(SupplyChain::class)->read($order,$this->actor(3));self::assertFalse($read['can_manage']);self::assertCount(1,$read['contacts']);self::assertArrayNotHasKey('agreed_total',$read);
         $this->denied(fn()=>app(\App\Services\Ops\CargoReview::class)->read($order,$this->actor(3)),403);
         $r=\Illuminate\Http\Request::create('/api/transport-orders/'.$order->id);$r->setUserResolver(fn()=>$this->actor(3));$route=$this->app['router']->getRoutes()->match($r);$r->setRouteResolver(fn()=>$route);$body=app(\App\Http\Controllers\Api\OpsPortalController::class)->show($r)->getData(true)['data'];self::assertTrue($body['supplier']);self::assertArrayNotHasKey('intake',$body);self::assertArrayNotHasKey('agreed_revenue',$body['order']);
+        self::assertSame(['current','next','hold','stages'],array_keys($body['timeline']));
+        self::assertNull($body['timeline']['hold']);
+        self::assertNotEmpty($body['timeline']['stages']);
+        foreach($body['timeline']['stages'] as $stage){
+            self::assertContains($stage['key'],['booked','confirmed','pickup','in_transit','delivered']);
+            self::assertSame([],array_diff(array_keys($stage),['key','label','complete','at']));
+        }
+        $r->setUserResolver(fn()=>$this->actor(4));
+        $this->denied(fn()=>app(\App\Http\Controllers\Api\OpsPortalController::class)->show($r),403);
 
         $this->denied(fn()=>app(SupplyChain::class)->read($order,$this->actor(4)),403);
     }

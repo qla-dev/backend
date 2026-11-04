@@ -39,7 +39,7 @@ final class OpsPortalController extends Controller
     }
     public function show(Request $r){
         $order=$this->order($r);$supply=app(\App\Services\Ops\SupplyChain::class);
-        if($supply->supplier($order,$r->user())&&!$supply->manages($order,$r->user()))return $this->response(['supplier'=>true,'order'=>['id'=>$order->id,'reference'=>$order->reference,'title'=>$order->title],'supply_chain'=>$supply->read($order,$r->user())]);
+        if($supply->supplier($order,$r->user())&&!$supply->manages($order,$r->user()))return $this->response(['supplier'=>true,'order'=>['id'=>$order->id,'reference'=>$order->reference,'title'=>$order->title],'supply_chain'=>$supply->read($order,$r->user()),'timeline'=>app(OperationalSignals::class)->supplierTimeline($order)]);
         abort_unless($this->portal->buyer($order,$r->user())||$this->portal->provider($order,$r->user()),403);
         return $this->response(['order'=>collect((array)$order)->only(['id','reference','title','status','load_id','workspace_id'])->all(),'documents'=>$this->portal->documents($order),
             'intake'=>$this->portal->documentState($order),'timeline'=>app(OperationalSignals::class)->orderTimeline($order)]);
