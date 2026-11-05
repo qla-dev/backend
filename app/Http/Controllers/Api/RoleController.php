@@ -10,7 +10,7 @@ class RoleController extends CrudController
     public function teamOptions(): JsonResponse
     {
         $roles = Role::query()->where('is_active', true)
-            ->whereIn('name', ['manager', 'dispatcher', 'customs_officer', 'finance', 'driver'])
+            ->whereIn('name', \App\Services\CompanyTeamAccess::ROLES)
             ->orderBy('label')->get(['id', 'name', 'label']);
 
         return response()->json(['message' => 'Team roles retrieved.', 'data' => $roles, 'meta' => [], 'errors' => []]);

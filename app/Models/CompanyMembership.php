@@ -10,7 +10,7 @@ class CompanyMembership extends BaseModel
 
     protected function casts(): array
     {
-        return ['joined_at' => 'datetime','departments'=>'array'];
+        return ['joined_at' => 'datetime','departments'=>'array','business_departments'=>'array','subdepartments'=>'array'];
     }
 
     public function company(): BelongsTo

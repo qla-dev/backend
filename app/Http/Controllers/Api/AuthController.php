@@ -143,7 +143,7 @@ class AuthController extends Controller
                 ->wherePivot('status', 'active')
                 ->first();
             abort_unless(
-                $company && ((int) $company->owner_user_id === (int) $user->id || $user->role?->name === 'manager'),
+                $company && ((int) $company->owner_user_id === (int) $user->id || app(\App\Services\CompanyTeamAccess::class)->manages($user,(int)$company->id)),
                 403,
                 'You are not allowed to edit this company profile.'
             );

@@ -13,6 +13,7 @@ final class OpsTaskAccess
 
     public function manages(User $user, int $company): bool
     {
+        if (!app(\App\Services\CompanyTeamAccess::class)->role($user,$company)) return false;
         return $user->isSuperAdminOrMaster()
             || (int) DB::table('companies')->where('id', $company)->value('owner_user_id') === (int) $user->id
             || in_array('setup', json_decode(DB::table('accounting_permissions')->where('company_id', $company)->where('user_id', $user->id)->value('abilities') ?? '[]', true), true);

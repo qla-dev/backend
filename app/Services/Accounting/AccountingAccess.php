@@ -13,7 +13,7 @@ final class AccountingAccess
     public function member(User $user, int $companyId): Company
     {
         $company = Company::findOrFail($companyId);
-        abort_unless((int) $company->owner_user_id === (int) $user->id || DB::table('company_user')
+        abort_unless($user->isSuperAdminOrMaster() || (int) $company->owner_user_id === (int) $user->id || DB::table('company_user')
             ->where('company_id', $companyId)->where('user_id', $user->id)->where('status', 'active')->exists(), 403);
 
         return $company;
@@ -22,6 +22,8 @@ final class AccountingAccess
     public function abilities(User $user, int $companyId): array
     {
         $this->member($user, $companyId);
+
+        if ($user->isSuperAdminOrMaster()) return self::ABILITIES;
 
         return json_decode(DB::table('accounting_permissions')->where('company_id', $companyId)
             ->where('user_id', $user->id)->value('abilities') ?? '[]', true) ?: [];

@@ -25,6 +25,9 @@ class OpsIntegrationTest extends TransportFlowTest
         Storage::fake('local');
         DB::table('users')->insert([['id'=>3,'name'=>'Unrelated customer'],['id'=>22,'name'=>'Sea operator']]);
         DB::table('company_user')->insert([['company_id'=>1,'user_id'=>1,'status'=>'active'],['company_id'=>1,'user_id'=>22,'status'=>'active']]);
+        Schema::create('roles',fn(Blueprint $t)=>[$t->id(),$t->string('name')]);
+        Schema::table('users',fn(Blueprint $t)=>$t->unsignedBigInteger('role_id')->nullable());
+        (require database_path('migrations/2026_11_05_000001_scope_company_team_roles.php'))->up();
         DB::table('accounting_permissions')->insert(['company_id'=>1,'user_id'=>22,'granted_by'=>1,'abilities'=>'["ops"]']);
         foreach([11=>[1,'provider-ci'],12=>[1,'provider-pl'],21=>[2,'customer-ci'],22=>[2,'customer-pl'],23=>[2,'replacement-ci'],31=>[3,'private-other-customer']] as $id=>[$owner,$name]){
             Storage::disk('local')->put('documents/'.$name.'.txt',$name);

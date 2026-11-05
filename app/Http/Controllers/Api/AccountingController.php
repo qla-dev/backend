@@ -40,9 +40,13 @@ final class AccountingController extends Controller
 
     public function companies(Request $r): JsonResponse
     {
-        return $this->response(Company::query()->where(function ($q) use ($r) {
-            $q->where('owner_user_id', $r->user()->id)->orWhereHas('users', fn ($u) => $u->where('users.id', $r->user()->id)->where('company_user.status', 'active'));
-        })->get(['id', 'name', 'owner_user_id']));
+        $team = app(\App\Services\CompanyTeamAccess::class);
+        $companies = $team->companies($r->user())->orderByRaw('CASE WHEN owner_user_id = ? THEN 0 WHEN id IN (SELECT company_id FROM company_user WHERE user_id = ? AND status = ?) THEN 1 ELSE 2 END', [$r->user()->id, $r->user()->id, 'active'])->orderBy('name')->get(['id', 'name', 'owner_user_id']);
+        foreach ($companies as $company) {
+            $company->setAttribute('membership_role', $team->role($r->user(), $company->id));
+            $company->setAttribute('can_manage_team', $team->manages($r->user(), $company->id));
+        }
+        return $this->response($companies);
     }
 
     public function context(Request $r): JsonResponse
@@ -52,7 +56,7 @@ final class AccountingController extends Controller
 
         return $this->response(['company' => $company->only(['id', 'name', 'owner_user_id']),
             'abilities' => $this->access->abilities($r->user(), $id), 'available_abilities' => AccountingAccess::ABILITIES,
-            'can_manage_permissions' => (int) $company->owner_user_id === (int) $r->user()->id,
+            'can_manage_permissions' => $r->user()->isSuperAdminOrMaster() || (int) $company->owner_user_id === (int) $r->user()->id,
             'user_id' => $r->user()->id,
             'configured' => DB::table('accounting_settings')->where('company_id', $id)->exists()]);
     }
@@ -61,7 +65,7 @@ final class AccountingController extends Controller
     {
         $id = (int) $r->route('company');
         $company = $this->access->member($r->user(), $id);
-        abort_unless((int) $company->owner_user_id === (int) $r->user()->id, 403);
+        abort_unless($r->user()->isSuperAdminOrMaster() || (int) $company->owner_user_id === (int) $r->user()->id, 403);
         $data = $r->validate(['user_id' => ['required', 'integer', 'exists:users,id'], 'abilities' => ['required', 'array'],
             'abilities.*' => [Rule::in(AccountingAccess::ABILITIES)]]);
         $user = User::findOrFail($data['user_id']);

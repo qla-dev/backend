@@ -339,15 +339,18 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
     Route::get('payments/{payment}/invoice', PaymentInvoiceDocumentController::class);
     Route::post('payments', [PaymentController::class, 'store'])->middleware('throttle:20,1');
 
-    Route::middleware('role:company,manager,superadmin,master')->group(function (): void {
+    Route::group([], function (): void {
+        Route::post('company-invitations/accept', [CompanyInvitationController::class, 'accept'])->middleware('throttle:20,1');
         Route::get('team-role-options', [RoleController::class, 'teamOptions']);
         Route::get('company-invitations/available-users', [CompanyInvitationController::class, 'availableUsers']);
         Route::apiResources([
             'company-memberships' => CompanyMembershipController::class,
             'company-invitations' => CompanyInvitationController::class,
-            'fleet-access' => FleetAccessController::class,
+
         ]);
     });
+
+    Route::apiResource('fleet-access', FleetAccessController::class)->middleware('role:company,manager,superadmin,master');
 
     // The access table owns this one outright: finance and the superadmin work the ledger, a company
     // and its manager may read it, and the middleware refuses their writes rather than trusting the

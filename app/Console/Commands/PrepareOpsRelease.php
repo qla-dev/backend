@@ -16,6 +16,7 @@ final class PrepareOpsRelease extends Command
         '2026_10_21_000001_create_operational_compliance',
         '2026_10_22_000001_create_transport_flows',
         '2026_10_23_000001_link_ops_departments_and_participants',
+        '2026_11_05_000001_scope_company_team_roles',
     ];
     private const COMPLIANCE_TABLES = ['ops_checklist_versions','ops_operational_state','ops_inspection_cases',
         'company_country_profiles','company_capability_verifications','compliance_document_links','compliance_audit'];
@@ -78,6 +79,10 @@ final class PrepareOpsRelease extends Command
             return self::FAILURE;
         }
         if(!in_array(self::MIGRATIONS[2],$ran,true)&&(Schema::hasTable('ops_order_participants')||Schema::hasColumn('company_user','departments'))){$this->error('Unregistered or partial OPS participant schema requires review.');return self::FAILURE;}
+        if (!in_array(self::MIGRATIONS[3],$ran,true) && (Schema::hasColumn('company_user','company_role_id') || Schema::hasColumn('company_user','business_departments') || Schema::hasColumn('company_user','subdepartments'))) {
+            $this->error('Unregistered or partial company team schema requires review. No schema changes applied.');
+            return self::FAILURE;
+        }
         $paths = array_map(fn($migration)=>database_path('migrations/'.$migration.'.php'),self::MIGRATIONS);
         foreach ($paths as $path) {
             if (!is_file($path)) {
@@ -95,6 +100,9 @@ final class PrepareOpsRelease extends Command
         if (!Schema::hasColumn('company_user','departments') || !Schema::hasColumn('ops_checklist_versions','transport_type') || !Schema::hasColumn('ops_checklist_versions','variant')) {
             $this->error('Transport template columns are missing.');
             return self::FAILURE;
+        }
+        foreach (['company_role_id','business_departments','subdepartments'] as $column) {
+            if (!Schema::hasColumn('company_user',$column)) { $this->error('Company team schema verification failed.'); return self::FAILURE; }
         }
         $this->info('OPS schema ready. No business records seeded, reset or deleted.');
         return self::SUCCESS;
