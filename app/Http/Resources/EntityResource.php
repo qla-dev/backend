@@ -12,6 +12,11 @@ class EntityResource extends JsonResource
     public function toArray(Request $request): array
     {
         $data=parent::toArray($request);
+        if ($this->resource instanceof \App\Models\User) {
+            $team = app(\App\Services\CompanyTeamAccess::class);
+            $data['can_manage_company_team'] = $this->resource->isSuperAdminOrMaster()
+                || $team->companies($this->resource)->get(['id'])->contains(fn($company) => $team->manages($this->resource, (int)$company->id));
+        }
         if ($this->resource instanceof \App\Models\CompanyMembership && $request->user()) {
             $team = app(\App\Services\CompanyTeamAccess::class);
             $data = array_merge($data, $team->organization($this->resource));

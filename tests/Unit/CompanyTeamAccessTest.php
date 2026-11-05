@@ -67,6 +67,16 @@ class CompanyTeamAccessTest extends AccountingModuleTest
         self::assertSame([2,1],array_column($companies,'id'));
     }
 
+    public function test_team_profile_exposes_local_management_without_promoting_platform_role(): void
+    {
+        $profile=(new \App\Http\Resources\EntityResource(User::findOrFail(4)))->resolve($this->request(4));
+        self::assertTrue($profile['can_manage_company_team']);
+        app(CompanyMembershipController::class)->update($this->request(1,['role_id'=>5]),1);
+        $profile=(new \App\Http\Resources\EntityResource(User::findOrFail(4)))->resolve($this->request(4));
+        self::assertFalse($profile['can_manage_company_team']);
+        self::assertSame('user',User::findOrFail(4)->role->name);
+    }
+
     public function test_team_company_role_changes_do_not_change_account_or_other_company(): void
     {
         app(CompanyMembershipController::class)->update($this->request(1,['role_id'=>5]),1);
