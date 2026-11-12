@@ -77,7 +77,7 @@ final class OpsController extends Controller
     {
         $id = $this->company($r);
         $data = $r->validate(['title' => ['required', 'string', 'max:255'], 'template_id' => ['prohibited'], 'customer_partner_id' => ['nullable', 'integer'],
-            'customer_name' => ['nullable', 'string', 'max:255'], 'responsible_user_id' => ['nullable', 'integer'], 'currency' => ['prohibited'], 'intake_currency'=>['sometimes', 'string', 'in:BAM,EUR,USD,GBP,CHF'],
+            'customer_name' => ['nullable', 'string', 'max:255'], 'responsible_user_id' => ['nullable', 'integer'], 'currency' => ['prohibited'], 'intake_currency'=>['sometimes', 'string', 'size:3', 'regex:/^[A-Z]{3}$/'],
             'agreed_revenue' => ['prohibited'], 'planned_start_at' => ['nullable', 'date'], 'planned_end_at' => ['nullable', 'date'], 'note' => ['nullable', 'string', 'max:5000'],
             'kind'=>['sometimes',Rule::in(['order','inquiry'])],'source'=>['sometimes',Rule::in(['manual','external'])],
             'department'=>['sometimes',Rule::in(\App\Services\Ops\TransportFlow::MODES)],'external_reference'=>['nullable','string','max:120'],
@@ -85,6 +85,7 @@ final class OpsController extends Controller
             'operations'=>['sometimes','array','min:1'],'operations.*'=>['string','distinct',Rule::in(array_keys(OpsOrders::INTAKE_OPERATIONS))],
             'document_ids'=>['sometimes','array','max:10'],'document_ids.*'=>['integer','distinct'],'cmr_document_id'=>['nullable','integer'],
             'route'=>['sometimes','array:from,to'],'route.from'=>['nullable','string','max:255'],'route.to'=>['nullable','string','max:255'],
+            'form_data'=>['sometimes','array','max:250'],
             'cargo'=>['sometimes','array:goods_type,weight_kg,volume_m3,pallets'],'cargo.goods_type'=>['nullable','string','max:255'],
             'cargo.weight_kg'=>['nullable','numeric','min:0'],'cargo.volume_m3'=>['nullable','numeric','min:0'],'cargo.pallets'=>['nullable','integer','min:0']]);
 

@@ -774,6 +774,7 @@ class LoadController extends CrudController
         $data['for_storage'] = $data['for_storage'] ?? (($data['transport_type'] ?? 'road') === 'warehouse');
         $data['public_id'] = (string) Str::uuid();
         $load = DB::transaction(function () use ($data, $stops) {
+            app(\App\Services\FleetOperations::class)->assertDispatchable($data['vehicle_id'] ?? null);
             // A CRM offer may only be linked by its own company; anything else is silently dropped.
             if (empty($data['crm_document_id']) || ! \Illuminate\Support\Facades\Schema::hasColumn('loads', 'crm_document_id')
                 || ! DB::table('crm_documents')->where('id', $data['crm_document_id'])->where('company_id', $data['company_id'] ?? 0)->whereNull('load_id')->exists()) {
@@ -804,6 +805,7 @@ class LoadController extends CrudController
         unset($data['stops']);
         $load = DB::transaction(function () use ($request, $id, $data, $hasStops, $stops) {
             $load = Load::query()->lockForUpdate()->findOrFail($id);
+            if(!empty($data['vehicle_id'])&&(int)$data['vehicle_id']!==(int)$load->vehicle_id || ($data['status']??null)==='in_delivery')app(\App\Services\FleetOperations::class)->assertDispatchable($data['vehicle_id'] ?? $load->vehicle_id);
             if(in_array($data['status']??'',['in_delivery','received','review','finished'],true))app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
             if($load->shipmentWorkspace()->exists()&&array_intersect(array_keys($data),\App\Services\Ops\CargoReview::FIELDS))abort(422,'Use the cargo and price review in Transport orders to amend booked cargo.');
             if (array_key_exists('status', $data) && $data['status'] !== $load->status) {
@@ -854,6 +856,7 @@ class LoadController extends CrudController
 
         $target = $data['status'] ?? null;
         if(in_array($target,['in_delivery','received','review','finished'],true))app(\App\Services\Ops\CargoReview::class)->assertUnblocked($load->id);
+        if($target==='in_delivery')app(\App\Services\FleetOperations::class)->assertDispatchable($load->vehicle_id);
         $adminReversal = $role === 'superadmin' && $target !== null
             && \App\Services\LoadStatusProgression::isBackward($load->status, $target);
         if ($target !== null && $role !== 'superadmin' && \App\Services\LoadStatusProgression::isBackward($load->status, $target)) {

@@ -71,6 +71,11 @@ class VehicleReturnInspectionController extends Controller
         $storedPaths = [];
         try {
             $inspection = DB::transaction(function () use ($request, $user, $load, $vehicle, $data, &$storedPaths): VehicleReturnInspection {
+                if ($vehicle->company_id) DB::table('companies')->where('id', $vehicle->company_id)->lockForUpdate()->firstOrFail();
+                $vehicle->refresh();
+                Vehicle::whereKey($vehicle->id)->lockForUpdate()->firstOrFail();
+                abort_if($vehicle->assigned_driver_user_id && $load->assigned_driver_user_id && (int)$vehicle->assigned_driver_user_id !== (int)$load->assigned_driver_user_id,422,'The route driver does not match the vehicle assignment. Record the correct handover first.');
+                abort_if($load->vehicleReturnInspection()->exists(), 409, 'A vehicle return is already recorded for this load.');
                 $inspection = VehicleReturnInspection::query()->create([
                     'load_id' => $load->id,
                     'vehicle_id' => $vehicle->id,
@@ -101,6 +106,17 @@ class VehicleReturnInspectionController extends Controller
                     ]);
                 }
 
+                $vehicleRole=$vehicle->company_id?app(\App\Services\FleetOperations::class)->role($user,(int)$vehicle->company_id):null;
+                $canTransfer=in_array($vehicleRole,['superadmin','master','company','manager','dispatcher'],true)
+                    || ((int)$vehicle->assigned_driver_user_id===(int)$user->id&&(int)$load->assigned_driver_user_id===(int)$user->id);
+                if ($vehicle->company_id && $canTransfer) {
+                    app(\App\Services\FleetOperations::class)->handover($vehicle, $user->id, [
+                        'load_id'=>$load->id, 'inspection_id'=>$inspection->id, 'destination'=>'depot',
+                        'depot_name'=>isset($data['parking_location'])?mb_substr($data['parking_location'],0,120):$vehicle->depot_name,
+                        'mileage_km'=>$data['mileage_km'], 'fuel_level_percent'=>$data['fuel_level_percent'],
+                        'has_damage'=>$data['has_damage'], 'notes'=>$data['damage_notes'] ?? null,
+                    ]);
+                }
                 if ($workspace = $load->shipmentWorkspace) {
                     $workspace->update(['operational_checklist' => array_map(fn ($item) =>
                         ($item['key'] ?? '') === 'vehicle_return'
@@ -129,7 +145,9 @@ class VehicleReturnInspectionController extends Controller
     public function photo(Request $request, VehicleReturnPhoto $photo): StreamedResponse
     {
         $photo->loadMissing('inspection.vehicle');
-        $this->authorizeVehicle($request, $photo->inspection->vehicle);
+        $own=(int)$photo->inspection->recorded_by_user_id===(int)$request->user()->id;
+        $handover=DB::table('fleet_handovers')->where('inspection_id',$photo->inspection->id)->where(fn($q)=>$q->where('from_driver_id',$request->user()->id)->orWhere('to_driver_id',$request->user()->id))->exists();
+        if(!$own&&!$handover)$this->authorizeVehicle($request, $photo->inspection->vehicle);
         abort_unless(Storage::disk('local')->exists($photo->path), 404);
 
         return Storage::disk('local')->response($photo->path, $photo->name, [
@@ -141,10 +159,11 @@ class VehicleReturnInspectionController extends Controller
     private function authorizeLoad(Request $request, Load $load, Vehicle $vehicle): void
     {
         $user = $request->user();
-        $role = $user?->role?->name;
+        $role = $load->company_id ? app(\App\Services\FleetOperations::class)->role($user,(int)$load->company_id) : null;
+        $isDriver=$user?->role?->name==='driver'||($vehicle->company_id&&app(\App\Services\FleetOperations::class)->role($user,(int)$vehicle->company_id)==='driver');
         $allowed = $user?->isSuperAdminOrMaster()
-            || ($role === 'driver' && (int) $load->assigned_driver_user_id === (int) $user->id)
-            || (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer'], true) && $user->companies()->whereKey($load->company_id)->exists());
+            || ($isDriver && (int) $load->assigned_driver_user_id === (int) $user->id)
+            || in_array($role, ['company', 'manager', 'dispatcher'], true);
 
         abort_unless($allowed && (int) $vehicle->id === (int) $load->vehicle_id, 403);
     }
@@ -152,14 +171,13 @@ class VehicleReturnInspectionController extends Controller
     private function authorizeVehicle(Request $request, Vehicle $vehicle): void
     {
         $user = $request->user();
-        $role = $user?->role?->name;
+        $role = $vehicle->company_id ? app(\App\Services\FleetOperations::class)->role($user,(int)$vehicle->company_id) : $user?->role?->name;
         $allowed = $user?->isSuperAdminOrMaster()
-            || (in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer'], true) && $user->companies()->whereKey($vehicle->company_id)->exists())
+            || in_array($role, ['company', 'manager', 'dispatcher'], true)
             || ($role === 'driver' && (
                 (int) $vehicle->owner_user_id === (int) $user->id
                 || (int) $vehicle->assigned_driver_user_id === (int) $user->id
-                || $vehicle->permittedUsers()->whereKey($user->id)->exists()
-                || $vehicle->loads()->where('assigned_driver_user_id', $user->id)->exists()
+                || $vehicle->permittedUsers()->whereKey($user->id)->where('fleet_access.can_view',true)->exists()
             ));
 
         abort_unless($allowed, 403);

@@ -225,6 +225,27 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
     Route::get('fuel-stations', [FuelStationController::class, 'index'])->middleware('throttle:120,1');
     Route::get('vehicles/{vehicle}/return-inspections', [VehicleReturnInspectionController::class, 'index']);
     Route::get('vehicle-return-photos/{photo}', [VehicleReturnInspectionController::class, 'photo']);
+    Route::get('fleet-operations/companies', [\App\Http\Controllers\Api\FleetOperationsController::class, 'companies']);
+    Route::get('fleet-operations/notifications', [\App\Http\Controllers\Api\FleetOperationsController::class, 'notifications']);
+    Route::prefix('fleet-operations/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\FleetOperationsController::class)->group(function (): void {
+        Route::get('context', 'context');
+        Route::get('handovers', 'handovers');
+        Route::post('handovers', 'createHandover');
+        Route::get('handovers/{id}', 'handoverDetail')->whereNumber('id');
+        Route::post('handovers/{id}/review', 'review')->whereNumber('id');
+        Route::get('damages', 'damages');
+        Route::get('damages/{id}', 'damageDetail')->whereNumber('id');
+        Route::patch('damages/{id}', 'updateDamage')->whereNumber('id');
+        Route::post('damages/{id}/files', 'upload')->whereNumber('id');
+        Route::get('files/{id}', 'file')->whereNumber('id');
+        Route::patch('vehicles/{id}', 'vehicle')->whereNumber('id');
+        Route::get('tours', 'tourList');
+        Route::post('tours/import', 'importTours');
+        Route::post('import-mapping', 'mapping')->middleware('throttle:20,1');
+        Route::get('tours/{id}', 'tourDetail')->whereNumber('id');
+        Route::post('tours/{id}/{action}', 'tourAction')->whereNumber('id')->where('action','assign|lock|reopen|complete');
+        Route::post('notifications/{id}/read', 'readNotification')->whereNumber('id');
+    });
     Route::get('reviews', [ReviewController::class, 'index']);
     Route::post('reviews', [ReviewController::class, 'store'])->middleware('throttle:20,1');
     Route::get('loads/{load}/invoice/{document}', LoadInvoiceDocumentController::class)

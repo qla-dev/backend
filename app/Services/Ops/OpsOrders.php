@@ -203,7 +203,7 @@ class OpsOrders
             }
             $order=$this->create($company,$actor,$data);
             $metadata=['kind'=>$data['kind']??'order','source'=>$data['source']??'manual','department'=>$data['department']??'road','external_reference'=>$data['external_reference']??null,
-                'customer_link'=>$link,'cargo'=>$data['cargo']??[],'route'=>$data['route']??[],'document_ids'=>$data['document_ids']??[],'cmr_document_id'=>$data['cmr_document_id']??null,'reviewed_by'=>$actor,'reviewed_at'=>now()->toIso8601String()];
+                'customer_link'=>$link,'form_data'=>$data['form_data']??null,'cargo'=>$data['cargo']??[],'route'=>$data['route']??[],'document_ids'=>$data['document_ids']??[],'cmr_document_id'=>$data['cmr_document_id']??null,'reviewed_by'=>$actor,'reviewed_at'=>now()->toIso8601String()];
             $items=[];
             foreach($data['operations']??['booking','goods_documents','pickup','transport','delivery'] as $key) $items[]=['key'=>$key,'label'=>self::INTAKE_OPERATIONS[$key], 'status'=>'pending','plan_version'=>2,'optional_selected'=>true,'source'=>'selected_intake','responsible_user_id'=>$data['responsible_user_id']??$actor,'audience'=>'provider','required_documents'=>$key==='cmr'?['CMR']:[]];
             $state=DB::table('ops_operational_state')->where('order_id',$order->id)->first();
