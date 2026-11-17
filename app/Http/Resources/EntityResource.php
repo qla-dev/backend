@@ -13,6 +13,10 @@ class EntityResource extends JsonResource
     {
         $data=parent::toArray($request);
         if ($this->resource instanceof \App\Models\User) {
+            if(((int)$request->user()?->id===(int)$this->resource->id||$request->is('api/auth/*'))&&\Illuminate\Support\Facades\Schema::hasTable('fleet_member_scopes')) {
+                $data['can_access_fleet']=\Illuminate\Support\Facades\DB::table('fleet_member_scopes as s')->join('company_user as m',fn($q)=>$q->on('m.company_id','=','s.company_id')->on('m.user_id','=','s.user_id'))
+                    ->where('s.user_id',$this->resource->id)->where('m.status','active')->get(['s.all_depots','s.depot_ids','s.vehicle_ids'])->contains(fn($s)=>$s->all_depots||count(json_decode($s->depot_ids,true)?:[])||count(json_decode($s->vehicle_ids??'[]',true)?:[]));
+            }
             $team = app(\App\Services\CompanyTeamAccess::class);
             $data['can_manage_company_team'] = $this->resource->isSuperAdminOrMaster()
                 || $team->companies($this->resource)->get(['id'])->contains(fn($company) => $team->manages($this->resource, (int)$company->id));

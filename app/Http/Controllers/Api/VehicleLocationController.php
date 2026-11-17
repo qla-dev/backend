@@ -46,6 +46,7 @@ class VehicleLocationController extends CrudController
             return;
         }
         $query->whereIn('vehicle_id', $this->permittedVehicleIds($user));
+        if(\Illuminate\Support\Facades\Schema::hasTable('fleet_member_scopes'))$query->whereIn('vehicle_id',app(\App\Services\FleetDepotAccess::class)->visibleVehicles($user)->select('vehicles.id'));
     }
 
     /** The vehicles this account owns, drives, has fleet access to, or whose company it belongs to. */
@@ -122,6 +123,7 @@ class VehicleLocationController extends CrudController
 
         abort_if($permitted->count() !== $vehicleIds->count(), 403, 'You cannot record positions for this vehicle.');
 
+        if(\Illuminate\Support\Facades\Schema::hasTable('fleet_member_scopes'))foreach($vehicleIds as $id)app(\App\Services\FleetDepotAccess::class)->vehicle($user,Vehicle::findOrFail($id),'handover');
         $now = now();
         $rows = collect($data['positions'])->map(fn (array $position): array => [
             'vehicle_id' => (int) $position['vehicle_id'],

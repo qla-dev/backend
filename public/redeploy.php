@@ -196,10 +196,15 @@ $deploymentHost = PHP_SAPI !== 'cli' ? strtolower(explode(':', (string) ($_SERVE
 $opsSchemaCommand = $phpCommand.' artisan freightbook:prepare-ops-release --no-ansi';
 if ($deploymentHost !== '') $opsSchemaCommand .= ' --deployment-site='.$shellArg($deploymentHost);
 
+$fleetSchemaCommand = $phpCommand.' artisan freightbook:prepare-fleet-release --no-ansi';
+if ($deploymentHost !== '') $fleetSchemaCommand .= ' --deployment-site='.$shellArg($deploymentHost);
+
 $commands = [
     ['label' => 'Pulling latest code', 'command' => 'git pull --ff-only'],
     ['label' => 'Installing Composer dependencies', 'command' => $composer.' install --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-dev --no-ansi'],
     ['label' => 'Preparing approved OPS schema', 'command' => $opsSchemaCommand],
+    ['label' => 'Inspecting approved fleet database', 'command' => $fleetSchemaCommand.' --inspect'],
+    ['label' => 'Preparing approved fleet schema', 'command' => $fleetSchemaCommand],
     ['label' => 'Clearing Laravel config cache', 'command' => $phpCommand.' artisan config:clear --no-ansi'],
     ['label' => 'Clearing Laravel route cache', 'command' => $phpCommand.' artisan route:clear --no-ansi'],
     ['label' => 'Clearing Laravel view cache', 'command' => $phpCommand.' artisan view:clear --no-ansi'],

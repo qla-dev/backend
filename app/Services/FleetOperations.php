@@ -22,14 +22,14 @@ final class FleetOperations
 
     public function authorize(User $user, int $company, bool $write = true): string
     {
-        $role = $this->role($user,$company);
-        abort_unless(in_array($role, $write ? ['superadmin','master','company','manager','dispatcher'] : ['superadmin','master','company','manager','dispatcher','driver'], true), 403);
-        return $role;
+        $scope=app(FleetDepotAccess::class)->authorize($user,$company,$write?'dispatch':'view');
+        return $scope['role'];
     }
 
     public function role(User $user,int $company): ?string
     {
-        return app(CompanyTeamAccess::class)->role($user,$company) ?? ((int)$user->driver?->primary_company_id===$company?'driver':null);
+        try { return app(FleetDepotAccess::class)->scope($user,$company)['role']; }
+        catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { if($e->getStatusCode()===403)return null;throw $e; }
     }
 
     public function driver(int $company, int $driver): void
@@ -49,6 +49,11 @@ final class FleetOperations
     /** Caller holds the vehicle lock. Transfer is immediate; review never silently changes custody. */
     public function handover(Vehicle $v, int $actor, array $data): int
     {
+        $actorUser=User::findOrFail($actor);
+        app(FleetDepotAccess::class)->vehicle($actorUser,$v,'handover');
+        $depotId=isset($data['depot_id'])?(int)$data['depot_id']:($v->depot_id?:$v->home_depot_id);
+        $depot=$depotId?app(FleetDepotAccess::class)->depot($actorUser,(int)$v->company_id,$depotId):null;
+        if ($depot) $data['depot_name']=$depot->name;
         $at = now();
         $fromDriver=$v->assigned_driver_user_id;
         if (in_array($v->status, ['sold','returned','stolen'], true)) abort(422, 'This vehicle is archived or unavailable.');
@@ -56,6 +61,8 @@ final class FleetOperations
         $to = $data['destination'] === 'driver' ? (int)($data['to_driver_id'] ?? 0) : null;
         if ($to) {
             $this->driver((int)$v->company_id, $to);
+            $allowed=app(FleetDepotAccess::class)->driverIds($actorUser,(int)$v->company_id,[$v->assigned_driver_user_id]);
+            abort_unless($allowed===null||in_array($to,$allowed),403,'Driver is outside your depot scope.');
             abort_if($v->dispatch_blocked || !in_array($v->status, self::ACTIVE_STATUSES, true), 422, 'Vehicle is not available for dispatch.');
             abort_if((int)$v->assigned_driver_user_id === $to, 422, 'Driver already has this vehicle.');
             abort_if(Vehicle::where('company_id',$v->company_id)->where('assigned_driver_user_id',$to)->where('id','!=',$v->id)->exists(),422,'Driver already has another vehicle. Return it first.');
@@ -66,14 +73,14 @@ final class FleetOperations
             'company_id'=>$v->company_id, 'vehicle_id'=>$v->id, 'load_id'=>$data['load_id'] ?? null,
             'inspection_id'=>$data['inspection_id'] ?? null, 'from_driver_id'=>$v->assigned_driver_user_id,
             'to_driver_id'=>$to, 'recorded_by'=>$actor, 'destination'=>$data['destination'],
-            'depot_name'=>$data['depot_name'] ?? $v->depot_name, 'plate'=>$v->registration_number,
+            'depot_id'=>$depotId,'from_depot_id'=>$v->depot_id,'depot_name'=>$data['depot_name'] ?? $v->depot_name, 'plate'=>$v->registration_number,
             'mileage_km'=>$data['mileage_km'], 'fuel_level_percent'=>$data['fuel_level_percent'],
             'has_damage'=>$data['has_damage'] ?? false, 'notes'=>$data['notes'] ?? null,
             'effective_at'=>$at, 'created_at'=>$at, 'updated_at'=>$at,
         ]);
         DB::table('fleet_assignments')->where('vehicle_id',$v->id)->whereNull('ended_at')->update(['ended_at'=>$at,'updated_at'=>$at]);
         if ($to) DB::table('fleet_assignments')->insert(['company_id'=>$v->company_id,'vehicle_id'=>$v->id,'driver_id'=>$to,'handover_id'=>$id,'started_at'=>$at,'created_at'=>$at,'updated_at'=>$at]);
-        $v->update(['assigned_driver_user_id'=>$to,'depot_name'=>$data['depot_name'] ?? $v->depot_name,
+        $v->update(['assigned_driver_user_id'=>$to,'depot_id'=>$depotId,'depot_name'=>$data['depot_name'] ?? $v->depot_name,
             'status'=>match($data['destination']) {'driver'=>'in_use','workshop'=>'maintenance','returned'=>'returned',default=>'depot'}]);
         $this->event((int)$v->company_id,$actor,'handover',$id,'created',['from_driver_id'=>$fromDriver,'to_driver_id'=>$to]);
         return $id;
@@ -82,7 +89,7 @@ final class FleetOperations
     public function damage(int $company, int $actor, int $vehicle, ?int $handover, array $data): int
     {
         $id = DB::table('fleet_damages')->insertGetId(['company_id'=>$company,'vehicle_id'=>$vehicle,'handover_id'=>$handover,
-            'recorded_by'=>$actor,'kind'=>$data['kind'] ?? 'internal','description'=>$data['description'],
+            'depot_id'=>$handover?DB::table('fleet_handovers')->where('id',$handover)->value('depot_id'):Vehicle::findOrFail($vehicle)->depot_id,'recorded_by'=>$actor,'kind'=>$data['kind'] ?? 'internal','description'=>$data['description'],
             'details'=>json_encode($data['details'] ?? []),'created_at'=>now(),'updated_at'=>now()]);
         DB::table('fleet_notifications')->insert(['company_id'=>$company,'damage_id'=>$id,'created_at'=>now(),'updated_at'=>now()]);
         if (!empty($data['block_vehicle'])) Vehicle::whereKey($vehicle)->update(['dispatch_blocked'=>true]);

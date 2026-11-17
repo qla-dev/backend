@@ -27,11 +27,15 @@ class FleetOperationsTest extends CompanyTeamAccessTest
         DB::table('company_user')->insert(['company_id'=>2,'user_id'=>8,'status'=>'active','company_role_id'=>9]);
         DB::table('vehicles')->insert([['id'=>1,'company_id'=>1,'registration_number'=>'TEST-001','assigned_driver_user_id'=>6,'ownership_type'=>'owned','status'=>'in_use'],['id'=>2,'company_id'=>2,'registration_number'=>'OTHER-001','assigned_driver_user_id'=>8,'ownership_type'=>'owned','status'=>'in_use']]);
         (require database_path('migrations/2026_11_12_000001_create_fleet_operations.php'))->up();
+        (require database_path('migrations/2026_11_17_000001_add_fleet_depots_and_access.php'))->up();
+        DB::table('fleet_depots')->insert([['id'=>10,'company_id'=>1,'code'=>'BER','name'=>'Berlin','active'=>true],['id'=>11,'company_id'=>1,'code'=>'LEI','name'=>'Leipzig','active'=>true],['id'=>12,'company_id'=>2,'code'=>'OTH','name'=>'Other','active'=>true]]);
+        DB::table('vehicles')->where('id',1)->update(['depot_id'=>10]);
+        DB::table('vehicles')->where('id',2)->update(['depot_id'=>12]);
     }
 
     private function req(int $actor,array $data=[]):Request{$r=Request::create('/fleet','POST',$data);$r->setUserResolver(fn()=>User::findOrFail($actor));return $r;}
     private function transfer(array $overrides=[]):int{return DB::transaction(fn()=>app(FleetOperations::class)->handover(Vehicle::findOrFail(1),1,array_merge(['destination'=>'driver','to_driver_id'=>7,'mileage_km'=>100,'fuel_level_percent'=>50,'has_damage'=>false],$overrides)));}
-    private function tour(array $overrides=[]):int{return DB::table('fleet_tours')->insertGetId(array_merge(['company_id'=>1,'service_date'=>now()->toDateString(),'depot_name'=>'Berlin','partner'=>'Partner','tour_code'=>'CA-01','driver_id'=>6,'vehicle_id'=>1,'created_by'=>1,'created_at'=>now(),'updated_at'=>now()],$overrides));}
+    private function tour(array $overrides=[]):int{return DB::table('fleet_tours')->insertGetId(array_merge(['company_id'=>1,'service_date'=>now()->toDateString(),'depot_id'=>10,'depot_name'=>'Berlin','partner'=>'Partner','tour_code'=>'CA-01','driver_id'=>6,'vehicle_id'=>1,'created_by'=>1,'created_at'=>now(),'updated_at'=>now()],$overrides));}
 
     public function test_transfer_changes_custody_without_finishing_load():void{
         DB::table('loads')->insert(['id'=>9,'company_id'=>1]);
@@ -86,14 +90,14 @@ class FleetOperationsTest extends CompanyTeamAccessTest
     }
     public function test_owned_vehicle_cannot_be_returned_as_rental():void{$this->expectException(HttpException::class);$this->transfer(['destination'=>'returned']);}
     public function test_import_preview_is_read_only_and_confirmation_deduplicates():void{
-        $payload=['service_date'=>now()->toDateString(),'depot_name'=>'Berlin','partner'=>'P','rows'=>[['tour_code'=>'001'],['tour_code'=>'001'],['tour_code'=>'']],'confirm'=>false];
+        $payload=['service_date'=>now()->toDateString(),'depot_id'=>10,'depot_name'=>'Berlin','partner'=>'P','rows'=>[['tour_code'=>'001'],['tour_code'=>'001'],['tour_code'=>'']],'confirm'=>false];
         $c=app(FleetOperationsController::class);$preview=$c->importTours($this->req(1,$payload),1)->getData(true)['data'];
         self::assertCount(1,$preview['valid']);self::assertCount(1,$preview['duplicates']);self::assertCount(1,$preview['invalid']);self::assertSame(0,DB::table('fleet_tours')->count());
         $payload['confirm']=true;$c->importTours($this->req(1,$payload),1);$c->importTours($this->req(1,$payload),1);self::assertSame(1,DB::table('fleet_tours')->count());self::assertSame('001',DB::table('fleet_tours')->first()->tour_code);
     }
     public function test_same_tour_id_can_exist_on_different_days_or_depots():void{
-        $c=app(FleetOperationsController::class);$p=['service_date'=>now()->toDateString(),'depot_name'=>'Berlin','partner'=>'P','rows'=>[['tour_code'=>'1']],'confirm'=>true];
-        $c->importTours($this->req(1,$p),1);$p['service_date']=now()->subDay()->toDateString();$c->importTours($this->req(1,$p),1);$p['depot_name']='Leipzig';$c->importTours($this->req(1,$p),1);self::assertSame(3,DB::table('fleet_tours')->count());
+        $c=app(FleetOperationsController::class);$p=['service_date'=>now()->toDateString(),'depot_id'=>10,'depot_name'=>'Berlin','partner'=>'P','rows'=>[['tour_code'=>'1']],'confirm'=>true];
+        $c->importTours($this->req(1,$p),1);$p['service_date']=now()->subDay()->toDateString();$c->importTours($this->req(1,$p),1);$p['depot_name']='Leipzig';$p['depot_id']=11;$c->importTours($this->req(1,$p),1);self::assertSame(3,DB::table('fleet_tours')->count());
     }
     public function test_mismatched_driver_cannot_lock():void{$id=$this->tour(['driver_id'=>7]);$this->expectException(HttpException::class);app(FleetOperations::class)->lockTour(DB::table('fleet_tours')->find($id),1);}
     public function test_change_driver_after_lock_blocks_completion_until_corrected():void{

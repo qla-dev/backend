@@ -94,14 +94,14 @@ Route::prefix('auth')->group(function (): void {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('google', [AuthController::class, 'google']);
     Route::post('apple', [AuthController::class, 'apple']);
-    Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
+    Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFleetResourceScope::class])->group(function (): void {
         Route::get('me', [AuthController::class, 'me']);
         Route::put('profile', [AuthController::class, 'updateProfile']);
         Route::post('logout', [AuthController::class, 'logout']);
     });
 });
 
-Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFleetResourceScope::class])->group(function (): void {
     Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\OperationalComplianceController::class)->group(function () {
         Route::get('ops/today', 'today');
         Route::get('ops/operational-overview', 'overview');
@@ -228,6 +228,15 @@ Route::middleware(['auth:sanctum', 'lena.guest'])->group(function (): void {
     Route::get('fleet-operations/companies', [\App\Http\Controllers\Api\FleetOperationsController::class, 'companies']);
     Route::get('fleet-operations/notifications', [\App\Http\Controllers\Api\FleetOperationsController::class, 'notifications']);
     Route::prefix('fleet-operations/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\FleetOperationsController::class)->group(function (): void {
+        Route::get('depots', [\App\Http\Controllers\Api\FleetDepotController::class,'index']);
+        Route::post('depots', [\App\Http\Controllers\Api\FleetDepotController::class,'save']);
+        Route::patch('depots/{id}', [\App\Http\Controllers\Api\FleetDepotController::class,'save'])->whereNumber('id');
+        Route::get('permissions', [\App\Http\Controllers\Api\FleetDepotController::class,'permissions']);
+        Route::put('permissions/{user}', [\App\Http\Controllers\Api\FleetDepotController::class,'grant'])->whereNumber('user');
+        Route::get('overview', [\App\Http\Controllers\Api\FleetDepotController::class,'overview']);
+        Route::patch('vehicle-service/{id}', [\App\Http\Controllers\Api\FleetDepotController::class,'service'])->whereNumber('id');
+        Route::get('vehicle-details/{id}', [\App\Http\Controllers\Api\FleetDepotController::class,'detail'])->whereNumber('id');
+        Route::patch('vehicle-depots/{id}', [\App\Http\Controllers\Api\FleetDepotController::class,'assignDepot'])->whereNumber('id');
         Route::get('context', 'context');
         Route::get('handovers', 'handovers');
         Route::post('handovers', 'createHandover');

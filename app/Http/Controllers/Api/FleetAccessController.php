@@ -6,6 +6,11 @@ use App\Models\FleetAccess;
 
 class FleetAccessController extends CrudController
 {
+    protected function applyFilters(\Illuminate\Database\Eloquent\Builder $query,\Illuminate\Http\Request $request):void
+    {
+        $query->whereIn('vehicle_id',app(\App\Services\FleetDepotAccess::class)->visibleVehicles($request->user())->select('vehicles.id'));
+    }
+
     protected function modelClass(): string
     {
         return FleetAccess::class;

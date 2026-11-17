@@ -20,6 +20,7 @@ class VehicleReturnInspectionController extends Controller
     public function index(Request $request, Vehicle $vehicle): JsonResponse
     {
         $this->authorizeVehicle($request, $vehicle);
+        if($vehicle->company_id)app(\App\Services\FleetDepotAccess::class)->vehicle($request->user(),$vehicle);
 
         $inspections = $vehicle->returnInspections()
             ->with(['photos:id,vehicle_return_inspection_id,name,mime_type,size_bytes', 'recordedBy:id,name'])
@@ -107,9 +108,10 @@ class VehicleReturnInspectionController extends Controller
                 }
 
                 $vehicleRole=$vehicle->company_id?app(\App\Services\FleetOperations::class)->role($user,(int)$vehicle->company_id):null;
-                $canTransfer=in_array($vehicleRole,['superadmin','master','company','manager','dispatcher'],true)
+                $canTransfer=in_array($vehicleRole,['superadmin','master','company','fleet_manager','depot_manager','dispatcher'],true)
                     || ((int)$vehicle->assigned_driver_user_id===(int)$user->id&&(int)$load->assigned_driver_user_id===(int)$user->id);
                 if ($vehicle->company_id && $canTransfer) {
+                    app(\App\Services\FleetDepotAccess::class)->vehicle($user,$vehicle,'handover');
                     app(\App\Services\FleetOperations::class)->handover($vehicle, $user->id, [
                         'load_id'=>$load->id, 'inspection_id'=>$inspection->id, 'destination'=>'depot',
                         'depot_name'=>isset($data['parking_location'])?mb_substr($data['parking_location'],0,120):$vehicle->depot_name,
@@ -145,6 +147,10 @@ class VehicleReturnInspectionController extends Controller
     public function photo(Request $request, VehicleReturnPhoto $photo): StreamedResponse
     {
         $photo->loadMissing('inspection.vehicle');
+        $fleetRecord=DB::table('fleet_handovers')->where('inspection_id',$photo->inspection->id)->first();
+        if($fleetRecord&&$photo->inspection->vehicle->company_id){
+            abort_unless(app(\App\Services\FleetDepotAccess::class)->query(DB::table('fleet_handovers'),$request->user(),(int)$fleetRecord->company_id,'handover')->where('id',$fleetRecord->id)->exists(),403);
+        }
         $own=(int)$photo->inspection->recorded_by_user_id===(int)$request->user()->id;
         $handover=DB::table('fleet_handovers')->where('inspection_id',$photo->inspection->id)->where(fn($q)=>$q->where('from_driver_id',$request->user()->id)->orWhere('to_driver_id',$request->user()->id))->exists();
         if(!$own&&!$handover)$this->authorizeVehicle($request, $photo->inspection->vehicle);
@@ -163,7 +169,7 @@ class VehicleReturnInspectionController extends Controller
         $isDriver=$user?->role?->name==='driver'||($vehicle->company_id&&app(\App\Services\FleetOperations::class)->role($user,(int)$vehicle->company_id)==='driver');
         $allowed = $user?->isSuperAdminOrMaster()
             || ($isDriver && (int) $load->assigned_driver_user_id === (int) $user->id)
-            || in_array($role, ['company', 'manager', 'dispatcher'], true);
+            || in_array($role, ['company', 'fleet_manager', 'depot_manager', 'dispatcher'], true);
 
         abort_unless($allowed && (int) $vehicle->id === (int) $load->vehicle_id, 403);
     }
@@ -173,7 +179,7 @@ class VehicleReturnInspectionController extends Controller
         $user = $request->user();
         $role = $vehicle->company_id ? app(\App\Services\FleetOperations::class)->role($user,(int)$vehicle->company_id) : $user?->role?->name;
         $allowed = $user?->isSuperAdminOrMaster()
-            || in_array($role, ['company', 'manager', 'dispatcher'], true)
+            || in_array($role, ['company', 'fleet_manager', 'depot_manager', 'dispatcher'], true)
             || ($role === 'driver' && (
                 (int) $vehicle->owner_user_id === (int) $user->id
                 || (int) $vehicle->assigned_driver_user_id === (int) $user->id

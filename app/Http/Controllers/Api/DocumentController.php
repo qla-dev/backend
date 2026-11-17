@@ -48,6 +48,8 @@ class DocumentController extends CrudController
 
     protected function applyFilters(Builder $query, Request $request): void
     {
+        if (Schema::hasTable('fleet_member_scopes')) $query->where(fn($q)=>$q->whereNull('vehicle_id')->orWhereIn('vehicle_id',app(\App\Services\FleetDepotAccess::class)->visibleVehicles($request->user())->select('vehicles.id')));
+        if (Schema::hasTable('fleet_member_scopes')) $query->where(fn($q)=>$q->whereNull('vehicle_id')->orWhereIn('vehicle_id',app(\App\Services\FleetDepotAccess::class)->visibleVehicles($request->user())->select('vehicles.id')));
         if ($request->filled('load_id')) {
             $query->where('load_id', $request->integer('load_id'));
         }

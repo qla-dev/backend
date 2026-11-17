@@ -22,7 +22,7 @@ class VehicleController extends CrudController
     {
         $p = $updating ? 'sometimes' : 'required';
 
-        return ['company_id' => ['nullable', 'integer', 'exists:companies,id'], 'owner_user_id' => ['nullable', 'integer', 'exists:users,id'], 'assigned_driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'registration_number' => [$p, 'string', 'max:80'], 'vin' => ['nullable', 'string', 'max:80'], 'transport_type' => ['sometimes', 'in:road,air,sea'], 'vehicle_type' => [$p, 'string', 'max:100'], 'make' => ['nullable', 'string', 'max:100'], 'model' => ['nullable', 'string', 'max:100'], 'year' => ['nullable', 'integer', 'between:1900,2100'], 'capacity_kg' => ['nullable', 'numeric', 'min:0'], 'capacity_m3' => ['nullable', 'numeric', 'min:0'], 'ownership_type' => ['sometimes', 'in:owned,financed,leasing,rented,other'], 'status' => ['sometimes', 'string', 'max:50'], 'features' => ['nullable', 'array']];
+        return ['company_id' => ['nullable', 'integer', 'exists:companies,id'], 'owner_user_id' => ['nullable', 'integer', 'exists:users,id'], 'assigned_driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'registration_number' => [$p, 'string', 'max:80'], 'vin' => ['nullable', 'string', 'max:80'], 'transport_type' => ['sometimes', 'in:road,air,sea'], 'vehicle_type' => [$p, 'string', 'max:100'], 'make' => ['nullable', 'string', 'max:100'], 'model' => ['nullable', 'string', 'max:100'], 'year' => ['nullable', 'integer', 'between:1900,2100'], 'capacity_kg' => ['nullable', 'numeric', 'min:0'], 'capacity_m3' => ['nullable', 'numeric', 'min:0'], 'ownership_type' => ['sometimes', 'in:owned,financed,leasing,rented,other'], 'status' => ['sometimes', 'string', 'max:50'], 'depot_id'=>['nullable','integer'],'home_depot_id'=>['nullable','integer'],'features' => ['nullable', 'array']];
     }
 
     protected function relations(): array
@@ -44,9 +44,11 @@ class VehicleController extends CrudController
     {
         if (!$request->boolean('include_archived')) $query->whereNotIn('status',['sold','returned','stolen']);
         $user = $request->user();
+        if ($user && \Illuminate\Support\Facades\Schema::hasTable('fleet_member_scopes')) $query->whereIn('vehicles.id',app(\App\Services\FleetDepotAccess::class)->visibleVehicles($user)->select('vehicles.id'));
         if (! $user) {
             return;
         }
+        if(\Illuminate\Support\Facades\Schema::hasTable('fleet_member_scopes'))$query->whereIn('vehicles.id',app(\App\Services\FleetDepotAccess::class)->visibleVehicles($user)->select('vehicles.id'));
 
         if ($user->role?->name === 'driver') {
             $query->where(function (Builder $visibility) use ($user): void {
@@ -110,6 +112,12 @@ class VehicleController extends CrudController
                 ?? null;
         }
 
+        if(!empty($data['company_id'])) {
+            $a=app(\App\Services\FleetDepotAccess::class);
+            if($role!=='driver')$a->authorize($user,(int)$data['company_id'],'create');
+            foreach(['depot_id','home_depot_id'] as $key)$a->depot($user,(int)$data['company_id'],$data[$key]??null);
+            if(!empty($data['depot_id']))$data['depot_name']=DB::table('fleet_depots')->where('id',$data['depot_id'])->value('name');
+        }
         abort_if(in_array($data['status'] ?? '', ['returned','sold','stolen'], true),422,'Register an active vehicle, then archive it through the fleet workflow.');
         $vehicle = DB::transaction(function()use($data,$user){
             if(!empty($data['company_id'])) {
@@ -138,11 +146,13 @@ class VehicleController extends CrudController
         $v=Vehicle::findOrFail($id);$user=$request->user();
         if($v->company_id && !($user->role?->name==='driver'&&(int)$v->owner_user_id===(int)$user->id))app(FleetOperations::class)->authorize($user,(int)$v->company_id);
         else abort_unless($user->isSuperAdminOrMaster()||(int)$v->owner_user_id===(int)$user->id,403);
+        app(\App\Services\FleetDepotAccess::class)->vehicle($user,$v,'service');
         $d=$request->validate($this->rules(true));
         abort_if(in_array($v->status,['sold','returned'],true),422,'Archived vehicle details are read-only.');
         abort_if(array_key_exists('company_id',$d)&&(int)$d['company_id']!==(int)$v->company_id,422,'Company ownership cannot be changed through vehicle editing.');
         abort_if(array_key_exists('assigned_driver_user_id',$d)&&(int)$d['assigned_driver_user_id']!==(int)$v->assigned_driver_user_id,422,'Use a vehicle handover to change the assigned driver.');
         abort_if(isset($d['status'])&&$d['status']!==$v->status,422,'Use fleet status management or a handover to change vehicle status.');
+        abort_if(array_key_exists('depot_id',$d)||array_key_exists('home_depot_id',$d),422,'Use depot assignment or a handover.');
         unset($d['owner_user_id']);
         $v->update($d);$v->load($this->relations());
         return $this->success((new EntityResource($v))->resolve($request),'Vehicle updated.');
