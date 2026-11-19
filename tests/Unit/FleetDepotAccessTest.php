@@ -174,6 +174,8 @@ class FleetDepotAccessTest extends FleetOperationsTest
         Schema::create('migrations',function(Blueprint $t){$t->id();$t->string('migration');$t->integer('batch');});
         $names=['2026_11_12_000001_create_fleet_operations','2026_11_17_000001_add_fleet_depots_and_access'];
         if(Schema::hasTable('fleet_vehicle_couplings'))$names[]='2026_11_19_000001_create_fleet_vehicle_couplings';
+        if(!Schema::hasTable('crm_documents'))Schema::create('crm_documents',fn(Blueprint $t)=>$t->id());
+        if(Schema::hasTable('fleet_handover_requests'))$names[]='2026_11_19_000002_create_freightbook_workflow_records';
         foreach($names as $name)DB::table('migrations')->insert(['migration'=>$name,'batch'=>1]);
         $before=DB::table('fleet_depots')->count();
         self::assertSame(0,\Illuminate\Support\Facades\Artisan::call('freightbook:prepare-fleet-release',['--inspect'=>true]));

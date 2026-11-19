@@ -11,7 +11,7 @@ final class PrepareFleetRelease extends Command
 {
     protected $signature='freightbook:prepare-fleet-release {--deployment-site=} {--inspect : Read-only database and migration preflight}';
     protected $description='Verify the database and prepare the approved fleet schema without reset or seed';
-    private const MIGRATIONS=['2026_11_12_000001_create_fleet_operations','2026_11_17_000001_add_fleet_depots_and_access','2026_11_19_000001_create_fleet_vehicle_couplings'];
+    private const MIGRATIONS=['2026_11_12_000001_create_fleet_operations','2026_11_17_000001_add_fleet_depots_and_access','2026_11_19_000001_create_fleet_vehicle_couplings','2026_11_19_000002_create_freightbook_workflow_records'];
     private const BASE_TABLES=['fleet_handovers','fleet_assignments','fleet_damages','fleet_files','fleet_tours','fleet_events','fleet_notifications','fleet_import_profiles'];
 
     public function handle(): int
@@ -35,6 +35,8 @@ final class PrepareFleetRelease extends Command
         foreach(self::MIGRATIONS as $name)$this->line($name.': '.(in_array($name,$ran,true)?'applied':'pending'));
         $first=in_array(self::MIGRATIONS[0],$ran,true);$second=in_array(self::MIGRATIONS[1],$ran,true);
         if(Schema::hasTable('fleet_vehicle_couplings')!==in_array(self::MIGRATIONS[2],$ran,true)){$this->error('Partial/unregistered vehicle coupling schema.');return self::FAILURE;}
+        foreach(['fleet_handover_requests','fleet_vehicle_reviews','fleet_vehicle_tasks','crm_logistics_cases','crm_supplier_quotes','crm_quote_versions'] as $table)if(Schema::hasTable($table)!==in_array(self::MIGRATIONS[3],$ran,true)){$this->error('Partial/unregistered workflow schema: '.$table);return self::FAILURE;}
+        if(!Schema::hasTable('crm_documents')){$this->error('CRM prerequisite missing.');return self::FAILURE;}
         foreach(self::BASE_TABLES as $table)if(Schema::hasTable($table)!==$first){$this->error('Partial/unregistered fleet schema: '.$table);return self::FAILURE;}
         foreach(['fleet_depots','fleet_member_scopes'] as $table)if(Schema::hasTable($table)!==$second){$this->error('Partial/unregistered depot schema: '.$table);return self::FAILURE;}
         if(Schema::hasColumn('vehicles','depot_name')!==$first||Schema::hasColumn('vehicles','depot_id')!==$second||Schema::hasColumn('vehicles','home_depot_id')!==$second){$this->error('Partial vehicle fleet columns.');return self::FAILURE;}

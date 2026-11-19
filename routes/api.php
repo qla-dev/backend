@@ -185,6 +185,12 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
         Route::match(['get', 'post'], 'pantheon/settings', 'pushSettings');
         Route::post('documents', 'store');
         Route::get('documents/{document}', 'show')->whereNumber('document');
+        Route::get('documents/{document}/logistics',[\App\Http\Controllers\Api\CrmLogisticsController::class,'index'])->whereNumber('document');
+        Route::post('documents/{document}/logistics',[\App\Http\Controllers\Api\CrmLogisticsController::class,'save'])->whereNumber('document');
+        Route::post('documents/{document}/logistics/suppliers',[\App\Http\Controllers\Api\CrmLogisticsController::class,'supplier'])->whereNumber('document');
+        Route::post('documents/{document}/logistics/versions',[\App\Http\Controllers\Api\CrmLogisticsController::class,'version'])->whereNumber('document');
+        Route::post('documents/{document}/logistics/versions/{version}/accept',[\App\Http\Controllers\Api\CrmLogisticsController::class,'accept'])->whereNumber(['document','version']);
+        Route::post('documents/{document}/logistics/reopen',[\App\Http\Controllers\Api\CrmLogisticsController::class,'reopen'])->whereNumber('document');
         Route::patch('documents/{document}', 'update')->whereNumber('document');
         Route::post('follow-ups', 'followUp');
         Route::post('follow-ups/{followUp}/done', 'completeFollowUp')->whereNumber('followUp');
@@ -228,6 +234,11 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
     Route::get('fleet-operations/companies', [\App\Http\Controllers\Api\FleetOperationsController::class, 'companies']);
     Route::get('fleet-operations/notifications', [\App\Http\Controllers\Api\FleetOperationsController::class, 'notifications']);
     Route::prefix('fleet-operations/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\FleetOperationsController::class)->group(function (): void {
+        Route::get('vehicle-workflow/{id}',[\App\Http\Controllers\Api\FleetWorkflowController::class,'index'])->whereNumber('id');
+        Route::get('workflow-alerts',[\App\Http\Controllers\Api\FleetWorkflowController::class,'alerts']);
+        Route::post('vehicle-workflow/{id}/review',[\App\Http\Controllers\Api\FleetWorkflowController::class,'review'])->whereNumber('id');
+        Route::post('vehicle-workflow/{id}/tasks',[\App\Http\Controllers\Api\FleetWorkflowController::class,'storeTask'])->whereNumber('id');
+        Route::post('vehicle-workflow/{id}/tasks/{task}',[\App\Http\Controllers\Api\FleetWorkflowController::class,'updateTask'])->whereNumber(['id','task']);
         Route::get('vehicle-couplings/{id}', [\App\Http\Controllers\Api\FleetCouplingController::class,'index'])->whereNumber('id');
         Route::post('vehicle-couplings/{id}', [\App\Http\Controllers\Api\FleetCouplingController::class,'attach'])->whereNumber('id');
         Route::post('vehicle-couplings/{id}/{coupling}/detach', [\App\Http\Controllers\Api\FleetCouplingController::class,'detach'])->whereNumber(['id','coupling']);

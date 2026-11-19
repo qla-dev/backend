@@ -672,7 +672,7 @@ class LoadController extends CrudController
         return [
             'customer_user_id' => ['sometimes', 'integer', 'exists:users,id'], 'consignee_customer_id' => ['nullable', 'integer', 'exists:customers,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'assigned_driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
-            'title' => [$p, 'string', 'max:255'], 'booking_reference' => ['nullable', 'string', 'max:160'], 'crm_document_id' => ['nullable', 'integer'], 'insurance' => ['nullable', 'string', 'max:255'],
+            'title' => [$p, 'string', 'max:255'], 'booking_reference' => ['nullable', 'string', 'max:160'], 'crm_document_id' => ['nullable', 'integer'], 'crm_quote_version_id' => ['nullable','integer'], 'insurance' => ['nullable', 'string', 'max:255'],
             'department' => ['nullable', 'string', 'max:120'], 'freight_mode' => ['nullable', 'string', 'max:120'], 'subdepartment' => ['nullable', 'string', 'max:120'],
             'status' => ['sometimes', Rule::in(Load::STATUSES)], 'transport_type' => ['sometimes', 'in:road,air,sea,rail,warehouse'], 'for_storage' => ['sometimes', 'boolean'],
             'cargo_type' => [$updating ? 'sometimes' : 'required_unless:transport_type,warehouse', 'nullable', 'string', 'max:100'], 'goods_type' => ['nullable', 'string', 'max:100'],
@@ -773,13 +773,14 @@ class LoadController extends CrudController
         $data['status'] = $data['status'] ?? 'pending';
         $data['for_storage'] = $data['for_storage'] ?? (($data['transport_type'] ?? 'road') === 'warehouse');
         $data['public_id'] = (string) Str::uuid();
-        $load = DB::transaction(function () use ($data, $stops) {
+        $load = DB::transaction(function () use ($data, $stops, $request) {
             app(\App\Services\FleetOperations::class)->assertDispatchable($data['vehicle_id'] ?? null);
-            // A CRM offer may only be linked by its own company; anything else is silently dropped.
-            if (empty($data['crm_document_id']) || ! \Illuminate\Support\Facades\Schema::hasColumn('loads', 'crm_document_id')
-                || ! DB::table('crm_documents')->where('id', $data['crm_document_id'])->where('company_id', $data['company_id'] ?? 0)->whereNull('load_id')->exists()) {
-                unset($data['crm_document_id']); // Missing column means code deployed before the Ops migration.
+            // Serialize conversion and reject stale or cross-company links explicitly.
+            if (!empty($data['crm_document_id'])) {
+                abort_unless(\Illuminate\Support\Facades\Schema::hasColumn('loads','crm_document_id'),503,'CRM linking is being prepared.');
+                app(\App\Services\Crm\CrmLoadLink::class)->assertAvailable($request->user(),(int)($data['company_id']??0),(int)$data['crm_document_id'],isset($data['crm_quote_version_id'])?(int)$data['crm_quote_version_id']:null);
             }
+            unset($data['crm_quote_version_id']);
             $load = Load::query()->create($data);
             if ($stops !== []) {
                 $load->stops()->createMany($stops);
@@ -799,7 +800,7 @@ class LoadController extends CrudController
     {
         $data = $request->validate($this->rules(true, $request->all()));
         // The CRM link is set once, on create; an update can never move a load to another offer.
-        unset($data['crm_document_id']);
+        unset($data['crm_document_id'],$data['crm_quote_version_id']);
         $hasStops = array_key_exists('stops', $data);
         $stops = $data['stops'] ?? [];
         unset($data['stops']);

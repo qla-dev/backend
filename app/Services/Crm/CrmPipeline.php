@@ -41,13 +41,18 @@ class CrmPipeline
             $query->where(fn ($q) => $q->where('number', 'like', $term)->orWhere('customer_name', 'like', $term)->orWhere('title', 'like', $term));
         }
 
-        return $query->orderByDesc('issued_on')->orderByDesc('id')->limit(min((int) ($filters['limit'] ?? 200), 500))->get()
-            ->map(fn ($d) => $this->decode($d))->all();
+        $rows=$query->orderByDesc('issued_on')->orderByDesc('id')->limit(min((int) ($filters['limit'] ?? 200), 500))->get();
+        if(Schema::hasTable('crm_quote_versions')) {
+            $quotes=DB::table('crm_logistics_cases as c')->join('crm_quote_versions as v','v.id','=','c.accepted_version_id')->where('c.company_id',$companyId)->whereIn('c.crm_document_id',$rows->pluck('id'))->get(['c.crm_document_id','v.snapshot','v.version'])->keyBy('crm_document_id');
+            foreach($rows as $row)if($v=$quotes->get($row->id)){$snapshot=json_decode($v->snapshot,true);$row->accepted_customer_quote=['version'=>$v->version,'sales_total'=>$snapshot['sales_total'],'currency'=>$snapshot['currency']];}
+        }
+        return $rows->map(fn($d)=>$this->decode($d))->all();
     }
 
     public function show(int $companyId, int $id): array
     {
         $document = $this->decode(DB::table('crm_documents')->where('company_id', $companyId)->where('id', $id)->first() ?? abort(404));
+        $document->logistics_case_id=Schema::hasTable('crm_logistics_cases')?DB::table('crm_logistics_cases')->where('crm_document_id',$id)->value('id'):null;
         $contacts = DB::table('crm_contacts')->where('company_id', $companyId)->where(function ($q) use ($document) {
             $q->when($document->customer_key, fn ($q) => $q->where('customer_key', $document->customer_key))
                 ->when($document->partner_id, fn ($q) => $q->orWhere('partner_id', $document->partner_id));

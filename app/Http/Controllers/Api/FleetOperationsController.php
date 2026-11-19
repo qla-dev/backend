@@ -101,20 +101,28 @@ class FleetOperationsController extends Controller
     {
         $role=$this->access($r,$company,false);$this->ability($r,$company,'handover');
         $d=$r->validate(['vehicle_id'=>['required','integer'],'destination'=>['required','in:driver,depot,workshop,returned'],
+            'request_key'=>['sometimes','uuid'],
             'to_driver_id'=>['nullable','required_if:destination,driver','integer'],'depot_name'=>['nullable','string','max:120'],'depot_id'=>['nullable','integer','required_if:destination,depot'],
             'mileage_km'=>['required','integer','min:0','max:999999999'],'fuel_level_percent'=>['required','integer','between:0,100'],
             'has_damage'=>['required','boolean'],'notes'=>['nullable','required_if:has_damage,1,true','string','max:5000'],
             'photos'=>['required','array','min:3','max:10'],'photos.*'=>['file','mimetypes:image/jpeg,image/png,image/webp,image/heic,image/heif','max:12288']]);
-        $paths=[];
+        $key=$d['request_key']??null;unset($d['request_key']);
+        if($key)abort_unless(\Illuminate\Support\Facades\Schema::hasTable('fleet_handover_requests'),503,'Handover release is being prepared. Retry shortly.');
+        $payload=[];foreach(['vehicle_id','to_driver_id','depot_id','mileage_km','fuel_level_percent'] as $field)$payload[$field]=isset($d[$field])&&$d[$field]!==''?(int)$d[$field]:null;
+        foreach(['destination','depot_name','notes'] as $field)$payload[$field]=(string)($d[$field]??'');$payload['has_damage']=(bool)$d['has_damage'];
+        $payload['photos']=array_map(fn($file)=>hash_file('sha256',$file->getRealPath()),$r->file('photos',[]));
+        $fingerprint=hash('sha256',json_encode($payload,JSON_THROW_ON_ERROR));$paths=[];
         try {
-            $id=DB::transaction(function()use($r,$company,$role,$d,&$paths){
+            $id=DB::transaction(function()use($r,$company,$role,$d,$key,$fingerprint,&$paths){
                 // Serialize dispatch changes company-wide, including a driver moving between vehicles.
                 DB::table('companies')->where('id',$company)->lockForUpdate()->firstOrFail();
+                if($key){$prior=DB::table('fleet_handover_requests')->where(['company_id'=>$company,'actor_id'=>$r->user()->id,'request_key'=>$key])->first();if($prior){abort_unless(hash_equals($prior->fingerprint,$fingerprint),409,'This request key was already used for different handover data. Refresh the handover history.');return $prior->handover_id;}}
                 $v=Vehicle::where('company_id',$company)->whereKey($d['vehicle_id'])->lockForUpdate()->firstOrFail();
                 abort_if($role==='driver'&&(int)$v->assigned_driver_user_id!==(int)$r->user()->id,403);
                 abort_if($role==='driver'&&$d['destination']==='returned',403);
                 $id=$this->fleet->handover($v,$r->user()->id,$d);
                 foreach($r->file('photos',[]) as $file)$this->storeFile($file,$company,$id,null,$paths);
+                if($key)DB::table('fleet_handover_requests')->insert(['company_id'=>$company,'actor_id'=>$r->user()->id,'request_key'=>$key,'fingerprint'=>$fingerprint,'handover_id'=>$id,'created_at'=>now(),'updated_at'=>now()]);
                 return $id;
             });
         }catch(\Throwable $e){foreach($paths as $p)Storage::disk('local')->delete($p);throw $e;}
