@@ -26,6 +26,7 @@ final class DiagnoseFleetDatabase extends Command
             $data['visible_processes'] = $processes->count();
             $data['process_states'] = $processes->groupBy(fn($r) => $r->Command.' / '.($r->State ?: 'idle'))->map(fn($rows) => ['count' => $rows->count(), 'longest_seconds' => $rows->max('Time')])->all();
             $data['app_debug'] = (bool) config('app.debug');
+            $data['environment'] = app()->environment();
             $data['note'] = 'Process visibility depends on DB privileges. Snapshot is read-only; SQL text, users and credentials are omitted.';
         } catch (\Throwable $e) {
             $this->error('Database diagnostics unavailable; check server logs or ask the hosting administrator. No changes made.');

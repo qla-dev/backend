@@ -39,7 +39,12 @@ return [
     |
     */
 
-    'debug' => (bool) env('APP_DEBUG', false),
+    // Public deployments must never expose SQL or stack traces, even with a stale .env.
+    'debug' => (bool) env('APP_DEBUG', false)
+        && env('APP_ENV', 'production') !== 'production'
+        && !in_array(strtolower((string) parse_url((string) env('APP_URL', ''), PHP_URL_HOST)), [
+            'freightbook.ai', 'www.freightbook.ai', 'cargo.qla.dev',
+        ], true),
 
     /*
     |--------------------------------------------------------------------------
