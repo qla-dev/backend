@@ -12,12 +12,24 @@ chdir($baseDir);
 putenv('COMPOSER_ALLOW_SUPERUSER=1');
 putenv('COMPOSER_NO_INTERACTION=1');
 
+$publicDeployment = PHP_SAPI !== 'cli' && in_array(strtolower(explode(':', (string) ($_SERVER['HTTP_HOST'] ?? ''))[0]), [
+    'freightbook.ai', 'www.freightbook.ai', 'cargo.qla.dev',
+], true);
+if ($publicDeployment) putenv('APP_DEBUG=false');
+
 $environmentFile = $baseDir.DIRECTORY_SEPARATOR.'.env';
 if (is_file($environmentFile)) {
     $environment = file_get_contents($environmentFile);
 
     if (is_string($environment)) {
         $normalizedEnvironment = preg_replace('/^(DB_HOST=)https?:\/\//m', '$1', $environment);
+
+        // Hosting may still label APP_ENV/APP_URL as local; public HTTP must not expose traces.
+        if ($publicDeployment && is_string($normalizedEnvironment)) {
+            $normalizedEnvironment = preg_match('/^APP_DEBUG\s*=/m', $normalizedEnvironment)
+                ? preg_replace('/^APP_DEBUG\s*=.*$/m', 'APP_DEBUG=false', $normalizedEnvironment)
+                : rtrim($normalizedEnvironment)."\nAPP_DEBUG=false\n";
+        }
 
         if (is_string($normalizedEnvironment) && $normalizedEnvironment !== $environment) {
             file_put_contents($environmentFile, $normalizedEnvironment, LOCK_EX);
