@@ -25,9 +25,33 @@ final class OpsPortalController extends Controller
     public function index(Request $r){
         $user=$r->user();$orders=DB::table('ops_orders')->whereIn('workspace_id',DB::table('shipment_workspace')->where('customer_user_id',$user->id)->select('id'));
         if(Schema::hasTable('ops_order_participants'))$orders->orWhereIn('id',DB::table('ops_order_participants')->where('user_id',$user->id)->whereIn('status',['invited','active'])->select('order_id'));
-        $rows=$orders->latest('id')->limit(200)->get()->map(function($order)use($user){$participant=Schema::hasTable('ops_order_participants')?DB::table('ops_order_participants')->where('order_id',$order->id)->where('user_id',$user->id)->first():null;
+        $orders = $orders->latest('id')->limit(200)->get();
+        $checklists = ShipmentWorkspace::where('customer_user_id', $user->id)
+            ->whereIn('id', $orders->pluck('workspace_id')->filter()->unique())
+            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->get(['id', 'operational_checklist'])->keyBy('id');
+        $documentOrders = $orders->filter(function ($order) use ($checklists) {
+            if (!$order->load_id || in_array($order->status, ['closed', 'cancelled'], true)) return false;
+            $workspace = $checklists->get($order->workspace_id);
+            if (!$workspace) return false;
+            return collect($workspace->operational_checklist)->contains(fn ($item) =>
+                ($item['key'] ?? '') === 'documents_received' && ($item['applicable'] ?? true) !== false
+                && !in_array($item['status'] ?? '', ['completed', 'not_applicable'], true));
+        });
+        $contexts = DB::table('ops_operational_state')->whereIn('order_id', $documentOrders->pluck('id'))->pluck('context', 'order_id');
+        $documentRoles = DB::table('ops_order_documents')
+            ->join('documents', 'documents.id', '=', 'ops_order_documents.document_id')
+            ->whereIn('ops_order_documents.order_id', $documentOrders->pluck('id'))->whereIn('ops_order_documents.role', ['ci', 'pl'])
+            ->get(['ops_order_documents.order_id', 'ops_order_documents.role'])->groupBy('order_id');
+        $documentOrderIds = $documentOrders->keyBy('id');
+        $rows=$orders->map(function($order)use($user,$documentOrderIds,$documentRoles,$contexts){$participant=Schema::hasTable('ops_order_participants')?DB::table('ops_order_participants')->where('order_id',$order->id)->where('user_id',$user->id)->first():null;
+            $access = $this->portal->buyer($order,$user)?'active':(app(\App\Services\Ops\SupplyChain::class)->supplier($order,$user)?'supplier':'invited');
+            $receipt = json_decode($contexts->get($order->id) ?? '{}', true)['document_intake']['receipt'] ?? null;
+            $missing = $access === 'active' && $documentOrderIds->has($order->id) && !$receipt
+                ? array_values(array_diff(['ci', 'pl'], $documentRoles->get($order->id, collect())->pluck('role')->all()))
+                : [];
             return ['id'=>$order->id,'reference'=>$order->reference,'title'=>$order->title,'status'=>$order->status,'provider'=>DB::table('companies')->where('id',$order->company_id)->value('name'),'workspace_id'=>$order->workspace_id,'load_id'=>$order->load_id,
-                'access'=>$this->portal->buyer($order,$user)?'active':(app(\App\Services\Ops\SupplyChain::class)->supplier($order,$user)?'supplier':'invited'),'invitation'=>$participant?collect((array)$participant)->only(['status','revision','expires_at'])->all():null];});
+                'access'=>$access,'missing_customer_documents'=>$missing,'invitation'=>$participant?collect((array)$participant)->only(['status','revision','expires_at'])->all():null];});
         // Bookings without a logistics-company work order remain visible without inventing a company.
         $assigned=ShipmentWorkspace::where(function($q)use($user){$q->where('provider_user_id',$user->id)->orWhere(function($q)use($user){$q->where('customer_user_id',$user->id)->whereNotIn('id',DB::table('ops_orders')->whereNotNull('workspace_id')->select('workspace_id'));});if(Schema::hasColumn('loads','assigned_driver_user_id'))$q->orWhereHas('freightLoad',fn($loads)=>$loads->where('assigned_driver_user_id',$user->id));});
         foreach($assigned->latest('id')->limit(100)->get() as $w){

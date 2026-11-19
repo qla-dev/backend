@@ -31,7 +31,7 @@ final class OpsTaskAccess
         return Schema::hasColumn('companies', 'verified_at') && DB::table('companies')->where('id', $order->company_id)->whereNotNull('verified_at')->exists();
     }
 
-    public function canEdit(User $user, object $order, array $item): bool
+    public function canEdit(User $user, object $order, array $item, ?bool $manage = null): bool
     {
         if(!empty($item['provider_company_id'])&&(int)$item['provider_company_id']!==(int)$order->company_id)return false;
         if (!empty($item['controlled']) || !empty($item['system']) || ($item['applicable'] ?? true) === false) return false;
@@ -39,7 +39,7 @@ final class OpsTaskAccess
             return (int) DB::table('shipment_workspace')->where('id', $order->workspace_id)->value('customer_user_id') === (int) $user->id || $user->isSuperAdminOrMaster();
         }
         if (!empty($item['verified_sea_only']) && !$this->verifiedSeaOrganizer($order)) return false;
-        return $this->manages($user, (int) $order->company_id) || (int) ($item['responsible_user_id'] ?? 0) === (int) $user->id;
+        return ($manage ?? $this->manages($user, (int) $order->company_id)) || (int) ($item['responsible_user_id'] ?? 0) === (int) $user->id;
     }
 
     /** Exact task assignment wins over the workspace's general provider role. */
@@ -59,17 +59,18 @@ final class OpsTaskAccess
         }));
     }
 
-    public function project(User $user, object $order, array $state): array
+    public function project(User $user, object $order, array $state, ?bool $manage = null): array
     {
-        $manage = $this->manages($user, (int) $order->company_id);
+        $manage ??= $this->manages($user, (int) $order->company_id);
         $state['can_manage'] = $manage;
         $state['viewer_id'] = (int) $user->id;
         $state['verified_sea_organizer'] = $this->verifiedSeaOrganizer($order);
-        $state['items'] = array_values(array_filter(array_map(function ($item) use ($user, $order) {
-            $item['can_edit'] = $this->canEdit($user, $order, $item);
+        $visible = array_filter($state['items'], fn ($item) => (empty($item['provider_company_id'])||(int)$item['provider_company_id']===(int)$order->company_id) && (!empty($item['system']) || (int) ($item['responsible_user_id'] ?? 0) === (int) $user->id || ($manage && empty($item['responsible_user_id']))));
+        $state['items'] = array_values(array_map(function ($item) use ($user, $order, $manage) {
+            $item['can_edit'] = $this->canEdit($user, $order, $item, $manage);
             $item['audience'] = (($item['audience'] ?? '') === 'customer' || in_array($item['key'] ?? '', self::CUSTOMER_KEYS, true)) ? 'customer' : 'provider';
             return $item;
-        }, $state['items']), fn ($item) => (empty($item['provider_company_id'])||(int)$item['provider_company_id']===(int)$order->company_id) && (!empty($item['system']) || (int) ($item['responsible_user_id'] ?? 0) === (int) $user->id || ($manage && empty($item['responsible_user_id'])))));
+        }, $visible));
         return $state;
     }
 }

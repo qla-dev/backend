@@ -54,6 +54,28 @@ class OpsSupplyChainTest extends TransportFlowTest
         $this->denied(fn()=>app(OpsPortal::class)->attach($order,$this->actor(3),3,'pod'),403);$this->denied(fn()=>app(OpsPortal::class)->attach($order,$this->actor(3),4,'ci'),404);
         app(SupplyChain::class)->act($order,$this->actor(2),['action'=>'revoke','contact_id'=>$c['id'],'revision'=>$c['revision']]);self::assertFalse(app(SupplyChain::class)->documentVisible($order,$this->actor(3),3));$this->denied(fn()=>app(OpsPortal::class)->attach($order,$this->actor(3),3,'ci'),403);
     }
+    public function test_only_booking_customer_sees_missing_document_actions(): void
+    {
+        $this->book();
+        $order = $this->order();
+        $portal = app(OpsPortal::class);
+        $portal->ensureDocumentOperation($order);
+        $this->invitation($order);
+        $participant = DB::table('ops_order_participants')->first();
+        $portal->participantAction($order, $this->actor(3), 'accept', $participant->revision);
+        $missing = function (int $actor) use ($order): array {
+            $request = \Illuminate\Http\Request::create('/api/transport-orders');
+            $request->setUserResolver(fn () => $this->actor($actor));
+            $data = app(\App\Http\Controllers\Api\OpsPortalController::class)->index($request)->getData(true)['data'];
+            return collect($data)->firstWhere('id', $order->id)['missing_customer_documents'];
+        };
+        self::assertSame(['ci', 'pl'], $missing(2));
+        self::assertSame([], $missing(3));
+        $portal->attach($order, $this->actor(3), 3, 'ci');
+        self::assertSame(['pl'], $missing(2));
+        $portal->attach($order, $this->actor(2), 2, 'pl');
+        self::assertSame([], $missing(2));
+    }
     public function test_new_external_contact_binds_only_after_email_verification(): void {
         $this->book();$order=$this->order();$this->invitation($order,'new@example.test');DB::table('users')->insert(['id'=>5,'name'=>'New supplier','email'=>'new@example.test']);$service=app(SupplyChain::class);
         $service->syncInvitations($this->actor(5));self::assertSame(0,DB::table('ops_order_participants')->count());DB::table('users')->where('id',5)->update(['email_verified_at'=>now()]);$service->syncInvitations($this->actor(5));self::assertSame(1,DB::table('ops_order_participants')->where('user_id',5)->where('role','supplier')->count());$service->syncInvitations($this->actor(5));self::assertSame(1,DB::table('ops_order_participants')->count());

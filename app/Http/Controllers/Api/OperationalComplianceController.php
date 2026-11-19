@@ -214,13 +214,18 @@ final class OperationalComplianceController extends Controller
     public function overview(Request $r)
     {
         $company = $this->company($r); $rows = [];
+        $taskAccess = app(\App\Services\Ops\OpsTaskAccess::class);
+        $manages = $taskAccess->manages($r->user(), $company);
         foreach (DB::table('ops_orders')->where('company_id',$company)->whereNotIn('status',['closed','cancelled'])->orderByDesc('id')->cursor() as $order) {
             if(app(\App\Services\Ops\OpsOrders::class)->intake($order)['kind']==='inquiry')continue;
+            $items = array_filter(
+                $taskAccess->project($r->user(), $order, $this->ops->read($order), $manages)['items'],
+                fn ($item) => ($item['key'] ?? '') !== 'financial_review' && ($item['applicable'] ?? true) !== false,
+            );
+            if (!$items) continue;
             $flow = app(\App\Services\Ops\TransportFlow::class)->read($order);
             $payment = app(\App\Services\Ops\TransportSettlement::class)->read($order)['payment'];
-            foreach (app(\App\Services\Ops\OpsTaskAccess::class)->project($r->user(), $order, $this->ops->read($order))['items'] as $item) {
-                if (($item['key'] ?? '') === 'financial_review') continue;
-                if (($item['applicable'] ?? true) === false) continue;
+            foreach ($items as $item) {
                 $rows[] = ['order_id'=>$order->id,'reference'=>$order->reference,'transport_type'=>$flow['transport_type'],'payment'=>$payment,'kind'=>'checklist','item'=>$item];
             }
         }
@@ -230,9 +235,11 @@ final class OperationalComplianceController extends Controller
     public function today(Request $r)
     {
         $company = $this->company($r); $result = [];
+        $taskAccess = app(\App\Services\Ops\OpsTaskAccess::class);
+        $manages = $taskAccess->manages($r->user(), $company);
         foreach (DB::table('ops_orders')->where('company_id', $company)->whereNotIn('status', ['closed','cancelled'])->orderBy('id')->cursor() as $order) {
             if(app(\App\Services\Ops\OpsOrders::class)->intake($order)['kind']==='inquiry')continue;
-            foreach (app(\App\Services\Ops\OpsTaskAccess::class)->project($r->user(), $order, $this->ops->read($order))['items'] as $item) {
+            foreach ($taskAccess->project($r->user(), $order, $this->ops->read($order), $manages)['items'] as $item) {
                 if (($item['key'] ?? '') === 'financial_review') continue;
                 if (($item['applicable'] ?? true) === false || in_array($item['status'] ?? '', ['completed','not_applicable'], true)) continue;
                 if (in_array($item['status'] ?? '', ['blocked','waiting_external']) || (!empty($item['due_date']) && substr($item['due_date'], 0, 10) <= now(config('app.timezone'))->toDateString())) {
@@ -243,12 +250,12 @@ final class OperationalComplianceController extends Controller
         foreach (DB::table('ops_inspection_cases')->join('ops_orders', 'ops_orders.id', '=', 'ops_inspection_cases.order_id')
             ->where('ops_inspection_cases.company_id', $company)->whereNotIn('ops_orders.status', ['closed','cancelled'])
             ->whereNotIn('ops_inspection_cases.status', ['approved','rejected','archived'])->whereNotNull('due_at')->where('due_at', '<=', now()->endOfDay())->get(['ops_inspection_cases.*', 'ops_orders.reference']) as $case) {
-            if (!app(\App\Services\Ops\OpsTaskAccess::class)->manages($r->user(), $company) && (int) $case->responsible_user_id !== (int) $r->user()->id) continue;
+            if (!$manages && (int) $case->responsible_user_id !== (int) $r->user()->id) continue;
             $result[] = ['order_id' => $case->order_id, 'reference' => $case->reference, 'kind' => 'inspection', 'item' => $this->decodeCase($case)];
         }
         if (\Illuminate\Support\Facades\Schema::hasTable('ops_transport_flows')) {
             foreach (DB::table('ops_transport_flows')->join('ops_orders','ops_orders.id','=','ops_transport_flows.order_id')->where('ops_transport_flows.company_id',$company)->where('ops_orders.status','!=','cancelled')->get(['ops_transport_flows.*','ops_orders.reference']) as $flow) {
-                foreach (json_decode($flow->transit,true) as $transit) if (($transit['status'] ?? '') !== 'discharged' && (app(\App\Services\Ops\OpsTaskAccess::class)->manages($r->user(), $company) || (int) ($transit['responsible_user_id'] ?? 0) === (int) $r->user()->id)) $result[]=['order_id'=>$flow->order_id,'reference'=>$flow->reference,'kind'=>'transit','item'=>$transit+['label'=>'Otvoren tranzit / NCTS','next_action'=>'Provjeriti službeni status tranzita']];
+                foreach (json_decode($flow->transit,true) as $transit) if (($transit['status'] ?? '') !== 'discharged' && ($manages || (int) ($transit['responsible_user_id'] ?? 0) === (int) $r->user()->id)) $result[]=['order_id'=>$flow->order_id,'reference'=>$flow->reference,'kind'=>'transit','item'=>$transit+['label'=>'Otvoren tranzit / NCTS','next_action'=>'Provjeriti službeni status tranzita']];
             }
         }
         if(\Illuminate\Support\Facades\Schema::hasTable('crm_follow_ups'))foreach(DB::table('crm_follow_ups')->where('company_id',$company)->where('owner_user_id',$r->user()->id)->whereNull('done_at')->whereDate('due_on','<=',now()->toDateString())->get() as $follow){
