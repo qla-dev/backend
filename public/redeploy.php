@@ -210,6 +210,7 @@ $commands = [
     ['label' => 'Clearing Laravel view cache', 'command' => $phpCommand.' artisan view:clear --no-ansi'],
     ['label' => 'Clearing Laravel application cache', 'command' => $phpCommand.' artisan cache:clear --no-ansi'],
     ['label' => 'Rebuilding Laravel config cache', 'command' => $phpCommand.' artisan config:cache --no-ansi'],
+    ['label' => 'Read-only database pressure snapshot', 'command' => $phpCommand.' artisan fleet:diagnose-database --json --no-ansi'],
 ];
 
 foreach ($commands as $step) {

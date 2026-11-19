@@ -82,11 +82,16 @@ final class FleetDepotController extends Controller
         elseif(!$r->boolean('include_archived'))$q->whereNotIn('status',['sold','returned','stolen']);
         $rows=$q->with(['assignedDriver:id,name'])->orderBy('registration_number')->paginate(25);
         $depots=DB::table('fleet_depots')->where('company_id',$company)->pluck('name','id');
-        $rows->getCollection()->transform(function($v)use($r,$company,$depots){
+        $ids=$rows->getCollection()->pluck('id');
+        $mileages=DB::table('fleet_handovers')->where('company_id',$company)->whereIn('vehicle_id',$ids)
+            ->selectRaw('vehicle_id, MAX(mileage_km) as mileage')->groupBy('vehicle_id')->pluck('mileage','vehicle_id');
+        $tours=$this->access->query(DB::table('fleet_tours')->where('company_id',$company),$r->user(),$company,'tour')
+            ->whereIn('vehicle_id',$ids)->whereDate('service_date',now()->toDateString())->whereIn('status',['open','locked'])
+            ->get(['id','vehicle_id','tour_code','partner','status'])->groupBy('vehicle_id');
+        $rows->getCollection()->transform(function($v)use($depots,$mileages,$tours){
             $v->depot_label=$depots[$v->depot_id]??$v->depot_name;
-            $v->last_mileage=DB::table('fleet_handovers')->where('vehicle_id',$v->id)->max('mileage_km');
-            $t=$this->access->query(DB::table('fleet_tours'),$r->user(),$company,'tour')->where('vehicle_id',$v->id)->whereDate('service_date',now()->toDateString())->whereIn('status',['open','locked']);
-            $v->active_tours=$t->get(['id','tour_code','partner','status']);return $v;
+            $v->last_mileage=$mileages[$v->id]??null;
+            $v->active_tours=$tours->get($v->id,collect())->values();return $v;
         });
         return $this->ok(['vehicles'=>$rows,'counts'=>$counts,'total'=>array_sum($counts->all()),'abilities'=>$s['abilities']]);
     }
@@ -96,10 +101,17 @@ final class FleetDepotController extends Controller
         $v=Vehicle::where('company_id',$company)->with(['assignedDriver:id,name','latestLocation'])->findOrFail($id);
         $this->access->vehicle($r->user(),$v);
         $s=$this->access->authorize($r->user(),$company);
-        $h=$this->access->query(DB::table('fleet_handovers'),$r->user(),$company,'handover')->where('vehicle_id',$id)->orderByDesc('id')->limit(30)->get();
-        $damages=in_array('damage',$s['abilities'])?$this->access->query(DB::table('fleet_damages'),$r->user(),$company,'damage')->where('vehicle_id',$id)->orderByDesc('id')->limit(30)->get():[];
+        $handovers=$this->access->query(DB::table('fleet_handovers')->where('company_id',$company),$r->user(),$company,'handover')->where('vehicle_id',$id);
+        $h=(clone $handovers)->orderByDesc('effective_at')->orderByDesc('id')->limit(30)->get();
+        $v->last_mileage=(clone $handovers)->max('mileage_km');
+        $v->active_tours=$this->access->query(DB::table('fleet_tours')->where('company_id',$company),$r->user(),$company,'tour')
+            ->where('vehicle_id',$id)->whereDate('service_date',now()->toDateString())->whereIn('status',['open','locked'])->get(['id','tour_code','partner','status']);
+        $damageQuery=in_array('damage',$s['abilities'])?$this->access->query(DB::table('fleet_damages')->where('company_id',$company),$r->user(),$company,'damage')->where('vehicle_id',$id):null;
+        $damages=$damageQuery?(clone $damageQuery)->orderByDesc('id')->limit(30)->get():[];
         $events=$s['admin']||$s['all']?DB::table('fleet_events')->where('company_id',$company)->where('entity_type','vehicle')->where('entity_id',$id)->orderByDesc('id')->limit(50)->get():[];
         return $this->ok(['vehicle'=>$v,'handovers'=>$h,'damages'=>$damages,'events'=>$events,
+            'last_handover'=>$h->first(),'pending_handovers'=>(clone $handovers)->where('review_status','pending')->count(),
+            'open_damages'=>$damageQuery?(clone $damageQuery)->where('status','!=','closed')->count():null,
             'home_depot'=>$v->home_depot_id?DB::table('fleet_depots')->where('company_id',$company)->where('id',$v->home_depot_id)->first():null,
             'depot'=>$v->depot_id?DB::table('fleet_depots')->where('company_id',$company)->where('id',$v->depot_id)->first():null,'abilities'=>$s['abilities']]);
     }

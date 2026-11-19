@@ -21,5 +21,19 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->report(function (\Throwable $e) {
+            if (\App\Support\DatabaseBusy::matches($e)) {
+                // Never use a database-backed logger or include SQL/token values here.
+                error_log('Freightbook DATABASE_BUSY: MySQL connection limit reached (1040).');
+                return false;
+            }
+        });
+        $exceptions->render(function (\Throwable $e, \Illuminate\Http\Request $request) {
+            if (\App\Support\DatabaseBusy::matches($e) && ($request->is('api/*') || $request->expectsJson())) {
+                return response()->json([
+                    'code' => 'DATABASE_BUSY',
+                    'message' => 'The database is busy. Please try again shortly.',
+                ], 503, ['Retry-After' => '5', 'Cache-Control' => 'no-store']);
+            }
+        });
     })->create();

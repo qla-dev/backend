@@ -41,6 +41,42 @@ class FleetDepotAccessTest extends FleetOperationsTest
         $c=app(FleetDepotController::class)->overview($this->requestFor(1),1)->getData(true)['data'];
         self::assertSame(2,$c['total']);self::assertSame(1,$c['counts']['sold']);self::assertSame(1,$c['vehicles']['total']);
     }
+    public function test_overview_query_count_does_not_grow_per_vehicle():void {
+        DB::enableQueryLog();
+        app(FleetDepotController::class)->overview($this->requestFor(1),1);
+        $baseline=count(DB::getQueryLog());
+        for($id=10;$id<34;$id++)DB::table('vehicles')->insert(['id'=>$id,'company_id'=>1,'depot_id'=>10,'registration_number'=>'TEST-'.$id,'status'=>'depot','ownership_type'=>'owned']);
+        DB::flushQueryLog();
+        $data=app(FleetDepotController::class)->overview($this->requestFor(1),1)->getData(true)['data'];
+        $queries=count(DB::getQueryLog());DB::disableQueryLog();
+        self::assertCount(25,$data['vehicles']['data']);
+        self::assertLessThanOrEqual($baseline+1,$queries,'Additional vehicles must not add individual mileage/tour queries.');
+    }
+    public function test_overview_and_detail_only_include_current_company_tours():void {
+        Schema::create('vehicle_locations',function(Blueprint $t){$t->id();$t->unsignedBigInteger('vehicle_id');$t->timestamp('recorded_at');$t->decimal('latitude')->nullable();$t->decimal('longitude')->nullable();});
+        DB::table('fleet_tours')->insert(['company_id'=>2,'service_date'=>now()->toDateString(),'depot_id'=>12,'depot_name'=>'Other','partner'=>'Foreign','tour_code'=>'SECRET','vehicle_id'=>1,'status'=>'open','created_by'=>1]);
+        DB::table('fleet_tours')->insert(['company_id'=>1,'service_date'=>now()->toDateString(),'depot_id'=>10,'depot_name'=>'Berlin','partner'=>'Own','tour_code'=>'OWN-1','vehicle_id'=>1,'status'=>'open','created_by'=>1]);
+        $overview=app(FleetDepotController::class)->overview($this->requestFor(1),1)->getData(true)['data'];
+        self::assertSame(['OWN-1'],array_column($overview['vehicles']['data'][0]['active_tours'],'tour_code'));
+        $detail=app(FleetDepotController::class)->detail($this->requestFor(1),1,1)->getData(true)['data'];
+        self::assertSame(['OWN-1'],array_column($detail['vehicle']['active_tours'],'tour_code'));
+        self::assertSame(0,$detail['pending_handovers']);self::assertSame(0,$detail['open_damages']);
+    }
+    public function test_database_busy_is_safe_even_before_authentication():void {
+        $pdo=new \PDOException('Secret SQL and token must not reach the client');
+        $pdo->errorInfo=['HY000',1040,'Too many connections'];
+        $exception=new \Illuminate\Database\QueryException('mysql','select * from personal_access_tokens where id = 513',[],$pdo);
+        DB::enableQueryLog();DB::flushQueryLog();
+        $response=app(\Illuminate\Contracts\Debug\ExceptionHandler::class)->render(Request::create('/api/fleet-operations/1/overview','GET',[],[],[],['HTTP_ACCEPT'=>'application/json']),$exception);
+        self::assertSame(503,$response->getStatusCode());
+        self::assertSame('5',$response->headers->get('Retry-After'));
+        self::assertSame('DATABASE_BUSY',$response->getData(true)['code']);
+        self::assertStringNotContainsString('personal_access_tokens',$response->getContent());
+        self::assertStringNotContainsString('Secret',$response->getContent());
+        self::assertCount(0,DB::getQueryLog());DB::disableQueryLog();
+        $pdo->errorInfo=['HY000',1045,'Access denied'];
+        self::assertFalse(\App\Support\DatabaseBusy::matches($pdo));
+    }
     public function test_depot_filter_cannot_expand_member_scope():void {
         $this->denied(fn()=>app(FleetDepotController::class)->overview($this->requestFor(4,['depot_id'=>11]),1));
     }
