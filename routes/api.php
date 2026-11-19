@@ -228,6 +228,9 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
     Route::get('fleet-operations/companies', [\App\Http\Controllers\Api\FleetOperationsController::class, 'companies']);
     Route::get('fleet-operations/notifications', [\App\Http\Controllers\Api\FleetOperationsController::class, 'notifications']);
     Route::prefix('fleet-operations/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\FleetOperationsController::class)->group(function (): void {
+        Route::get('vehicle-couplings/{id}', [\App\Http\Controllers\Api\FleetCouplingController::class,'index'])->whereNumber('id');
+        Route::post('vehicle-couplings/{id}', [\App\Http\Controllers\Api\FleetCouplingController::class,'attach'])->whereNumber('id');
+        Route::post('vehicle-couplings/{id}/{coupling}/detach', [\App\Http\Controllers\Api\FleetCouplingController::class,'detach'])->whereNumber(['id','coupling']);
         Route::get('depots', [\App\Http\Controllers\Api\FleetDepotController::class,'index']);
         Route::post('depots', [\App\Http\Controllers\Api\FleetDepotController::class,'save']);
         Route::patch('depots/{id}', [\App\Http\Controllers\Api\FleetDepotController::class,'save'])->whereNumber('id');

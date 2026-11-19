@@ -172,9 +172,11 @@ class FleetDepotAccessTest extends FleetOperationsTest
     }
     public function test_read_only_release_preflight_does_not_change_rows_or_history():void {
         Schema::create('migrations',function(Blueprint $t){$t->id();$t->string('migration');$t->integer('batch');});
-        foreach(['2026_11_12_000001_create_fleet_operations','2026_11_17_000001_add_fleet_depots_and_access'] as $name)DB::table('migrations')->insert(['migration'=>$name,'batch'=>1]);
+        $names=['2026_11_12_000001_create_fleet_operations','2026_11_17_000001_add_fleet_depots_and_access'];
+        if(Schema::hasTable('fleet_vehicle_couplings'))$names[]='2026_11_19_000001_create_fleet_vehicle_couplings';
+        foreach($names as $name)DB::table('migrations')->insert(['migration'=>$name,'batch'=>1]);
         $before=DB::table('fleet_depots')->count();
         self::assertSame(0,\Illuminate\Support\Facades\Artisan::call('freightbook:prepare-fleet-release',['--inspect'=>true]));
-        self::assertSame($before,DB::table('fleet_depots')->count());self::assertSame(2,DB::table('migrations')->count());
+        self::assertSame($before,DB::table('fleet_depots')->count());self::assertSame(count($names),DB::table('migrations')->count());
     }
 }

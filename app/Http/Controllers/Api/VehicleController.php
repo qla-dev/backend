@@ -81,6 +81,7 @@ class VehicleController extends CrudController
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());
+        $data = app(\App\Services\VehicleRegistry::class)->validate($data);
         $user = $request->user();
         $role = $user?->role?->name;
 
@@ -90,8 +91,9 @@ class VehicleController extends CrudController
         }
 
         if ($user && in_array($role, ['company', 'manager', 'dispatcher', 'customs_officer'], true)) {
-            $companyIds = $user->companies()->pluck('companies.id');
+            $companyIds = app(\App\Services\CompanyTeamAccess::class)->companies($user)->pluck('companies.id');
             $requestedCompanyId = isset($data['company_id']) ? (int) $data['company_id'] : null;
+            if($requestedCompanyId&&!$companyIds->contains($requestedCompanyId))throw ValidationException::withMessages(['company_id'=>['Select a company you are authorised to manage.']]);
             $companyId = $requestedCompanyId && $companyIds->contains($requestedCompanyId)
                 ? $requestedCompanyId
                 : $companyIds->first();
@@ -106,6 +108,7 @@ class VehicleController extends CrudController
         }
 
         if ($user && $role === 'driver') {
+            abort_if(\App\Services\VehicleRegistry::isTrailer($data['features']??null),422,'A company fleet manager must register trailers. Drivers are assigned to motor vehicles.');
             $data['assigned_driver_user_id'] = $user->id;
             $data['company_id'] = $user->driver?->primary_company_id
                 ?? $user->companies()->value('companies.id')
@@ -147,14 +150,29 @@ class VehicleController extends CrudController
         if($v->company_id && !($user->role?->name==='driver'&&(int)$v->owner_user_id===(int)$user->id))app(FleetOperations::class)->authorize($user,(int)$v->company_id);
         else abort_unless($user->isSuperAdminOrMaster()||(int)$v->owner_user_id===(int)$user->id,403);
         app(\App\Services\FleetDepotAccess::class)->vehicle($user,$v,'service');
+        if($v->company_id)abort_if(app(\App\Services\FleetDepotAccess::class)->scope($user,(int)$v->company_id)['role']==='workshop',403,'Use the service endpoint for workshop updates.');
         $d=$request->validate($this->rules(true));
+        $d=app(\App\Services\VehicleRegistry::class)->validate($d,$v);
+        if(isset($d['features']['resource_type'])&&($d['features']['resource_type']!==($v->features['resource_type']??null))) {
+            \App\Services\VehicleCouplings::assertDetached($v);
+        }
         abort_if(in_array($v->status,['sold','returned'],true),422,'Archived vehicle details are read-only.');
         abort_if(array_key_exists('company_id',$d)&&(int)$d['company_id']!==(int)$v->company_id,422,'Company ownership cannot be changed through vehicle editing.');
         abort_if(array_key_exists('assigned_driver_user_id',$d)&&(int)$d['assigned_driver_user_id']!==(int)$v->assigned_driver_user_id,422,'Use a vehicle handover to change the assigned driver.');
         abort_if(isset($d['status'])&&$d['status']!==$v->status,422,'Use fleet status management or a handover to change vehicle status.');
         abort_if(array_key_exists('depot_id',$d)||array_key_exists('home_depot_id',$d),422,'Use depot assignment or a handover.');
         unset($d['owner_user_id']);
-        $v->update($d);$v->load($this->relations());
+        DB::transaction(function()use($v,$d){
+            if($v->company_id)DB::table('companies')->where('id',$v->company_id)->lockForUpdate()->firstOrFail();
+            $locked=Vehicle::whereKey($v->id)->lockForUpdate()->firstOrFail();
+            abort_if(in_array($locked->status,['sold','returned'],true),422,'Archived vehicle details are read-only.');
+            abort_if(isset($d['status'])&&$d['status']!==$locked->status,422,'Vehicle status changed. Refresh before editing.');
+            abort_if(array_key_exists('assigned_driver_user_id',$d)&&(int)$d['assigned_driver_user_id']!==(int)$locked->assigned_driver_user_id,422,'Driver assignment changed. Refresh before editing.');
+            $checked=app(\App\Services\VehicleRegistry::class)->validate($d,$locked);
+            if(($checked['features']['resource_type']??null)!==($locked->features['resource_type']??null))\App\Services\VehicleCouplings::assertDetached($locked);
+            $locked->update($checked);
+        });
+        $v->refresh();$v->load($this->relations());
         return $this->success((new EntityResource($v))->resolve($request),'Vehicle updated.');
     }
 

@@ -223,6 +223,7 @@ $commands = [
     ['label' => 'Clearing Laravel application cache', 'command' => $phpCommand.' artisan cache:clear --no-ansi'],
     ['label' => 'Rebuilding Laravel config cache', 'command' => $phpCommand.' artisan config:cache --no-ansi'],
     ['label' => 'Read-only database pressure snapshot', 'command' => $phpCommand.' artisan fleet:diagnose-database --json --no-ansi'],
+    ['label' => 'Read-only vehicle registry audit', 'command' => $phpCommand.' artisan fleet:audit-registry --summary --no-ansi'],
 ];
 
 foreach ($commands as $step) {

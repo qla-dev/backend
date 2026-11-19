@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Vehicle extends BaseModel
 {
+    protected $appends = ['registry_warnings','registry_compliance'];
+    public function getRegistryWarningsAttribute(): array { return \App\Services\VehicleRegistry::warnings($this); }
+    public function getRegistryComplianceAttribute(): array { return \App\Services\VehicleRegistry::guidance($this->features); }
     protected function casts(): array
     {
         return ['features' => 'array', 'capacity_kg' => 'decimal:2', 'capacity_m3' => 'decimal:2'];

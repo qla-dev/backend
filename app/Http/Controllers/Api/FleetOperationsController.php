@@ -218,6 +218,7 @@ class FleetOperationsController extends Controller
         abort_if($d['status']==='returned',422,'Use a return handover for rented vehicles.');
         return DB::transaction(function()use($r,$company,$id,$d){
             $v=Vehicle::where('company_id',$company)->whereKey($id)->lockForUpdate()->firstOrFail();
+            if(in_array($d['status'],['sold','stolen','maintenance'],true)||$d['dispatch_blocked'])\App\Services\VehicleCouplings::assertDetached($v);
             abort_if(in_array($v->status,['sold','returned'],true),422,'Archived vehicle cannot be reactivated here.');
             $scope=$this->ability($r,$company,'status');
             if($scope['role']==='workshop') {

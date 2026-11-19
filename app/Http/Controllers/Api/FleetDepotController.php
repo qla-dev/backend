@@ -72,6 +72,8 @@ final class FleetDepotController extends Controller
     {
         $s=$this->access->authorize($r->user(),$company);
         $q=$this->access->query(Vehicle::where('company_id',$company),$r->user(),$company,'vehicle');
+        if($r->filled('resource_type'))$q->where('features->resource_type',$r->input('resource_type'));
+        if($r->filled('legal_category'))$q->where('features->legal_category',$r->input('legal_category'));
         if($r->filled('depot_id')) {
             if($r->input('depot_id')==='unassigned')$q->whereNull('depot_id');
             else { $this->access->depot($r->user(),$company,$r->integer('depot_id'),false);$q->where('depot_id',$r->integer('depot_id')); }
@@ -101,6 +103,11 @@ final class FleetDepotController extends Controller
         $v=Vehicle::where('company_id',$company)->with(['assignedDriver:id,name','latestLocation'])->findOrFail($id);
         $this->access->vehicle($r->user(),$v);
         $s=$this->access->authorize($r->user(),$company);
+        $v->linked_trailers=[];
+        if(\Illuminate\Support\Facades\Schema::hasTable('fleet_vehicle_couplings')) {
+            $ids=DB::table('fleet_vehicle_couplings')->where('company_id',$company)->where('towing_vehicle_id',$id)->whereNull('ended_at')->orderBy('position')->pluck('trailer_vehicle_id');
+            $v->linked_trailers=$this->access->query(Vehicle::where('company_id',$company),$r->user(),$company,'vehicle')->whereIn('id',$ids)->get(['id','registration_number','vehicle_type','features','capacity_kg','capacity_m3']);
+        }
         $handovers=$this->access->query(DB::table('fleet_handovers')->where('company_id',$company),$r->user(),$company,'handover')->where('vehicle_id',$id);
         $h=(clone $handovers)->orderByDesc('effective_at')->orderByDesc('id')->limit(30)->get();
         $v->last_mileage=(clone $handovers)->max('mileage_km');
@@ -123,6 +130,7 @@ final class FleetDepotController extends Controller
         foreach(['home_depot_id','depot_id'] as $key)$this->access->depot($r->user(),$company,$d[$key]??null);
         return DB::transaction(function()use($r,$company,$id,$d){
             $v=Vehicle::where('company_id',$company)->whereKey($id)->lockForUpdate()->firstOrFail();
+            \App\Services\VehicleCouplings::assertDetached($v);
             abort_if($v->assigned_driver_user_id&&($d['depot_id']??null)!=$v->depot_id,422,'Use a handover to transfer a vehicle currently assigned to a driver.');
             $before=$v->only(['home_depot_id','depot_id']);
             $v->home_depot_id=$d['home_depot_id']??null;$v->depot_id=$d['depot_id']??null;

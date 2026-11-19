@@ -17,6 +17,8 @@ final class FleetOperations
     {
         if(!$vehicle)return;
         $v=Vehicle::whereKey($vehicle)->lockForUpdate()->firstOrFail();
+        abort_if(VehicleRegistry::isTrailer($v->features),422,'Dispatch a motor vehicle; a trailer must be coupled to it.');
+        VehicleCouplings::assertDispatchableCombination($v);
         abort_if($v->dispatch_blocked||!in_array($v->status,self::ACTIVE_STATUSES,true),422,'Vehicle is archived, in workshop, or blocked for dispatch.');
     }
 
@@ -51,7 +53,10 @@ final class FleetOperations
     {
         $actorUser=User::findOrFail($actor);
         app(FleetDepotAccess::class)->vehicle($actorUser,$v,'handover');
+        abort_if(VehicleRegistry::isTrailer($v->features)&&$data['destination']==='driver',422,'Assign a driver to the towing vehicle, not to a trailer.');
+        if(in_array($data['destination'],['returned','workshop'],true))VehicleCouplings::assertDetached($v);
         $depotId=isset($data['depot_id'])?(int)$data['depot_id']:($v->depot_id?:$v->home_depot_id);
+        if((int)$depotId!==(int)$v->depot_id)VehicleCouplings::assertDetached($v);
         $depot=$depotId?app(FleetDepotAccess::class)->depot($actorUser,(int)$v->company_id,$depotId):null;
         if ($depot) $data['depot_name']=$depot->name;
         $at = now();
