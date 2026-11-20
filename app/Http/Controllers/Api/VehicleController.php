@@ -80,6 +80,32 @@ class VehicleController extends CrudController
 
     public function store(Request $request): JsonResponse
     {
+        $request->validate(['draft_id'=>['nullable','uuid']]);
+        if ($request->filled('draft_id')) {
+            return DB::transaction(function () use ($request) {
+                $draft=DB::table('vehicle_drafts')->where('id',$request->input('draft_id'))->where('user_id',$request->user()->id)->lockForUpdate()->firstOrFail();
+                abort_if($draft->deleted_at,409,'Draft has been deleted.');
+                if ($draft->company_id) app(\App\Services\FleetDepotAccess::class)->authorize($request->user(),(int)$draft->company_id,'create');
+                abort_unless((int)$draft->company_id===$request->integer('company_id'),422,'Draft belongs to another company.');
+                if ($draft->vehicle_id) {
+                    $vehicle=Vehicle::findOrFail($draft->vehicle_id);
+                    app(\App\Services\FleetDepotAccess::class)->vehicle($request->user(),$vehicle);
+                    $vehicle->load($this->relations());
+                    return $this->success((new EntityResource($vehicle))->resolve($request),'Vehicle already registered.');
+                }
+                $response=$this->storeVehicle($request);
+                $vehicleId=$response->getData(true)['data']['id'];
+                $form=json_decode($draft->form,true);
+                $form['savedVehicle']=$response->getData(true)['data'];
+                DB::table('vehicle_drafts')->where('id',$draft->id)->update(['vehicle_id'=>$vehicleId,'form'=>json_encode($form),'active_scope'=>null,'updated_at'=>now()]);
+                return $response;
+            });
+        }
+        return $this->storeVehicle($request);
+    }
+
+    private function storeVehicle(Request $request): JsonResponse
+    {
         $data = $request->validate($this->rules());
         $data = app(\App\Services\VehicleRegistry::class)->validate($data);
         $user = $request->user();

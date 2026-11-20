@@ -100,6 +100,11 @@ class DocumentController extends CrudController
      */
     public function upload(Request $request): JsonResponse
     {
+        if ($request->filled('vehicle_id')) {
+            app(\App\Services\FleetDepotAccess::class)->vehicle($request->user(),\App\Models\Vehicle::findOrFail($request->integer('vehicle_id')),'service');
+            $request->validate(['file'=>['required','file','mimes:pdf,jpg,jpeg,png','max:25600']]);
+            abort_if($request->filled('load_id') || $request->filled('load_draft_id') || $request->filled('user_id'),422,'Vehicle documents must belong only to the vehicle.');
+        }
         $data = $request->validate([
             'file' => ['required', 'file', 'max:25600'],
             'load_id' => ['nullable', 'integer', 'exists:loads,id'],
@@ -190,6 +195,9 @@ class DocumentController extends CrudController
      */
     public function destroy(Request $request, int $id): JsonResponse
     {
+        foreach (['fleet_vehicle_reviews','fleet_vehicle_tasks'] as $table) {
+            if (Schema::hasTable($table)) abort_if(DB::table($table)->where('document_id',$id)->exists(),409,'Vehicle review and service evidence must be preserved; upload a replacement instead.');
+        }
         if (Schema::hasTable('ops_inspection_cases')) abort_if(DB::table('ops_inspection_cases')->whereJsonContains('document_ids', $id)->exists(), 409, 'Inspekcijski dokaz mora ostati sačuvan; učitajte novu verziju.');
         $document = Document::query()->findOrFail($id);
         if (Schema::hasTable('accounting_invoice_documents')) abort_if(DB::table('accounting_invoice_documents')->where('document_id', $id)->exists(), 409, 'Documents linked to accounting records must be preserved.');
@@ -204,5 +212,16 @@ class DocumentController extends CrudController
         if (Schema::hasTable('ops_inspection_cases')) abort_if(DB::table('ops_inspection_cases')->whereJsonContains('document_ids', $id)->exists(), 409, 'Inspekcijski dokaz se ne zamjenjuje; učitajte novu verziju.');
         if (Schema::hasTable('accounting_invoice_documents')) abort_if(DB::table('accounting_invoice_documents')->where('document_id', $id)->exists(), 409, 'Accounting source documents cannot be replaced through the generic document API.');
         return parent::update($request, $id);
+    }
+
+    public function replace(Request $request, int $id): JsonResponse
+    {
+        $document=Document::findOrFail($id);
+        abort_unless($document->vehicle_id,422,'Only vehicle documents can be replaced here.');
+        app(\App\Services\FleetDepotAccess::class)->vehicle($request->user(),\App\Models\Vehicle::findOrFail($document->vehicle_id),'service');
+        $request->validate(['file'=>['required','file','mimes:pdf,jpg,jpeg,png','max:25600']]);
+        // Keep the previous file as history, including any service/review references to it.
+        $request->merge(['vehicle_id'=>$document->vehicle_id,'type'=>$document->type,'reference'=>'Replaces document #'.$document->id]);
+        return $this->upload($request);
     }
 }

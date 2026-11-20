@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Editing snapshots must preserve unfinished strings exactly, including blanks and spaces.
+        $isDraft = fn (Request $request) => $request->is('api/form-drafts*') || $request->is('api/vehicle-drafts*');
+        $middleware->trimStrings(except: [$isDraft]);
+        $middleware->convertEmptyStringsToNull(except: [$isDraft]);
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : route('login'));
         $middleware->alias([
             'lena.guest' => \App\Http\Middleware\RestrictLenaGuest::class,

@@ -94,14 +94,14 @@ Route::prefix('auth')->group(function (): void {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('google', [AuthController::class, 'google']);
     Route::post('apple', [AuthController::class, 'apple']);
-    Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFleetResourceScope::class])->group(function (): void {
+    Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFleetResourceScope::class, \App\Http\Middleware\GuardFormDraftSubmission::class])->group(function (): void {
         Route::get('me', [AuthController::class, 'me']);
         Route::put('profile', [AuthController::class, 'updateProfile']);
         Route::post('logout', [AuthController::class, 'logout']);
     });
 });
 
-Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFleetResourceScope::class])->group(function (): void {
+Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFleetResourceScope::class, \App\Http\Middleware\GuardFormDraftSubmission::class])->group(function (): void {
     Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\OperationalComplianceController::class)->group(function () {
         Route::get('ops/today', 'today');
         Route::get('ops/operational-overview', 'overview');
@@ -304,6 +304,16 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
         Route::post('loads/{load}/book', [LoadController::class, 'book']);
     });
 
+    Route::get('form-drafts', [\App\Http\Controllers\Api\FormDraftController::class, 'index']);
+    Route::get('form-drafts/current', [\App\Http\Controllers\Api\FormDraftController::class, 'current']);
+    Route::put('form-drafts/{id}', [\App\Http\Controllers\Api\FormDraftController::class, 'save']);
+    Route::delete('form-drafts/{id}', [\App\Http\Controllers\Api\FormDraftController::class, 'close']);
+    Route::post('form-drafts/{id}/complete', [\App\Http\Controllers\Api\FormDraftController::class, 'close']);
+    Route::post('form-drafts/{id}/rebase', [\App\Http\Controllers\Api\FormDraftController::class, 'rebase']);
+    Route::get('vehicle-drafts/current', [\App\Http\Controllers\Api\VehicleDraftController::class, 'show']);
+    Route::put('vehicle-drafts/{id}', [\App\Http\Controllers\Api\VehicleDraftController::class, 'save']);
+    Route::delete('vehicle-drafts/{id}', [\App\Http\Controllers\Api\VehicleDraftController::class, 'destroy']);
+    Route::post('documents/{document}/replace', [DocumentController::class, 'replace'])->whereNumber('document');
     Route::post('documents/upload', [DocumentController::class, 'upload']);
     Route::get('documents/{document}/download', [DocumentController::class, 'download']);
 

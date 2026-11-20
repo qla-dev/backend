@@ -1,0 +1,13 @@
+# Private form drafts
+
+`form_drafts` stores recoverable editing snapshots separately from business records. Payloads and cached successful submission responses use Laravel encryption. Keys combine user, company, module, form and record; a unique active scope prevents duplicate active drafts. Each write checks its revision. Completion/deletion releases the active scope and retains a tombstone for interrupted browser sessions.
+
+Authenticated endpoints are `GET /form-drafts`, `GET /form-drafts/current`, `PUT /form-drafts/{uuid}`, `DELETE /form-drafts/{uuid}`, and `POST /form-drafts/{uuid}/complete` or `/rebase`. Company membership is rechecked on access. Supported original records are authorized separately, including fleet depot restrictions. Original mutation controllers retain their normal authorization.
+
+`GuardFormDraftSubmission` handles `X-Form-Draft` / `X-Form-Draft-Revision`. It locks the draft and supported source record, rejects changed source fingerprints, and stores the successful JSON result in the mutation transaction. A retry with identical method/path/body/file hashes returns that result without executing the write again. Changed permissions invalidate cached replay. Failed requests retain the editing draft. Rebase checks both draft revision and the reviewed current source fingerprint.
+
+Only draft endpoints bypass trimming and empty-string-to-null conversion, preserving partially typed values. Business request normalization is unchanged. Payload validation caps JSON at 2 MB. Passwords, secrets, authorization/API tokens and payment card fields are stripped recursively on both client and server. Pending file content remains in browser IndexedDB until a normal document upload; already uploaded document IDs can be included in a snapshot.
+
+The earlier `vehicle_drafts` endpoint/table is retained for compatibility; the updated frontend vehicle editor uses the central service. Apply the two additive migrations `2026_11_20_000001_create_vehicle_drafts` and `2026_11_20_000002_create_form_drafts` through the normal deployment process before deploying the new frontend. No seed/reset is necessary. Preserve `APP_KEY` because draft encryption relies on it. Production migrations were not run during implementation.
+
+Tests use verified SQLite `:memory:` only. `FormDraftsTest --filter test_global`: 9 tests / 177 assertions for isolation, encryption/redaction, revisions, deletion, conflicts/rebase, repeat submission, revoked permissions and string normalization. Fleet registry regression: 113 tests / 839 assertions. The focused vehicle improvement filter: 5 tests / 602 assertions. The local test/bootstrap paths are not runtime dependencies.

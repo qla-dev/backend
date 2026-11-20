@@ -12,6 +12,7 @@ class EntityResource extends JsonResource
     public function toArray(Request $request): array
     {
         $data=parent::toArray($request);
+        if($this->resource instanceof \Illuminate\Database\Eloquent\Model && in_array($this->resource->getTable(),\App\Services\FormDrafts::RESOURCES,true))$data['draft_record_hash']=app(\App\Services\FormDrafts::class)->hash((object)$this->resource->getAttributes());
         if ($this->resource instanceof \App\Models\User) {
             if(((int)$request->user()?->id===(int)$this->resource->id||$request->is('api/auth/*'))&&\Illuminate\Support\Facades\Schema::hasTable('fleet_member_scopes')) {
                 $data['can_access_fleet']=\Illuminate\Support\Facades\DB::table('fleet_member_scopes as s')->join('company_user as m',fn($q)=>$q->on('m.company_id','=','s.company_id')->on('m.user_id','=','s.user_id'))

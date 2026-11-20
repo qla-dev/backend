@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\DB;
 
 class Invoice extends BaseModel
 {
-    protected $appends = ['payment_status', 'paid_amount', 'remaining_amount', 'posting_status', 'tax_unknown', 'payment_activity'];
+    protected $appends = ['payment_status', 'paid_amount', 'remaining_amount', 'posting_status', 'tax_unknown', 'payment_activity','draft_record_hash'];
+    public function getDraftRecordHashAttribute():string {return app(\App\Services\FormDrafts::class)->hash((object)$this->getAttributes());}
 
     public function getPaymentActivityAttribute(): array
     {

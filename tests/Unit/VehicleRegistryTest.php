@@ -21,6 +21,8 @@ class VehicleRegistryTest extends FleetDepotAccessTest
         parent::setUp();
         Schema::table('vehicles',function(Blueprint $t){$t->string('transport_type')->nullable();$t->decimal('capacity_kg',15,2)->nullable();$t->decimal('capacity_m3',15,2)->nullable();});
         (require database_path('migrations/2026_11_19_000001_create_fleet_vehicle_couplings.php'))->up();
+        // Fixtures extend the table after earlier suites may have cached its old column list.
+        (new \ReflectionProperty(\Illuminate\Database\Eloquent\Model::class,'guardableColumns'))->setValue(null,[]);
     }
     private function request(int $user,array $data=[]):Request {$r=Request::create('/api/fleet','POST',$data);$r->setUserResolver(fn()=>User::findOrFail($user));return $r;}
     private function assets():void {
@@ -47,7 +49,7 @@ class VehicleRegistryTest extends FleetDepotAccessTest
         $this->expectException(ValidationException::class);app(VehicleRegistry::class)->validate(['features'=>['resource_type'=>'rigid_truck','body_type_code'=>'box','width_m'=>2.4,'cargo_width_m'=>2.6]]);
     }
     public function test_legacy_suspicious_values_are_reported_without_rewriting():void {
-        $v=Vehicle::find(1);$v->update(['capacity_kg'=>340000,'capacity_m3'=>201003]);
+        $v=Vehicle::find(1);$v->update(['capacity_kg'=>340000,'capacity_m3'=>201003,'features'=>['next_service'=>'Next month']]);
         self::assertContains('capacity_review',VehicleRegistry::warnings($v));self::assertSame(340000.0,(float)$v->fresh()->capacity_kg);
         $data=app(VehicleRegistry::class)->validate(['features'=>['next_service'=>'Next month']],$v);
         self::assertSame('Next month',$data['features']['next_service']);self::assertArrayNotHasKey('capacity_kg',$data);

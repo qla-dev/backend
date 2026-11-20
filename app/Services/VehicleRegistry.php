@@ -9,6 +9,8 @@ use Illuminate\Validation\ValidationException;
 
 final class VehicleRegistry
 {
+    public const FUEL_TYPES = ['diesel','petrol','lpg','cng','lng','bev','fcev','hydrogen_combustion','biodiesel','ethanol','biomethane','alternative_other','petrol_hev','diesel_hev','petrol_phev','diesel_phev','petrol_lpg','petrol_cng','hybrid_other'];
+    public const COUNTRIES = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW';
     public const TYPES = ['cargo_van','rigid_truck','tractor_unit','semi_trailer','trailer'];
     public const BODIES = ['panel_van','box','curtainsider','tarpaulin','refrigerated','flatbed','dropside','container_chassis','tipper','tanker','silo','car_transporter','swap_body','low_loader','other','none'];
     public const NUMBERS = ['gross_weight_kg','unladen_weight_kg','category_mass_kg','gross_combination_weight_kg','max_towed_weight_kg','fifth_wheel_load_kg','length_m','width_m','height_m','cargo_length_m','cargo_width_m','cargo_height_m','door_width_m','door_height_m','loading_metres','tank_capacity_l','tail_lift_capacity_kg'];
@@ -23,6 +25,13 @@ final class VehicleRegistry
     /** Merge a partial update, keep unknown legacy data, and validate every structured registry write. */
     public function validate(array $data, ?Vehicle $existing = null): array
     {
+        $incoming=$data['features']??[];
+        $common=[];
+        $common['mass_conditions']=['nullable','string','max:4000'];
+        foreach(['last_service','next_service'] as $key) if(array_key_exists($key,$incoming) && ($incoming[$key]??null)!==($existing?->features[$key]??null)) $common[$key]=['nullable','date_format:Y-m-d'];
+        if(array_key_exists('fuel_type',$incoming) && ($incoming['fuel_type']??null)!==($existing?->features['fuel_type']??null)) $common['fuel_type']=['nullable',Rule::in(self::FUEL_TYPES)];
+        if(array_key_exists('operation_country',$incoming) && ($incoming['operation_country']??null)!==($existing?->features['operation_country']??null)) $common['operation_country']=['nullable',Rule::in(explode(' ',self::COUNTRIES))];
+        Validator::make($incoming,$common)->validate();
         Validator::make($data,['capacity_kg'=>['nullable','numeric','min:0','max:1000000000'],'capacity_m3'=>['nullable','numeric','min:0','max:1000000000']])->validate();
         if (array_key_exists('features',$data)) $data['features']=array_replace($existing?->features??[], $data['features']??[]);
         $f=$data['features']??$existing?->features??[];
