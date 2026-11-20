@@ -176,9 +176,31 @@ class FleetDepotAccessTest extends FleetOperationsTest
         if(Schema::hasTable('fleet_vehicle_couplings'))$names[]='2026_11_19_000001_create_fleet_vehicle_couplings';
         if(!Schema::hasTable('crm_documents'))Schema::create('crm_documents',fn(Blueprint $t)=>$t->id());
         if(Schema::hasTable('fleet_handover_requests'))$names[]='2026_11_19_000002_create_freightbook_workflow_records';
+        if(Schema::hasTable('vehicle_drafts'))$names[]='2026_11_20_000001_create_vehicle_drafts';
+        if(Schema::hasTable('form_drafts'))$names[]='2026_11_20_000002_create_form_drafts';
         foreach($names as $name)DB::table('migrations')->insert(['migration'=>$name,'batch'=>1]);
         $before=DB::table('fleet_depots')->count();
         self::assertSame(0,\Illuminate\Support\Facades\Artisan::call('freightbook:prepare-fleet-release',['--inspect'=>true]));
         self::assertSame($before,DB::table('fleet_depots')->count());self::assertSame(count($names),DB::table('migrations')->count());
+    }
+    public function test_draft_release_applies_only_approved_migrations_and_is_repeatable():void {
+        $this->test_read_only_release_preflight_does_not_change_rows_or_history();
+        $vehicles=DB::table('vehicles')->count();$users=DB::table('users')->count();
+        self::assertSame(0,\Illuminate\Support\Facades\Artisan::call('freightbook:prepare-fleet-release'));
+        self::assertTrue(Schema::hasTable('vehicle_drafts'));self::assertTrue(Schema::hasTable('form_drafts'));
+        self::assertTrue(Schema::hasColumns('form_drafts',['payload','revision','active_scope','access_hash']));
+        self::assertSame(6,DB::table('migrations')->count());
+        self::assertSame($vehicles,DB::table('vehicles')->count());self::assertSame($users,DB::table('users')->count());
+        self::assertSame(0,\Illuminate\Support\Facades\Artisan::call('freightbook:prepare-fleet-release'));
+        self::assertSame(6,DB::table('migrations')->count());
+    }
+    public function test_draft_release_refuses_unregistered_draft_tables():void {
+        $this->test_read_only_release_preflight_does_not_change_rows_or_history();
+        if(!Schema::hasTable('form_drafts'))(require database_path('migrations/2026_11_20_000002_create_form_drafts.php'))->up();
+        DB::table('migrations')->where('migration','2026_11_20_000002_create_form_drafts')->delete();
+        $before=DB::table('migrations')->count();
+        self::assertSame(1,\Illuminate\Support\Facades\Artisan::call('freightbook:prepare-fleet-release'));
+        self::assertStringContainsString('Partial/unregistered draft schema',\Illuminate\Support\Facades\Artisan::output());
+        self::assertSame($before,DB::table('migrations')->count());
     }
 }
