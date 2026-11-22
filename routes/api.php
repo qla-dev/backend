@@ -267,7 +267,8 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
         Route::post('tours/import', 'importTours');
         Route::post('import-mapping', 'mapping')->middleware('throttle:20,1');
         Route::get('tours/{id}', 'tourDetail')->whereNumber('id');
-        Route::post('tours/{id}/{action}', 'tourAction')->whereNumber('id')->where('action','assign|lock|reopen|complete');
+        Route::get('tour-load-options', 'tourLoadOptions');
+        Route::post('tours/{id}/{action}', 'tourAction')->whereNumber('id')->where('action','assign|loads|lock|reopen|complete');
         Route::post('notifications/{id}/read', 'readNotification')->whereNumber('id');
     });
     Route::get('reviews', [ReviewController::class, 'index']);

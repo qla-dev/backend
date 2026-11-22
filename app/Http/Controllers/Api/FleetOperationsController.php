@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\CompanyTeamAccess;
 use App\Services\FleetOperations;
+use App\Services\FleetTourLoads;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -253,7 +254,16 @@ class FleetOperationsController extends Controller
         if($r->filled('depot_id'))$q->where('t.depot_id',$r->integer('depot_id'));
         foreach(['depot_name','partner','status'] as $key)if($r->filled($key))$q->where('t.'.$key,$r->input($key));
         if($r->filled('search'))$q->where('tour_code','like','%'.mb_substr($r->input('search'),0,120).'%');
-        return $this->ok($q->select('t.*','d.name as driver_name','a.name as locked_by_name','v.registration_number as selected_plate')->orderByDesc('service_date')->orderBy('depot_name')->orderBy('partner')->orderBy('tour_code')->paginate(100));
+        $page = $q->select('t.*','d.name as driver_name','a.name as locked_by_name','v.registration_number as selected_plate')
+            ->orderByDesc('service_date')->orderBy('depot_name')->orderBy('partner')->orderBy('tour_code')->paginate(100);
+        if ($r->boolean('with_loads')) {
+            $loads = app(FleetTourLoads::class)->forTours($company, $page->getCollection()->pluck('id')->all());
+            $page->through(function ($tour) use ($loads) {
+                $tour->loads = $loads->get($tour->id, collect());
+                return $tour;
+            });
+        }
+        return $this->ok($page);
     }
 
     public function importTours(Request $r,int $company)
@@ -261,8 +271,14 @@ class FleetOperationsController extends Controller
         $this->access($r,$company);
         $d=$r->validate(['service_date'=>['required','date_format:Y-m-d'],'depot_name'=>['nullable','string','max:120'],'depot_id'=>['required','integer'],
             'partner'=>['required','string','max:80'],'rows'=>['required','array','min:1','max:3000'],'rows.*.tour_code'=>['nullable','string','max:120'],
-            'rows.*.driver_name'=>['nullable','string','max:255'],'confirm'=>['required','boolean']]);
+            'rows.*.driver_name'=>['nullable','string','max:255'],'confirm'=>['required','boolean'],
+            'source'=>['nullable',Rule::in(['amazon'])],
+            'rows.*.source_data'=>['nullable','array:dsp,transporter_id,progress,service_type,duration,activities,completed_stops,remaining_stops,deliveries,pickups,roadside_pickups,time_window,departure,service_stops,bulk_weight'],
+            'rows.*.source_data.*'=>['nullable','string','max:120']]);
         $depot=app(\App\Services\FleetDepotAccess::class)->depot($r->user(),$company,$d['depot_id']);$d['depot_name']=$depot->name;$d['partner']=trim($d['partner']);
+        if (($d['source'] ?? null) === 'amazon') {
+            $d['partner'] = 'Amazon';
+        }
         abort_if($d['depot_name']===''||$d['partner']==='',422,'Depot and partner are required.');
         $seen=[];$valid=[];$invalid=[];$duplicates=[];
         foreach($d['rows'] as $i=>$row){
@@ -270,7 +286,8 @@ class FleetOperationsController extends Controller
             if($code===''){$invalid[]=['row'=>$i+1,'reason'=>'Missing tour ID'];continue;}
             $key=mb_strtolower($code);
             if(isset($seen[$key])||DB::table('fleet_tours')->where('company_id',$company)->where('service_date',$d['service_date'])->where('depot_id',$d['depot_id'])->where('partner',$d['partner'])->whereRaw('LOWER(tour_code) = ?',[$key])->exists()){$duplicates[]=['row'=>$i+1,'tour_code'=>$code];continue;}
-            $seen[$key]=true;$valid[]=['tour_code'=>$code,'driver_name'=>$row['driver_name']??null];
+            $seen[$key]=true;$valid[]=['tour_code'=>$code,'driver_name'=>$row['driver_name']??null,
+                'source_data'=>($d['source']??null)==='amazon'?($row['source_data']??null):null];
         }
         $count=0;
         if($d['confirm']){
@@ -278,7 +295,12 @@ class FleetOperationsController extends Controller
                 DB::table('companies')->where('id',$company)->lockForUpdate()->firstOrFail();$count=0;
                 foreach($valid as $row){$identity=['company_id'=>$company,'service_date'=>$d['service_date'],'depot_id'=>$d['depot_id'],'partner'=>trim($d['partner']),'tour_code'=>$row['tour_code']];
                     if(DB::table('fleet_tours')->where(collect($identity)->except('tour_code')->all())->whereRaw('LOWER(tour_code) = ?',[mb_strtolower($row['tour_code'])])->exists())continue;
-                    DB::table('fleet_tours')->insert($identity+['depot_name'=>$d['depot_name']]+['source_driver_name'=>$row['driver_name']??null,'created_by'=>$r->user()->id,'created_at'=>now(),'updated_at'=>now()]);$count++;
+                    $record = $identity+['depot_name'=>$d['depot_name'],'source_driver_name'=>$row['driver_name'],
+                        'created_by'=>$r->user()->id,'created_at'=>now(),'updated_at'=>now()];
+                    if (isset($d['source'])) {
+                        $record += ['import_source'=>$d['source'],'source_data'=>json_encode($row['source_data'], JSON_THROW_ON_ERROR)];
+                    }
+                    DB::table('fleet_tours')->insert($record);$count++;
                 }
                 $this->fleet->event($company,$r->user()->id,'import',0,'tours_imported',['count'=>$count,'service_date'=>$d['service_date'],'partner'=>$d['partner']]);return $count;
             });
@@ -310,16 +332,17 @@ class FleetOperationsController extends Controller
         $this->ability($r,$company,'dispatch');$this->record($r,$company,'fleet_tours','tour',$id);
         $this->access($r,$company);
         $d=$r->validate(['driver_id'=>['nullable','integer'],'vehicle_id'=>['nullable','integer'],'reason'=>['nullable','string','max:2000'],
+            'load_ids'=>['sometimes','array','max:100'],'load_ids.*'=>['integer','distinct','min:1'],
             'partner_url'=>['nullable','url:http,https','max:2000']]);
         return DB::transaction(function()use($r,$company,$id,$action,$d){
             DB::table('companies')->where('id',$company)->lockForUpdate()->firstOrFail();
             $tour=DB::table('fleet_tours')->where('company_id',$company)->where('id',$id)->lockForUpdate()->firstOrFail();
             if($action==='assign'){
-                abort_unless($tour->status==='open',422,'Reopen the tour with a reason before changing the assignment.');
-                if(!empty($d['driver_id']))$this->fleet->driver($company,$d['driver_id']);
-                if(!empty($d['vehicle_id'])){ $v=Vehicle::where('company_id',$company)->findOrFail($d['vehicle_id']);app(\App\Services\FleetDepotAccess::class)->vehicle($r->user(),$v,'dispatch');abort_unless((int)$v->depot_id===(int)$tour->depot_id,422,'Vehicle and tour must belong to the same depot.'); }
-                DB::table('fleet_tours')->where('id',$id)->update(['driver_id'=>$d['driver_id']??null,'vehicle_id'=>$d['vehicle_id']??null,'partner_url'=>$d['partner_url']??null,'updated_at'=>now()]);
-                $this->fleet->event($company,$r->user()->id,'tour',$id,'assigned',$d);
+                $this->assignTour($r, $tour, $d);
+            }elseif($action==='loads'){
+                abort_unless(array_key_exists('load_ids', $d), 422, 'Provide the ordered load IDs.');
+                app(FleetTourLoads::class)->replace($company, $id, $d['load_ids']);
+                $this->fleet->event($company, $r->user()->id, 'tour', $id, 'tour_loads_changed', ['load_ids'=>$d['load_ids']]);
             }elseif($action==='lock')$this->fleet->lockTour($tour,$r->user()->id);
             elseif($action==='reopen'){
                 abort_unless(!empty($d['reason'])&&$tour->status!=='open',422,'A reason is required to reopen a locked tour.');
@@ -338,12 +361,46 @@ class FleetOperationsController extends Controller
         });
     }
 
+    private function assignTour(Request $request, object $tour, array $data): void
+    {
+        $company = (int) $tour->company_id;
+        $changes = array_intersect_key($data, array_flip(['driver_id', 'vehicle_id', 'partner_url']));
+        $driverChanged = array_key_exists('driver_id', $changes) && (int) $changes['driver_id'] !== (int) $tour->driver_id;
+        $vehicleChanged = array_key_exists('vehicle_id', $changes) && (int) $changes['vehicle_id'] !== (int) $tour->vehicle_id;
+        if ($driverChanged && !empty($changes['driver_id'])) {
+            $this->fleet->driver($company, $changes['driver_id']);
+        }
+        if ($vehicleChanged && !empty($changes['vehicle_id'])) {
+            $vehicle = Vehicle::where('company_id', $company)->findOrFail($changes['vehicle_id']);
+            app(\App\Services\FleetDepotAccess::class)->vehicle($request->user(), $vehicle, 'dispatch');
+            abort_unless((int) $vehicle->depot_id === (int) $tour->depot_id, 422, 'Vehicle and tour must belong to the same depot.');
+            $this->fleet->assertDispatchable($vehicle->id);
+        }
+        if ($tour->status !== 'open' && ($driverChanged || $vehicleChanged)) {
+            $reason = trim($data['reason'] ?? '');
+            abort_if($reason === '', 422, 'Enter a reason to change a confirmed assignment.');
+            $this->fleet->event($company, $request->user()->id, 'tour', $tour->id, 'reopened', ['reason'=>$reason, 'previous'=>(array) $tour]);
+            $changes += ['status'=>'open','assignment_id'=>null,'plate'=>null,'locked_by'=>null,'locked_at'=>null,'completed_at'=>null];
+        }
+        DB::table('fleet_tours')->where('id', $tour->id)->update($changes + ['updated_at'=>now()]);
+        $this->fleet->event($company, $request->user()->id, 'tour', $tour->id, 'assigned', $data);
+    }
+
+    public function tourLoadOptions(Request $request, int $company)
+    {
+        $this->ability($request, $company, 'dispatch');
+        $search = $request->validate(['search'=>['nullable','string','max:120']])['search'] ?? '';
+        return $this->ok(app(FleetTourLoads::class)->search($company, trim($search)));
+    }
+
     public function tourDetail(Request $r,int $company,int $id)
     {
         $this->ability($r,$company,'view');$this->record($r,$company,'fleet_tours','tour',$id);
         $role=$this->access($r,$company,false);$tour=DB::table('fleet_tours')->where('company_id',$company)->where('id',$id)->firstOrFail();
         abort_if($role==='driver'&&(int)$tour->driver_id!==(int)$r->user()->id,403);
-        return $this->ok(['tour'=>$tour,'events'=>DB::table('fleet_events as e')->leftJoin('users as u','u.id','=','e.actor_id')->where('e.company_id',$company)->where('entity_type','tour')->where('entity_id',$id)->select('e.*','u.name as actor_name')->orderByDesc('e.id')->get()]);
+        $tour->source_data = json_decode($tour->source_data ?? 'null', true);
+        $loads = app(FleetTourLoads::class)->forTours($company, [$id])->get($id, collect());
+        return $this->ok(['tour'=>$tour,'loads'=>$loads,'events'=>DB::table('fleet_events as e')->leftJoin('users as u','u.id','=','e.actor_id')->where('e.company_id',$company)->where('entity_type','tour')->where('entity_id',$id)->select('e.*','u.name as actor_name')->orderByDesc('e.id')->get()]);
     }
 
     public function readNotification(Request $r,int $company,int $id)

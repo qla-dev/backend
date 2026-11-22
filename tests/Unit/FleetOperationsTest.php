@@ -28,6 +28,7 @@ class FleetOperationsTest extends CompanyTeamAccessTest
         DB::table('vehicles')->insert([['id'=>1,'company_id'=>1,'registration_number'=>'TEST-001','assigned_driver_user_id'=>6,'ownership_type'=>'owned','status'=>'in_use'],['id'=>2,'company_id'=>2,'registration_number'=>'OTHER-001','assigned_driver_user_id'=>8,'ownership_type'=>'owned','status'=>'in_use']]);
         (require database_path('migrations/2026_11_12_000001_create_fleet_operations.php'))->up();
         (require database_path('migrations/2026_11_17_000001_add_fleet_depots_and_access.php'))->up();
+        (require database_path('migrations/2026_11_22_000002_add_fleet_tour_loads_and_source.php'))->up();
         DB::table('fleet_depots')->insert([['id'=>10,'company_id'=>1,'code'=>'BER','name'=>'Berlin','active'=>true],['id'=>11,'company_id'=>1,'code'=>'LEI','name'=>'Leipzig','active'=>true],['id'=>12,'company_id'=>2,'code'=>'OTH','name'=>'Other','active'=>true]]);
         DB::table('vehicles')->where('id',1)->update(['depot_id'=>10]);
         DB::table('vehicles')->where('id',2)->update(['depot_id'=>12]);
@@ -36,6 +37,53 @@ class FleetOperationsTest extends CompanyTeamAccessTest
     private function req(int $actor,array $data=[]):Request{$r=Request::create('/fleet','POST',$data);$r->setUserResolver(fn()=>User::findOrFail($actor));return $r;}
     private function transfer(array $overrides=[]):int{return DB::transaction(fn()=>app(FleetOperations::class)->handover(Vehicle::findOrFail(1),1,array_merge(['destination'=>'driver','to_driver_id'=>7,'mileage_km'=>100,'fuel_level_percent'=>50,'has_damage'=>false],$overrides)));}
     private function tour(array $overrides=[]):int{return DB::table('fleet_tours')->insertGetId(array_merge(['company_id'=>1,'service_date'=>now()->toDateString(),'depot_id'=>10,'depot_name'=>'Berlin','partner'=>'Partner','tour_code'=>'CA-01','driver_id'=>6,'vehicle_id'=>1,'created_by'=>1,'created_at'=>now(),'updated_at'=>now()],$overrides));}
+
+    public function test_tour_loads_are_optional_ordered_and_company_scoped(): void
+    {
+        DB::table('loads')->insert([['id'=>10,'company_id'=>1], ['id'=>20,'company_id'=>2], ['id'=>30,'company_id'=>2]]);
+        DB::table('shipment_workspace')->insert(['load_id'=>20,'provider_company_id'=>1]);
+        $id = $this->tour();
+        $controller = app(FleetOperationsController::class);
+        $controller->tourAction($this->req(1,['load_ids'=>[20,10]]),1,$id,'loads');
+        self::assertSame([20,10], DB::table('fleet_tour_loads')->where('tour_id',$id)->orderBy('position')->pluck('load_id')->all());
+        $loadAccess = app(\App\Services\FleetTourLoads::class);
+        self::assertTrue($loadAccess->canViewThroughTour(User::findOrFail(6), 20));
+        self::assertFalse($loadAccess->canViewThroughTour(User::findOrFail(7), 20));
+        self::assertFalse($loadAccess->canViewThroughTour(User::findOrFail(8), 20));
+        try {
+            $controller->tourAction($this->req(1,['load_ids'=>[30]]),1,$id,'loads');
+            self::fail('An unrelated load must be rejected.');
+        } catch (HttpException $e) {
+            self::assertSame(422, $e->getStatusCode());
+            self::assertSame(2, DB::table('fleet_tour_loads')->count());
+        }
+        $controller->tourAction($this->req(1,['load_ids'=>[]]),1,$id,'loads');
+        self::assertSame(0, DB::table('fleet_tour_loads')->count());
+    }
+
+    public function test_confirmed_tour_can_be_reassigned_with_audited_reopening(): void
+    {
+        $id = $this->tour(['status'=>'completed','plate'=>'TEST-001','locked_by'=>1,'locked_at'=>now()]);
+        app(FleetOperationsController::class)->tourAction($this->req(1,['driver_id'=>7,'reason'=>'Replacement driver']),1,$id,'assign');
+        $tour = DB::table('fleet_tours')->find($id);
+        self::assertSame('open', $tour->status);
+        self::assertSame(7, (int) $tour->driver_id);
+        self::assertSame(1, (int) $tour->vehicle_id);
+        self::assertNull($tour->plate);
+        self::assertStringContainsString('TEST-001', DB::table('fleet_events')->where('action','reopened')->value('details'));
+    }
+
+    public function test_amazon_import_persists_connector_fields_and_keeps_driver_unassigned(): void
+    {
+        $data = ['service_date'=>now()->toDateString(),'depot_id'=>10,'partner'=>'Amazon','source'=>'amazon','confirm'=>true,
+            'rows'=>[['tour_code'=>'001','driver_name'=>'Driver A','source_data'=>['transporter_id'=>'V-1','departure'=>'18:15']]]];
+        app(FleetOperationsController::class)->importTours($this->req(1,$data),1);
+        $tour = DB::table('fleet_tours')->first();
+        self::assertSame('amazon', $tour->import_source);
+        self::assertSame('18:15', json_decode($tour->source_data, true)['departure']);
+        self::assertSame('Driver A', $tour->source_driver_name);
+        self::assertNull($tour->driver_id);
+    }
 
     public function test_transfer_changes_custody_without_finishing_load():void{
         DB::table('loads')->insert(['id'=>9,'company_id'=>1]);

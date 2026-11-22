@@ -498,7 +498,7 @@ class LoadController extends CrudController
             // A carrier who bid on it keeps seeing the load its offer is attached to.
             || $load->offers->contains(fn (Offer $offer): bool => (int) $offer->created_by_user_id === (int) $user->id || (int) $offer->driver_user_id === (int) $user->id)
         );
-        abort_unless($allowed, 403, 'You cannot view this load.');
+        abort_unless($allowed || ($user && app(\App\Services\FleetTourLoads::class)->canViewThroughTour($user, $id)), 403, 'You cannot view this load.');
 
         return $this->success((new EntityResource($load))->resolve($request), 'Resource retrieved successfully.');
     }
