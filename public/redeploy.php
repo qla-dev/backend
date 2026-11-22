@@ -2,9 +2,6 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__).'/deployment/authorize.php';
-freightbookAuthorizeDeployment('backend');
-
 set_time_limit(0);
 ini_set('memory_limit', '512M');
 ini_set('output_buffering', '0');
