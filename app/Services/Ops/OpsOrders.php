@@ -3,8 +3,11 @@
 namespace App\Services\Ops;
 
 use App\Models\ShipmentWorkspace;
+use App\Models\User;
 use App\Services\Accounting\AccountingLedger;
+use App\Services\Accounting\BusinessWorkspace;
 use App\Services\Accounting\Decimal;
+use App\Services\FeatureAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -74,7 +77,7 @@ class OpsOrders
         $crmId = $load->crm_document_id ?? null;
 
         return DB::transaction(function () use ($workspace, $companyId, $template, $partner, $customer, $snapshot, $stops, $crmId, $load) {
-            DB::table('companies')->where('id',$companyId)->lockForUpdate()->first();
+            BusinessWorkspace::lock($companyId);
             if ($existing = DB::table('ops_orders')->where('workspace_id',$workspace->id)->first()) return $existing;
             $id = DB::table('ops_orders')->insertGetId([
                 'company_id' => $companyId, 'reference' => $this->nextReference($companyId), 'doc_type' => 'SF00',
@@ -183,6 +186,15 @@ class OpsOrders
         abort_if($this->intake($order)['kind']==='inquiry',422,'Confirm this inquiry as a transport order before starting operations.');
     }
 
+    public static function canLinkCustomer(User $user, int $workspace, string $type): bool
+    {
+        if (! BusinessWorkspace::isPersonal($workspace) || $type === 'partner') {
+            return true;
+        }
+
+        return FeatureAccess::canAccess($user, $type === 'customer' ? 'customers' : 'logisticsCompanies');
+    }
+
     public function register(int $company, int $actor, array $data): object
     {
         return DB::transaction(function() use($company,$actor,$data) {
@@ -194,6 +206,9 @@ class OpsOrders
             $link=null;
             if(!empty($data['customer_link_id'])) {
                 $type=$data['customer_link_type'];
+                if (BusinessWorkspace::isPersonal($company)) {
+                    abort_unless(self::canLinkCustomer(User::findOrFail($actor), $company, $type), 403);
+                }
                 $query=DB::table(match($type){'partner'=>'accounting_partners','customer'=>'customers','company'=>'companies'})->where('id',$data['customer_link_id']);
                 if($type==='partner')$query->where('company_id',$company);
                 $linked=$query->first() ?? abort(422,'Customer record is unavailable.');
@@ -390,7 +405,7 @@ class OpsOrders
     private function nextReference(int $companyId): string
     {
         // Locked per company so two bookings at the same moment cannot take the same number.
-        DB::table('companies')->where('id', $companyId)->lockForUpdate()->first();
+        BusinessWorkspace::lock($companyId);
         $prefix = now()->format('y').'-SF-';
         $last = DB::table('ops_orders')->where('company_id', $companyId)->where('reference', 'like', $prefix.'%')->orderByDesc('reference')->value('reference');
 

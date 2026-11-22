@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Document;
 use App\Models\Invoice;
@@ -12,6 +11,7 @@ use App\Services\Accounting\AccountingAccess;
 use App\Services\Accounting\AccountingInvoices;
 use App\Services\Accounting\AccountingLedger;
 use App\Services\Accounting\AccountingPayments;
+use App\Services\Accounting\BusinessWorkspace;
 use App\Services\Accounting\Decimal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,23 +40,45 @@ final class AccountingController extends Controller
 
     public function companies(Request $r): JsonResponse
     {
+        return $this->response($this->companyList($r));
+    }
+
+    public function workspaces(Request $r): JsonResponse
+    {
+        $user = $r->user();
+        $companies = $this->companyList($r);
+        $personal = BusinessWorkspace::personal($user);
+        $first = $companies->first();
+
+        if ($first && $this->access->abilities($user, $first->id)) {
+            return $this->response([...$companies, $personal]);
+        }
+
+        return $this->response([$personal, ...$companies]);
+    }
+
+    private function companyList(Request $r)
+    {
         $team = app(\App\Services\CompanyTeamAccess::class);
         $companies = $team->companies($r->user())->orderByRaw('CASE WHEN owner_user_id = ? THEN 0 WHEN id IN (SELECT company_id FROM company_user WHERE user_id = ? AND status = ?) THEN 1 ELSE 2 END', [$r->user()->id, $r->user()->id, 'active'])->orderBy('name')->get(['id', 'name', 'owner_user_id']);
         foreach ($companies as $company) {
             $company->setAttribute('membership_role', $team->role($r->user(), $company->id));
             $company->setAttribute('can_manage_team', $team->manages($r->user(), $company->id));
         }
-        return $this->response($companies);
+        return $companies;
     }
 
     public function context(Request $r): JsonResponse
     {
         $id = (int) $r->route('company');
-        $company = $this->access->member($r->user(), $id);
+        $abilities = $this->access->abilities($r->user(), $id);
+        $personal = BusinessWorkspace::isPersonal($id);
+        $company = $personal ? BusinessWorkspace::personal($r->user())
+            : $this->access->member($r->user(), $id)->only(['id', 'name', 'owner_user_id']);
 
-        return $this->response(['company' => $company->only(['id', 'name', 'owner_user_id']),
-            'abilities' => $this->access->abilities($r->user(), $id), 'available_abilities' => AccountingAccess::ABILITIES,
-            'can_manage_permissions' => $r->user()->isSuperAdminOrMaster() || (int) $company->owner_user_id === (int) $r->user()->id,
+        return $this->response(['company' => $company, 'personal' => $personal,
+            'abilities' => $abilities, 'available_abilities' => $personal ? $abilities : AccountingAccess::ABILITIES,
+            'can_manage_permissions' => ! $personal && ($r->user()->isSuperAdminOrMaster() || (int) $company['owner_user_id'] === (int) $r->user()->id),
             'user_id' => $r->user()->id,
             'configured' => DB::table('accounting_settings')->where('company_id', $id)->exists()]);
     }
@@ -64,6 +86,7 @@ final class AccountingController extends Controller
     public function permissions(Request $r): JsonResponse
     {
         $id = (int) $r->route('company');
+        abort_if(BusinessWorkspace::isPersonal($id), 404);
         $company = $this->access->member($r->user(), $id);
         abort_unless($r->user()->isSuperAdminOrMaster() || (int) $company->owner_user_id === (int) $r->user()->id, 403);
         $data = $r->validate(['user_id' => ['required', 'integer', 'exists:users,id'], 'abilities' => ['required', 'array'],
@@ -71,7 +94,7 @@ final class AccountingController extends Controller
         $user = User::findOrFail($data['user_id']);
         $this->access->member($user, $id);
         DB::transaction(function () use ($id, $r, $data) {
-            Company::whereKey($id)->lockForUpdate()->first();
+            BusinessWorkspace::lock($id);
             DB::table('accounting_permissions')->updateOrInsert(['company_id' => $id, 'user_id' => $data['user_id']],
                 ['abilities' => json_encode(array_values(array_unique($data['abilities']))), 'granted_by' => $r->user()->id, 'created_at' => now(), 'updated_at' => now()]);
             $this->ledger->audit($id, $r->user()->id, 'permissions', $data['user_id'], 'permissions_changed', $data);
@@ -139,7 +162,7 @@ final class AccountingController extends Controller
         $id = $this->company($r, 'setup');
         $data = $r->validate(['jurisdiction' => ['required', Rule::in(['FBiH', 'RS', 'BD'])], 'base_currency' => ['required', 'regex:/^[A-Z]{3}$/'], 'invoice_prefix' => ['required', 'regex:/^[A-Z0-9-]{1,40}$/']]);
         DB::transaction(function () use ($id, $data, $r) {
-            Company::whereKey($id)->lockForUpdate()->first();
+            BusinessWorkspace::lock($id);
             $previous = DB::table('accounting_settings')->where('company_id', $id)->first();
             if ($previous && (DB::table('invoices')->where('company_id', $id)->where('accounting_managed', true)->exists()
                 || DB::table('accounting_entries')->where('company_id', $id)->exists() || DB::table('accounting_bank_transactions')->where('company_id', $id)->exists())) {
@@ -598,7 +621,7 @@ final class AccountingController extends Controller
             Invoice::where('company_id', $id)->where('accounting_managed', true)->findOrFail($invoice);
             foreach (array_unique($data['document_ids']) as $documentId) {
                 $file = DB::table('documents')->where('id', $documentId)->first();
-                $owner = (int) DB::table('companies')->where('id', $id)->value('owner_user_id');
+                $owner = (int) BusinessWorkspace::ownerId($id);
                 $this->ledger->require($file && ((int) $file->uploaded_by_user_id === $owner || DB::table('company_user')
                     ->where('company_id', $id)->where('user_id', $file->uploaded_by_user_id)->where('status', 'active')->exists()), 'Document belongs to another company.');
                 DB::table('accounting_invoice_documents')->insertOrIgnore(['invoice_id' => $invoice, 'document_id' => $documentId]);

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ShipmentWorkspace;
+use App\Services\Accounting\BusinessWorkspace;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -98,7 +99,7 @@ final class OperationalCompliance
     public function member(int $company, ?int $user): void
     {
         if (!$user) return;
-        abort_unless(DB::table('companies')->where('id', $company)->where('owner_user_id', $user)->exists()
+        abort_unless(BusinessWorkspace::ownerId($company) === $user
             || DB::table('company_user')->where('company_id', $company)->where('user_id', $user)->where('status', 'active')->exists(), 422, 'Odgovorna osoba mora biti aktivni član kompanije.');
     }
 

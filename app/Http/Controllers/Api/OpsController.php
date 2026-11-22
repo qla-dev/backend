@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Accounting\AccountingAccess;
+use App\Services\Accounting\BusinessWorkspace;
 use App\Services\Ops\OpsOrders;
 use App\Services\Ops\OpsPantheonSync;
 use Illuminate\Http\JsonResponse;
@@ -52,7 +53,7 @@ final class OpsController extends Controller
             'partners' => DB::table('accounting_partners')->where('company_id', $id)->orderBy('name')->get(['id', 'name', 'tax_number']),
             'departments'=>app(\App\Services\Ops\OpsDepartments::class)->forUser($id,(int)$r->user()->id),
             'members' => DB::table('users')->whereIn('id', DB::table('company_user')->where('company_id', $id)->where('status', 'active')->pluck('user_id')
-                ->push(DB::table('companies')->where('id', $id)->value('owner_user_id')))->get(['id', 'name'])]);
+                ->push(BusinessWorkspace::ownerId($id)))->get(['id', 'name'])]);
     }
 
     public function show(Request $r): JsonResponse
@@ -105,8 +106,12 @@ final class OpsController extends Controller
         $company=$this->company($r);$data=$r->validate(['search'=>['nullable','string','max:100']]);$term=trim($data['search']??'');
         $options=DB::table('accounting_partners')->where('company_id',$company)->when($term,fn($q)=>$q->where('name','like','%'.$term.'%'))->orderBy('name')->limit(20)->get(['id','name'])->map(fn($v)=>['id'=>$v->id,'name'=>$v->name,'type'=>'partner'])->all();
         if(mb_strlen($term)>=2){
-            foreach(DB::table('companies')->where('name','like','%'.$term.'%')->orderBy('name')->limit(15)->get(['id','name']) as $v)$options[]=['id'=>$v->id,'name'=>$v->name,'type'=>'company'];
-            foreach(DB::table('customers')->where('company_name','like','%'.$term.'%')->orderBy('company_name')->limit(15)->get(['id','company_name']) as $v)$options[]=['id'=>$v->id,'name'=>$v->company_name,'type'=>'customer'];
+            if (OpsOrders::canLinkCustomer($r->user(), $company, 'company')) {
+                foreach(DB::table('companies')->where('name','like','%'.$term.'%')->orderBy('name')->limit(15)->get(['id','name']) as $v)$options[]=['id'=>$v->id,'name'=>$v->name,'type'=>'company'];
+            }
+            if (OpsOrders::canLinkCustomer($r->user(), $company, 'customer')) {
+                foreach(DB::table('customers')->where('company_name','like','%'.$term.'%')->orderBy('company_name')->limit(15)->get(['id','company_name']) as $v)$options[]=['id'=>$v->id,'name'=>$v->company_name,'type'=>'customer'];
+            }
         }
         return $this->response(['customers'=>$options,'operations'=>OpsOrders::INTAKE_OPERATIONS,'documents'=>DB::table('documents')->where('uploaded_by_user_id',$r->user()->id)->whereNull('load_id')->whereNull('vehicle_id')->whereNull('user_id')->whereNull('load_draft_id')->where('type','CMR')->latest('id')->limit(20)->get(['id','name'])]);
     }
@@ -202,7 +207,7 @@ final class OpsController extends Controller
         if ($settings) {
             // Members are listed so each SmartFreight user can be mapped to a PANTHEON worker (tHR_Prsn).
             $settings->members = DB::table('users')->whereIn('id', DB::table('company_user')->where('company_id', $id)->where('status', 'active')->pluck('user_id')
-                ->push(DB::table('companies')->where('id', $id)->value('owner_user_id')))->get(['id', 'name']);
+                ->push(BusinessWorkspace::ownerId($id)))->get(['id', 'name']);
         }
 
         return $this->response($settings);

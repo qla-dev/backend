@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Document;
 use App\Services\Accounting\AccountingAccess;
+use App\Services\Accounting\BusinessWorkspace;
 use App\Services\OperationalCompliance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,7 @@ final class OperationalComplianceController extends Controller
     private function company(Request $r, string $ability = 'ops'): int
     {
         $id = (int) $r->route('company');
-        if (!$r->user()->isSuperAdminOrMaster()) $this->access->authorize($r->user(), $id, $ability);
+        $this->access->authorize($r->user(), $id, $ability);
         return $id;
     }
 
@@ -30,6 +31,7 @@ final class OperationalComplianceController extends Controller
     private function profileAccess(Request $r, bool $write = false): array
     {
         $company = (int) $r->route('company');
+        abort_if(BusinessWorkspace::isPersonal($company), 404);
         if ($r->user()->isSuperAdminOrMaster()) {
             DB::table('companies')->where('id', $company)->first() ?? abort(404);
             return [$company, true];
@@ -88,12 +90,12 @@ final class OperationalComplianceController extends Controller
             $items=array_map(fn($item)=>$item+['plan_version'=>2],$before['items']);$index=array_search($data['key'],array_column($items,'key'));
             $catalog=$this->optionalCatalog($order);
             abort_unless(($index!==false&&!empty($items[$index]['optional']))||isset($catalog[$data['key']]),422,'Unknown optional operation.');
-            if($data['key']==='sea_si_vgm'||($index!==false&&!empty($items[$index]['verified_sea_only']))){
+            if($data['key']==='sea_si_vgm'||($index!==false&&(!empty($items[$index]['sea_organizer_only']) || !empty($items[$index]['verified_sea_only'])))){
                 $flow=app(\App\Services\Ops\TransportFlow::class)->read($order);
-                abort_unless(($flow['transport_type']==='sea'||collect($flow['legs'])->contains('mode','sea'))&&app(\App\Services\Ops\OpsTaskAccess::class)->verifiedSeaOrganizer($order),422,'This operation requires a sea service and its verified organizer.');
+                abort_unless(($flow['transport_type']==='sea'||collect($flow['legs'])->contains('mode','sea'))&&app(\App\Services\Ops\OpsTaskAccess::class)->organizesSeaService($order),422,'This operation requires a sea service managed by the order provider.');
             }
             if($index===false){$items[]=['key'=>$data['key'],'label'=>$catalog[$data['key']][0],'status'=>'pending','responsible_user_id'=>$order->responsible_user_id??$r->user()->id,'controlled'=>$data['key']==='cargo_documents','required_documents'=>$data['key']==='cmr'?['CMR']:[]];$index=count($items)-1;}
-            if($data['key']==='sea_si_vgm')$items[$index]['verified_sea_only']=true;
+            if($data['key']==='sea_si_vgm')$items[$index]['sea_organizer_only']=true;
             $items[$index]['optional_selected']=true;$items[$index]['requirement_reason']=$data['reason'];$items[$index]['requirement_source']='operator_review';$items[$index]['applicable']=true;
             $context=$before['context'];foreach($items[$index]['applies_when']??[] as $flag)$context[$flag]=true;
             if($flag=$catalog[$data['key']][1]??null)$context[$flag]=true;
@@ -151,7 +153,7 @@ final class OperationalComplianceController extends Controller
         }
         app(\App\Services\Ops\TransportFlow::class)->validateVariant($data['transport_type'] ?? '',$data['variant'] ?? null);
         return DB::transaction(function () use ($company, $items, $r, $data) {
-            DB::table('companies')->where('id', $company)->lockForUpdate()->first() ?? abort(404);
+            BusinessWorkspace::lock($company);
             $version = (int) DB::table('ops_checklist_versions')->where('company_id', $company)->max('version') + 1;
             $id = DB::table('ops_checklist_versions')->insertGetId(['company_id' => $company, 'version' => $version, 'items' => json_encode($items), ... (\Illuminate\Support\Facades\Schema::hasColumn('ops_checklist_versions','transport_type') ? ['transport_type'=>$data['transport_type'] ?? null,'variant'=>$data['variant'] ?? null] : []), 'created_by' => $r->user()->id, 'created_at' => now(), 'updated_at' => now()]);
             $this->ops->audit($company, 'template', $id, $r->user()->id, 'published', null, ['version' => $version, 'items' => $items]);
@@ -299,7 +301,7 @@ final class OperationalComplianceController extends Controller
             })]);
         $data = $r->validate(['country_code' => ['required', Rule::in(['BA','HR','RS'])], 'revision' => ['required', 'integer', 'min:0']]);
         return DB::transaction(function () use ($r, $company, $data) {
-            DB::table('companies')->where('id', $company)->lockForUpdate()->first() ?? abort(404);
+            BusinessWorkspace::lock($company);
             $before = DB::table('company_country_profiles')->where('company_id', $company)->first();
             abort_unless($data['revision'] === (int) ($before?->revision ?? 0), 409, 'Profil je izmijenjen.');
             $pack = config('country_verification.countries.'.$data['country_code']); unset($pack['name']);
@@ -320,7 +322,7 @@ final class OperationalComplianceController extends Controller
             'document_ids' => ['present', 'array', 'max:20'], 'document_ids.*' => ['integer', 'distinct'],
             'registry_reference' => ['nullable', 'url', 'max:2000'], 'expires_at' => ['nullable', 'date', 'after:today']]);
         return DB::transaction(function () use ($r, $company, $data) {
-            DB::table('companies')->where('id', $company)->lockForUpdate()->first() ?? abort(404);
+            BusinessWorkspace::lock($company);
             abort_if($data['capability'] === 'driver' && empty($data['subject_user_id']), 422, 'Izaberite vozača iz kompanije.');
             abort_if($data['capability'] !== 'driver' && !empty($data['subject_user_id']), 422, 'Ova sposobnost se odnosi na kompaniju.');
             $this->ops->member($company, $data['subject_user_id'] ?? null);

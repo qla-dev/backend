@@ -72,6 +72,7 @@ final class OpsPortalController extends Controller
     public function linkCustomer(Request $r){
         $order=$this->order($r);abort_unless($this->portal->provider($order,$r->user()),403);abort_if($order->workspace_id,422,'The booking customer comes from the accepted offer.');
         $data=$r->validate(['type'=>['required','in:customer,company,partner'],'id'=>['required','integer','min:1']]);
+        abort_unless(\App\Services\Ops\OpsOrders::canLinkCustomer($r->user(), (int) $order->company_id, $data['type']), 403);
         return DB::transaction(function()use($order,$r,$data){$order=app(\App\Services\OperationalCompliance::class)->order((int)$order->company_id,(int)$order->id,true);abort_if(in_array($order->status,['closed','cancelled'],true),422);
             abort_if(DB::table('ops_order_participants')->where('order_id',$order->id)->where('role','customer')->whereIn('status',['active','invited'])->exists(),422,'Revoke current access before changing the linked customer.');
             $q=DB::table(match($data['type']){'customer'=>'customers','company'=>'companies','partner'=>'accounting_partners'})->where('id',$data['id']);if($data['type']==='partner')$q->where('company_id',$order->company_id);$customer=$q->first()??abort(404);

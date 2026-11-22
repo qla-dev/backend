@@ -45,7 +45,7 @@ class AuthController extends Controller
     public function register(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'role' => ['required', 'in:user,driver,company,finance'], 'name' => ['required', 'string', 'max:255'],
+            'role' => ['required', 'in:user,driver,company,finance,warehouse'], 'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'], 'username' => ['required', 'string', 'max:80', 'unique:users,username'],
             'password' => ['required', 'string', 'min:8'], 'language' => ['nullable', 'string', 'max:5'],
             'license_number' => ['nullable', 'required_if:role,driver', 'string', 'max:120', 'unique:drivers,license_number'],
@@ -175,7 +175,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'id_token' => ['required_without:access_token', 'nullable', 'string'],
             'access_token' => ['required_without:id_token', 'nullable', 'string'],
-            'role' => ['sometimes', 'nullable', 'in:user,driver,company,finance'],
+            'role' => ['sometimes', 'nullable', 'in:user,driver,company,finance,warehouse'],
         ]);
         $account = isset($validated['access_token'])
             ? $this->verifyGoogleAccessToken($validated['access_token'])
@@ -189,7 +189,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'identity_token' => ['required', 'string'],
             'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'role' => ['sometimes', 'nullable', 'in:user,driver,company,finance'],
+            'role' => ['sometimes', 'nullable', 'in:user,driver,company,finance,warehouse'],
         ]);
         $account = $this->verifyAppleIdentityToken($validated['identity_token']);
 

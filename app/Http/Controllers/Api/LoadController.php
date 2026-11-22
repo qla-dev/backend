@@ -672,7 +672,7 @@ class LoadController extends CrudController
         return [
             'customer_user_id' => ['sometimes', 'integer', 'exists:users,id'], 'consignee_customer_id' => ['nullable', 'integer', 'exists:customers,id'], 'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'assigned_driver_user_id' => ['nullable', 'integer', 'exists:users,id'], 'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
-            'title' => [$p, 'string', 'max:255'], 'booking_reference' => ['nullable', 'string', 'max:160'], 'crm_document_id' => ['nullable', 'integer'], 'crm_quote_version_id' => ['nullable','integer'], 'insurance' => ['nullable', 'string', 'max:255'],
+            'title' => [$p, 'string', 'max:255'], 'booking_reference' => ['nullable', 'string', 'max:160'], 'crm_document_id' => ['nullable', 'integer'], 'crm_workspace_id' => ['nullable', 'integer', 'min:1'], 'crm_quote_version_id' => ['nullable','integer'], 'insurance' => ['nullable', 'string', 'max:255'],
             'department' => ['nullable', 'string', 'max:120'], 'freight_mode' => ['nullable', 'string', 'max:120'], 'subdepartment' => ['nullable', 'string', 'max:120'],
             'status' => ['sometimes', Rule::in(Load::STATUSES)], 'transport_type' => ['sometimes', 'in:road,air,sea,rail,warehouse'], 'for_storage' => ['sometimes', 'boolean'],
             'cargo_type' => [$updating ? 'sometimes' : 'required_unless:transport_type,warehouse', 'nullable', 'string', 'max:100'], 'goods_type' => ['nullable', 'string', 'max:100'],
@@ -762,7 +762,16 @@ class LoadController extends CrudController
                 $data['company_id'] = $demoCompanyId;
             }
         }
-        if (in_array($request->user()?->role?->name, ['company', 'manager', 'dispatcher', 'customs_officer'], true) && empty($data['company_id'])) {
+        $crmScope = (int) ($data['crm_workspace_id'] ?? 0);
+        unset($data['crm_workspace_id']);
+        $personalCrm = !empty($data['crm_document_id']) && \App\Services\Accounting\BusinessWorkspace::isPersonal($crmScope);
+        if ($personalCrm) {
+            abort_if(!empty($data['company_id']), 422, 'A personal CRM document requires a personal load.');
+        } elseif ($crmScope && !empty($data['crm_document_id'])) {
+            abort_if(!empty($data['company_id']) && (int) $data['company_id'] !== $crmScope, 422);
+            $data['company_id'] = $crmScope;
+        }
+        if (!$personalCrm && in_array($request->user()?->role?->name, ['company', 'manager', 'dispatcher', 'customs_officer'], true) && empty($data['company_id'])) {
             $ownCompanyId = $request->user()->companies()->value('companies.id');
 
             if ($ownCompanyId) {
@@ -778,7 +787,7 @@ class LoadController extends CrudController
             // Serialize conversion and reject stale or cross-company links explicitly.
             if (!empty($data['crm_document_id'])) {
                 abort_unless(\Illuminate\Support\Facades\Schema::hasColumn('loads','crm_document_id'),503,'CRM linking is being prepared.');
-                app(\App\Services\Crm\CrmLoadLink::class)->assertAvailable($request->user(),(int)($data['company_id']??0),(int)$data['crm_document_id'],isset($data['crm_quote_version_id'])?(int)$data['crm_quote_version_id']:null);
+                app(\App\Services\Crm\CrmLoadLink::class)->assertAvailable($request->user(),$crmScope ?: (int)($data['company_id']??0),(int)$data['crm_document_id'],isset($data['crm_quote_version_id'])?(int)$data['crm_quote_version_id']:null);
             }
             unset($data['crm_quote_version_id']);
             $load = Load::query()->create($data);
@@ -800,7 +809,7 @@ class LoadController extends CrudController
     {
         $data = $request->validate($this->rules(true, $request->all()));
         // The CRM link is set once, on create; an update can never move a load to another offer.
-        unset($data['crm_document_id'],$data['crm_quote_version_id']);
+        unset($data['crm_document_id'],$data['crm_quote_version_id'],$data['crm_workspace_id']);
         $hasStops = array_key_exists('stops', $data);
         $stops = $data['stops'] ?? [];
         unset($data['stops']);

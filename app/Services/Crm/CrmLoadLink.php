@@ -2,11 +2,13 @@
 namespace App\Services\Crm;
 use App\Models\User;
 use App\Services\Accounting\AccountingAccess;
+use App\Services\Accounting\BusinessWorkspace;
 use Illuminate\Support\Facades\{DB,Schema};
 final class CrmLoadLink {
     /** Must run in the same transaction that inserts the load and updates crm_documents.load_id. */
     public function assertAvailable(User $user,int $company,int $document,?int $version):object {
         if(DB::transactionLevel()===0)throw new \LogicException('CRM conversion requires a transaction.');
+        $company = $company ?: BusinessWorkspace::personalId($user->id);
         app(AccountingAccess::class)->authorize($user,$company,'crm');
         $crm=DB::table('crm_documents')->where(['id'=>$document,'company_id'=>$company])->lockForUpdate()->first();
         abort_unless($crm,422,'CRM document does not belong to this company.');

@@ -10,7 +10,7 @@ final class FormDraftController extends Controller
 {
     public function __construct(private FormDrafts $drafts){}
     private function context(Request $r):array {
-        $d=$r->validate(['company_id'=>['nullable','integer','min:1','exists:companies,id'],'module'=>['required','regex:/^[a-zA-Z0-9_-]{1,80}$/'],'form_key'=>['required','string','max:120'],'record_key'=>['nullable','string','max:120']]);
+        $d=$r->validate(['company_id'=>['nullable','integer','min:1'],'module'=>['required','regex:/^[a-zA-Z0-9_-]{1,80}$/'],'form_key'=>['required','string','max:120'],'record_key'=>['nullable','string','max:120']]);
         $this->drafts->authorize($r->user(),$d['company_id']??null);return $d;
     }
     public function index(Request $r) {

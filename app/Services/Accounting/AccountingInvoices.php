@@ -15,7 +15,7 @@ final class AccountingInvoices
     {
         return DB::transaction(function () use ($companyId, $actor, $data, $id) {
             $settings = DB::table('accounting_settings')->where('company_id', $companyId)->lockForUpdate()->first();
-            $this->ledger->require($settings !== null, 'Configure company accounting first.');
+            $this->ledger->require($settings !== null, 'Configure accounting first.');
             $invoice = $id ? Invoice::where('company_id', $companyId)->where('accounting_managed', true)->lockForUpdate()->findOrFail($id) : new Invoice;
             if ($id) {
                 $this->ledger->require(in_array($invoice->approval_status, ['draft', 'rejected'], true) && $invoice->issuance_status === 'draft', 'Approved or issued content is protected.');
@@ -111,7 +111,7 @@ final class AccountingInvoices
                     $document = DB::table('documents')->where('id', $documentId)->first();
                     $this->ledger->require($document !== null, 'Document not found.');
                     $uploader = (int) $document->uploaded_by_user_id;
-                    $companyOwner = (int) DB::table('companies')->where('id', $companyId)->value('owner_user_id');
+                    $companyOwner = (int) BusinessWorkspace::ownerId($companyId);
                     $this->ledger->require($uploader === $companyOwner || DB::table('company_user')->where('company_id', $companyId)
                         ->where('user_id', $uploader)->where('status', 'active')->exists(), 'Document belongs to another company.');
                 }
@@ -157,7 +157,9 @@ final class AccountingInvoices
                 $invoice->status = 'issued';
                 // A job may have several service invoices. OPS requires settlement of every active invoice.
                 $invoice->issued_snapshot = [
-                    'seller' => (array) DB::table('companies')->where('id', $companyId)->first(),
+                    'seller' => BusinessWorkspace::isPersonal($companyId)
+                        ? (array) DB::table('users')->where('id', BusinessWorkspace::ownerId($companyId))->first(['name', 'email', 'phone'])
+                        : (array) DB::table('companies')->where('id', $companyId)->first(),
                     'buyer' => (array) DB::table('accounting_partners')->where('company_id', $companyId)->where('id', $invoice->partner_id)->first(),
                     'number' => $invoice->number, 'currency' => $invoice->currency,
                     'issued_at' => $invoice->issued_at?->format('Y-m-d'), 'due_at' => $invoice->due_at?->format('Y-m-d'),

@@ -56,21 +56,18 @@ class OpsRoleTest extends TransportFlowTest
         self::assertFalse($access->canEdit($buyer,$this->order(),['key'=>'mode_shipping_line']));
     }
 
-    public function test_ux_sea_extra_operations_require_current_verified_organizer(): void
+    public function test_sea_operations_are_independent_of_company_verification(): void
     {
-        $this->book();$order=$this->order();$access=app(OpsTaskAccess::class);
-        self::assertFalse($access->verifiedSeaOrganizer($order));
-        DB::table('company_capability_verifications')->insert(['company_id'=>1,'country_code'=>'BA','capability'=>'forwarder','activity'=>'international','status'=>'verified','rule_version'=>'test','document_ids'=>'[]','submitted_by'=>1,'expires_at'=>now()->addYear()->toDateString(),'created_at'=>now(),'updated_at'=>now()]);
-        self::assertTrue($access->verifiedSeaOrganizer($order));
-        $legs=[['key'=>'sea','mode'=>'sea','from'=>'Nansha','to'=>'Rijeka'],['key'=>'road','mode'=>'road','from'=>'Rijeka','to'=>'Sarajevo']];
-        $tasks=app(TransportFlow::class)->tasks('sea',$legs,'FCL',true);
-        self::assertCount(3,array_filter($tasks,fn($task)=>!empty($task['verified_sea_only'])));
-        self::assertCount(0,array_filter(app(TransportFlow::class)->tasks('sea',$legs,'FCL'),fn($task)=>!empty($task['verified_sea_only'])));
-        DB::table('company_capability_verifications')->where('company_id',1)->update(['status'=>'suspended']);
-        self::assertFalse($access->verifiedSeaOrganizer($order));
-        DB::table('company_capability_verifications')->where('company_id',1)->update(['status'=>'verified','expires_at'=>'2020-01-01']);
-        self::assertFalse($access->verifiedSeaOrganizer($order));
-        DB::table('shipment_workspace')->where('id',$order->workspace_id)->update(['provider_company_id'=>2]);
-        self::assertFalse($access->verifiedSeaOrganizer($order));
+        $this->book();
+        $order = $this->order();
+        $access = app(OpsTaskAccess::class);
+        self::assertTrue($access->organizesSeaService($order));
+        $legs = [['key'=>'sea','mode'=>'sea','from'=>'Nansha','to'=>'Rijeka'], ['key'=>'road','mode'=>'road','from'=>'Rijeka','to'=>'Sarajevo']];
+        $flow = app(TransportFlow::class);
+        self::assertCount(3, array_filter($flow->tasks('sea', $legs, 'FCL'), fn ($task) => !empty($task['sea_organizer_only'])));
+
+        DB::table('shipment_workspace')->where('id', $order->workspace_id)->update(['provider_company_id' => 2]);
+        self::assertFalse($access->organizesSeaService($order));
+        self::assertCount(0, array_filter($flow->tasks('sea', $legs, 'FCL', false), fn ($task) => !empty($task['sea_organizer_only'])));
     }
 }

@@ -56,14 +56,12 @@ class FeatureAccess
      * Features reached only by operating the thing they are about.
      *
      * Warehouses and fleets are declared in the profile and are self-asserted, so the table applies
-     * only once the account has said it operates them AND its company is verified. Warehouse
+     * once the account has said it operates them. Warehouse
      * companies are never gated on a warehouse switch - the warehouse is what they are - and the
      * superadmin and finance see the global view because theirs is oversight, not ownership.
      */
     private const OWNED = ['warehouse' => 'warehouse', 'docks' => 'warehouse', 'fleet' => 'fleet'];
-    private const OWNERSHIP_GATED = ['company', 'manager', 'dispatcher', 'forwarder'];
-    /** Drivers run their own trucks with no company behind them to verify, so their switch alone decides. */
-    private const SELF_DECLARED = ['driver'];
+    private const OWNERSHIP_GATED = ['company', 'manager', 'dispatcher', 'forwarder', 'driver'];
 
     /** The role as the table names it, or null for a user the table does not cover. */
     public static function permissionRole(?User $user): ?string
@@ -99,13 +97,8 @@ class FeatureAccess
             $declared = $owned === 'warehouse'
                 ? (bool) ($user?->have_warehouse)
                 : (bool) ($user?->have_fleet);
-            if (! ($declared && self::isVerified($user))) return self::NONE;
-        }
-        if ($owned !== null && in_array($role, self::SELF_DECLARED, true)) {
-            $declared = $owned === 'warehouse' ? (bool) ($user?->have_warehouse) : (bool) ($user?->have_fleet);
             if (! $declared) return self::NONE;
         }
-
         return $level;
     }
 
@@ -124,11 +117,6 @@ class FeatureAccess
     public static function features(): array
     {
         return array_keys(self::MATRIX);
-    }
-
-    private static function isVerified(?User $user): bool
-    {
-        return (bool) $user?->companies()->whereNotNull('verified_at')->exists();
     }
 
     private static function isWarehouseCompany(?User $user): bool

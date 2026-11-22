@@ -2,6 +2,8 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Services\Accounting\AccountingAccess;
+use App\Services\Accounting\BusinessWorkspace;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -10,7 +12,14 @@ use Illuminate\Support\Facades\Schema;
 final class FormDrafts
 {
     public const RESOURCES=['vehicles','drivers','customers','companies','users','loads','invoices','documents','warehouses','crm_documents','shipment_workspaces','fleet_vehicle_tasks','fleet_tours','accounting_partners','accounting_entries','accounting_bank_transactions','accounting_cost_estimates'];
-    public function authorize(User $user,?int $company):void {if($company)app(CompanyTeamAccess::class)->authorize($user,$company);}
+    public function authorize(User $user, ?int $company): void
+    {
+        if ($company && BusinessWorkspace::isPersonal($company)) {
+            app(AccountingAccess::class)->authorizePersonal($user, $company);
+        } elseif ($company) {
+            app(CompanyTeamAccess::class)->authorize($user, $company);
+        }
+    }
     public function scope(User $user,array $d):string {return hash('sha256',json_encode([$user->id,(int)($d['company_id']??0),$d['module'],$d['form_key'],$d['record_key']??'new']));}
     public static function clean(mixed $value):mixed {
         if(!is_array($value))return $value;
@@ -20,7 +29,7 @@ final class FormDrafts
     public function unpack(string $value):array {return json_decode(Crypt::decryptString($value),true,512,JSON_THROW_ON_ERROR);}
     public function accessHash(User $user,?int $company):string {
         $u=(array)DB::table('users')->where('id',$user->id)->first();$stamp=['user'=>array_intersect_key($u,array_flip(['id','role_id','is_active']))];
-        if($company){$stamp['owner']=DB::table('companies')->where('id',$company)->value('owner_user_id');foreach(['company_user','fleet_member_scopes','accounting_permissions'] as $table)if(Schema::hasTable($table))$stamp[$table]=DB::table($table)->where(['company_id'=>$company,'user_id'=>$user->id])->get()->map(fn($row)=>(array)$row)->all();}
+        if($company){$stamp['owner']=BusinessWorkspace::ownerId($company);foreach(['company_user','fleet_member_scopes','accounting_permissions'] as $table)if(Schema::hasTable($table))$stamp[$table]=DB::table($table)->where(['company_id'=>$company,'user_id'=>$user->id])->get()->map(fn($row)=>(array)$row)->all();}
         return $this->hash((object)$stamp);
     }
     public function record(User $user,?int $company,string $resource,int $id,bool $lock=false):object {

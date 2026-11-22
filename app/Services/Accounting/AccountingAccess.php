@@ -21,12 +21,23 @@ final class AccountingAccess
 
     public function abilities(User $user, int $companyId): array
     {
+        if (BusinessWorkspace::isPersonal($companyId)) {
+            $this->authorizePersonal($user, $companyId);
+
+            return array_values(array_diff(self::ABILITIES, ['integrations', 'pos']));
+        }
+
         $this->member($user, $companyId);
 
         if ($user->isSuperAdminOrMaster()) return self::ABILITIES;
 
         return json_decode(DB::table('accounting_permissions')->where('company_id', $companyId)
             ->where('user_id', $user->id)->value('abilities') ?? '[]', true) ?: [];
+    }
+
+    public function authorizePersonal(User $user, int $id): void
+    {
+        abort_unless($id === BusinessWorkspace::personalId($user->id), 403);
     }
 
     public function authorize(User $user, int $companyId, string $ability): void

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Accounting\AccountingAccess;
+use App\Services\Accounting\BusinessWorkspace;
 use App\Services\Crm\CrmPantheonPush;
 use App\Services\Crm\CrmPipeline;
 use App\Services\Crm\PantheonCrmSync;
@@ -39,7 +40,7 @@ final class CrmController extends Controller
         return $this->response(['documents' => $this->crm->documents($id, $filters), 'follow_ups' => $this->crm->dueFollowUps($id),
             'partners' => DB::table('accounting_partners')->where('company_id', $id)->orderBy('name')->get(['id', 'name', 'tax_number']),
             'members' => DB::table('users')->whereIn('id', DB::table('company_user')->where('company_id', $id)->where('status', 'active')->pluck('user_id')
-                ->push(DB::table('companies')->where('id', $id)->value('owner_user_id')))->get(['id', 'name']),
+                ->push(BusinessWorkspace::ownerId($id)))->get(['id', 'name']),
             'pantheon' => $connector, 'stage_counts' => DB::table('crm_documents')->where('company_id', $id)->selectRaw('stage, COUNT(*) as documents')->groupBy('stage')->pluck('documents', 'stage')]);
     }
 
@@ -56,6 +57,8 @@ final class CrmController extends Controller
             'currency' => ['required', 'regex:/^[A-Z]{3}$/'], 'total_amount' => ['nullable', 'numeric', 'min:0'], 'note' => ['nullable', 'string', 'max:5000'],
             'owner_user_id' => ['nullable', 'integer'], 'next_follow_up_on' => ['nullable', 'date'], 'items' => ['sometimes', 'array', 'max:200'], 'items.*.item_code' => ['nullable', 'string', 'max:30'], 'items.*.name' => ['required', 'string', 'max:255'], 'items.*.quantity' => ['required', 'numeric', 'min:0'], 'items.*.unit' => ['nullable', 'string', 'max:6'], 'items.*.unit_price' => ['required', 'numeric', 'min:0'], 'items.*.discount_percent' => ['nullable', 'numeric', 'between:0,100'], 'items.*.vat_percent' => ['nullable', 'numeric', 'between:0,100'], 'items.*.vat_code' => ['nullable', 'string', 'max:2'], 'items.*.product_id' => ['nullable', 'integer']]);
 
+        $this->authorizeAssignee($id, $data['owner_user_id'] ?? null);
+
         return $this->response($this->crm->create($id, $r->user()->id, $data));
     }
 
@@ -67,6 +70,8 @@ final class CrmController extends Controller
             'contact_name' => ['sometimes', 'nullable', 'string', 'max:255'], 'note' => ['sometimes', 'nullable', 'string', 'max:5000'], 'valid_until' => ['sometimes', 'nullable', 'date'],
             'total_amount' => ['sometimes', 'numeric', 'min:0'], 'items' => ['sometimes', 'array', 'max:200'], 'items.*.item_code' => ['nullable', 'string', 'max:30'], 'items.*.name' => ['required', 'string', 'max:255'], 'items.*.quantity' => ['required', 'numeric', 'min:0'], 'items.*.unit' => ['nullable', 'string', 'max:6'], 'items.*.unit_price' => ['required', 'numeric', 'min:0'], 'items.*.discount_percent' => ['nullable', 'numeric', 'between:0,100'], 'items.*.vat_percent' => ['nullable', 'numeric', 'between:0,100'], 'items.*.vat_code' => ['nullable', 'string', 'max:2'], 'items.*.product_id' => ['nullable', 'integer']]);
 
+        $this->authorizeAssignee($id, $data['owner_user_id'] ?? null);
+
         return $this->response($this->crm->update($id, $r->user()->id, (int) $r->route('document'), $data));
     }
 
@@ -76,7 +81,16 @@ final class CrmController extends Controller
         $data = $r->validate(['crm_document_id' => ['nullable', 'integer'], 'partner_id' => ['nullable', 'integer'], 'due_on' => ['required', 'date'],
             'note' => ['required', 'string', 'max:1000'], 'owner_user_id' => ['nullable', 'integer']]);
 
+        $this->authorizeAssignee($id, $data['owner_user_id'] ?? null);
+
         return $this->response($this->crm->followUp($id, $r->user()->id, $data));
+    }
+
+    private function authorizeAssignee(int $workspace, ?int $assignee): void
+    {
+        if ($assignee !== null && BusinessWorkspace::isPersonal($workspace)) {
+            abort_unless($assignee === BusinessWorkspace::ownerId($workspace), 403);
+        }
     }
 
     public function completeFollowUp(Request $r): JsonResponse

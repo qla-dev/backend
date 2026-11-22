@@ -102,7 +102,7 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFleetResourceScope::class, \App\Http\Middleware\GuardFormDraftSubmission::class])->group(function (): void {
-    Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\OperationalComplianceController::class)->group(function () {
+    Route::prefix('accounting/{company}')->whereNumber('company')->middleware(\App\Http\Middleware\InitializePersonalWorkspace::class)->controller(\App\Http\Controllers\Api\OperationalComplianceController::class)->group(function () {
         Route::get('ops/today', 'today');
         Route::get('ops/operational-overview', 'overview');
         Route::patch('ops/orders/{order}/transport-flow', [\App\Http\Controllers\Api\TransportFlowController::class, 'save'])->whereNumber('order');
@@ -129,8 +129,9 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
         Route::match(['get','post'],'{order}/cargo-review','review')->whereNumber('order');
     });
     Route::get('shipment-workspaces/{shipmentWorkspace}/ops-today',[\App\Http\Controllers\Api\ShipmentWorkspaceController::class,'opsToday'])->whereNumber('shipmentWorkspace');
+    Route::get('accounting/workspaces', [\App\Http\Controllers\Api\AccountingController::class, 'workspaces']);
     Route::get('accounting/companies', [\App\Http\Controllers\Api\AccountingController::class, 'companies']);
-    Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\AccountingController::class)->group(function (): void {
+    Route::prefix('accounting/{company}')->whereNumber('company')->middleware(\App\Http\Middleware\InitializePersonalWorkspace::class)->controller(\App\Http\Controllers\Api\AccountingController::class)->group(function (): void {
         Route::get('context', 'context');
         Route::get('overview', 'overview');
         Route::post('permissions', 'permissions');
@@ -161,7 +162,7 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
         Route::post('partners', 'partner');
         Route::post('jobs/invoice', 'fromJob');
     });
-    Route::prefix('accounting/{company}')->whereNumber('company')->controller(\App\Http\Controllers\Api\SmartPosController::class)->group(function (): void {
+    Route::prefix('accounting/{company}')->whereNumber('company')->middleware(\App\Http\Middleware\InitializePersonalWorkspace::class)->controller(\App\Http\Controllers\Api\SmartPosController::class)->group(function (): void {
         Route::get('pos/status', 'status');
         Route::get('pos/operations', 'operations');
         Route::get('pos/duplicate-options', 'duplicateOptions');
@@ -177,7 +178,7 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
         Route::post('pantheon/sync', 'syncPantheon');
         Route::post('pantheon/export', 'exportPantheon');
     });
-    Route::prefix('accounting/{company}/crm')->whereNumber('company')->controller(\App\Http\Controllers\Api\CrmController::class)->group(function (): void {
+    Route::prefix('accounting/{company}/crm')->whereNumber('company')->middleware(\App\Http\Middleware\InitializePersonalWorkspace::class)->controller(\App\Http\Controllers\Api\CrmController::class)->group(function (): void {
         Route::get('', 'overview');
         Route::get('report', 'report');
         Route::post('sync', 'sync');
@@ -196,14 +197,14 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
         Route::post('follow-ups/{followUp}/done', 'completeFollowUp')->whereNumber('followUp');
     });
     // Product/service catalogue (CRM, templates, POS); PANTHEON tHE_SetItem only through catalog/pantheon/sync.
-    Route::prefix('accounting/{company}/catalog')->whereNumber('company')->controller(\App\Http\Controllers\Api\CatalogController::class)->group(function (): void {
+    Route::prefix('accounting/{company}/catalog')->whereNumber('company')->middleware(\App\Http\Middleware\InitializePersonalWorkspace::class)->controller(\App\Http\Controllers\Api\CatalogController::class)->group(function (): void {
         Route::get('', 'index');
         Route::post('', 'save');
         Route::match(['get', 'post'], 'pantheon/settings', 'pantheonSettings');
         Route::post('pantheon/sync', 'syncPantheon');
     });
     // FreightBook Ops work orders: local data only; PANTHEON is reached through ops/pantheon/sync.
-    Route::prefix('accounting/{company}/ops')->whereNumber('company')->controller(\App\Http\Controllers\Api\OpsController::class)->group(function (): void {
+    Route::prefix('accounting/{company}/ops')->whereNumber('company')->middleware(\App\Http\Middleware\InitializePersonalWorkspace::class)->controller(\App\Http\Controllers\Api\OpsController::class)->group(function (): void {
         Route::get('', 'overview');
         Route::post('orders', 'store');
         Route::post('sync-bookings','syncBookings');
@@ -217,7 +218,7 @@ Route::middleware(['auth:sanctum', 'lena.guest', \App\Http\Middleware\EnsureFlee
         Route::post('orders/{order}/close', 'close')->whereNumber('order');
         Route::post('orders/{order}/reopen', 'reopen')->whereNumber('order');
     });
-    Route::prefix('accounting/{company}/integrations/ops-pantheon')->whereNumber('company')->controller(\App\Http\Controllers\Api\OpsController::class)->group(function (): void {
+    Route::prefix('accounting/{company}/integrations/ops-pantheon')->whereNumber('company')->middleware(\App\Http\Middleware\InitializePersonalWorkspace::class)->controller(\App\Http\Controllers\Api\OpsController::class)->group(function (): void {
         Route::get('', 'pantheon');
         Route::post('', 'savePantheon');
         Route::post('sync', 'syncPantheon');
